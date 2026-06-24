@@ -1,0 +1,82 @@
+/* Qualinav QI Projects — admin screens */
+
+.qi-admin-title { margin-bottom: 4px; }
+.qi-admin-nav { margin-bottom: 18px; }
+
+/* Stats */
+.qi-stats {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+	gap: 12px;
+	margin: 16px 0 28px;
+}
+.qi-stat-card {
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-radius: 8px;
+	padding: 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.qi-stat-value { font-size: 26px; font-weight: 700; line-height: 1.1; color: #1d2327; }
+.qi-stat-label { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #646970; }
+
+/* Tables */
+.qi-admin-table { margin: 8px 0 26px; }
+.qi-admin-table code { font-size: 11px; }
+.qi-admin-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+@media (max-width: 1100px) { .qi-admin-cols { grid-template-columns: 1fr; } }
+
+.qi-badge {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 10px;
+	font-size: 11px;
+	text-transform: capitalize;
+	background: #e5e5e5;
+	color: #1d2327;
+}
+.qi-badge--completed   { background: #d7f0dd; color: #135e2b; }
+.qi-badge--in_progress { background: #d8e8fb; color: #1b466e; }
+.qi-badge--draft       { background: #f0e7c8; color: #5e4a13; }
+.qi-badge--archived    { background: #e2e2e2; color: #555; }
+
+/* Editor */
+.qi-editor-meta { background: #fff; border: 1px solid #dcdcde; border-radius: 8px; padding: 12px 16px; }
+.qi-restore-form { margin: 14px 0 4px; display: flex; align-items: center; gap: 10px; }
+.qi-editor-form { margin-top: 16px; }
+.qi-tab-block {
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-radius: 8px;
+	padding: 14px 18px 20px;
+	margin: 0 0 18px;
+}
+.qi-tab-block legend { font-weight: 700; font-size: 15px; padding: 0 6px; }
+.qi-tab-block--new { border-style: dashed; }
+
+.qi-field { display: block; margin: 12px 0; max-width: 760px; }
+.qi-field > span { display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px; }
+.qi-field input[type=text],
+.qi-field textarea,
+.qi-field select { width: 100%; max-width: 760px; }
+.qi-field--inline { display: inline-block; max-width: 280px; margin-right: 24px; }
+.qi-field--inline select { width: auto; }
+
+.qi-canvas-field { border-top: 1px solid #f0f0f1; padding-top: 12px; }
+.qi-canvas-preview { margin: 6px 0; }
+.qi-canvas-preview img { max-width: 280px; height: auto; display: block; border: 1px solid #dcdcde; border-radius: 4px; }
+.qi-canvas-preview code { display: inline-block; margin-top: 4px; font-size: 11px; color: #646970; }
+
+.qi-steps { border-top: 2px solid #f0f0f1; margin-top: 16px; padding-top: 8px; }
+.qi-steps h4 { margin: 10px 0 4px; }
+.qi-step-row {
+	border: 1px solid #f0f0f1;
+	border-radius: 6px;
+	padding: 8px 14px 14px;
+	margin: 10px 0;
+	background: #fbfbfc;
+}
+.qi-step-row--new { border-style: dashed; background: #fff; }
+.qi-step-remove { color: #b32d2e; }

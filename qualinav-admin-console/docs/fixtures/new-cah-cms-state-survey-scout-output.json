@@ -1,0 +1,248 @@
+{
+  "status": "ok",
+  "request_id": "fixture-new-cah-cms-001",
+  "workflow_version": "day0_workflow_v1_fixture",
+  "generated_at": "2026-06-18T10:20:00Z",
+  "persona_experience_summary": {
+    "summary": "New Critical Access Hospital Quality Director using a CMS/state survey pathway with high setup guidance needs.",
+    "guidance_level": "high",
+    "first_30_days_track": true,
+    "program_maturity": "early"
+  },
+  "persona_context": {
+    "hospital_category": "critical_access_hospital",
+    "payment_model": "cost_based_cah",
+    "service_model": "rural_limited_service",
+    "survey_pathway": "cms_state_survey",
+    "accreditation_pathway": "cms_state_survey",
+    "accreditation_body": "not_applicable",
+    "quality_director_experience": "new",
+    "guidance_level": "high",
+    "program_maturity": "early",
+    "first_30_days_track": true
+  },
+  "workflows": {
+    "persona_experience_summary": [
+      {
+        "title": "New CAH Quality Director",
+        "summary": "Use First 30 Days guidance, document discovery tasks, and clear starter workflows."
+      }
+    ],
+    "master_reporting_schedule": [
+      {
+        "report_name": "MBQIP quarterly starter review",
+        "frequency": "Quarterly",
+        "due_date_rule": "Confirm with State Flex Program",
+        "owner": "Quality Director",
+        "backup_preparer": "Not assigned",
+        "approval_required": "CEO review",
+        "status": "Missing backup"
+      },
+      {
+        "report_name": "Emergency preparedness exercise documentation",
+        "frequency": "Annual",
+        "due_date_rule": "Before annual review",
+        "owner": "Emergency Preparedness Coordinator",
+        "backup_preparer": "Quality Director",
+        "approval_required": "Not set",
+        "status": "Needs review"
+      }
+    ],
+    "meeting_report_flow_map": [
+      {
+        "committee_name": "QAPI Committee",
+        "frequency_timing": "Monthly",
+        "user_role": "Staff support",
+        "reports_to": "Governing Board",
+        "preparation_lead_time": "2 weeks",
+        "information_flow": "Starter dashboard and monitoring gaps should be reviewed monthly.",
+        "sequencing_rule": "Collect dashboard data before QAPI agenda lock.",
+        "status": "Needs review"
+      }
+    ],
+    "survey_readiness_timeline": [
+      {
+        "milestone": "Locate prior state survey report",
+        "timing": "First 2 weeks",
+        "owner": "Quality Director",
+        "status": "Missing input"
+      },
+      {
+        "milestone": "Create CMS Conditions of Participation checklist",
+        "timing": "First 30 days",
+        "owner": "Quality Director",
+        "status": "Recommended"
+      }
+    ],
+    "recurring_clinical_monitoring": [
+      {
+        "monitoring_area": "Medication safety monitoring",
+        "cadence": "Monthly",
+        "reviewed_by": "QAPI Committee",
+        "current_state": "Not yet in place",
+        "priority": "High priority gap",
+        "action_needed": "Create aggregate review process"
+      },
+      {
+        "monitoring_area": "Morbidity and mortality review",
+        "cadence": "As occurring",
+        "reviewed_by": "Medical Executive Committee",
+        "current_state": "Not sure",
+        "priority": "Medium priority gap",
+        "action_needed": "Confirm if process applies"
+      }
+    ],
+    "aggregate_data_uploads": [
+      {
+        "measure": "MBQIP measures",
+        "cadence": "Quarterly",
+        "source_system": "QualityNet",
+        "owner": "Quality Director",
+        "status": "Needs setup"
+      },
+      {
+        "measure": "Hand hygiene audit summary",
+        "cadence": "Monthly",
+        "source_system": "Manual audit",
+        "owner": "Nursing Leader",
+        "status": "Draft"
+      }
+    ],
+    "routine_task_rhythm": [
+      {
+        "task": "Locate and verify required plan approvals",
+        "cadence": "Weekly",
+        "owner": "Quality Director",
+        "monitoring_area": "Required plans"
+      },
+      {
+        "task": "Starter QAPI dashboard review",
+        "cadence": "Monthly",
+        "owner": "Quality Director",
+        "monitoring_area": "QAPI"
+      },
+      {
+        "task": "CMS/state survey source check",
+        "cadence": "Monthly",
+        "owner": "Quality Director",
+        "monitoring_area": "Regulatory monitoring"
+      }
+    ],
+    "active_improvement_projects": [
+      {
+        "project_aim": "Build starter quality dashboard",
+        "method": "Model for Improvement / PDSA",
+        "measure": "Dashboard sections completed",
+        "current_status": "Planning",
+        "next_step": "Choose first five aggregate measures"
+      }
+    ],
+    "plan_policy_tasks": [
+      {
+        "plan_name": "QAPI Plan",
+        "current_status": "Not sure",
+        "owner": "Quality Director",
+        "last_approved": "Not set",
+        "board_approval": "Not sure",
+        "action_needed": "Verify owner/date",
+        "priority": "High"
+      },
+      {
+        "plan_name": "Infection Prevention and Control Plan",
+        "current_status": "Review needed",
+        "owner": "Infection Preventionist",
+        "last_approved": "Not set",
+        "board_approval": "Not sure",
+        "action_needed": "Review/update",
+        "priority": "High"
+      }
+    ],
+    "template_needs": [
+      "QAPI project charter",
+      "PDSA worksheet",
+      "Survey readiness checklist",
+      "Board quality report template"
+    ],
+    "priority_queue": [
+      {
+        "priority": "High",
+        "item": "Verify QAPI Plan approval status",
+        "why_it_matters": "A new Quality Director needs current plan evidence before survey readiness work can be trusted.",
+        "target": "First 2 weeks",
+        "related_monitoring_area": "Required plans"
+      },
+      {
+        "priority": "High",
+        "item": "Create medication safety monitoring rhythm",
+        "why_it_matters": "Medication safety is a core aggregate monitoring area for the starter operating system.",
+        "target": "First 30 days",
+        "related_monitoring_area": "Medication safety monitoring"
+      }
+    ],
+    "learning_journey": [
+      {
+        "topic": "QAPI basics and committee mapping",
+        "format": "Structured learning path",
+        "status": "Recommended"
+      },
+      {
+        "topic": "CMS/state survey readiness foundations",
+        "format": "Short on-demand modules",
+        "status": "Recommended"
+      }
+    ],
+    "first_30_days_learning_journey": [
+      {
+        "week": "Week 1",
+        "focus": "Find required plans, committee calendar, and dashboard sources",
+        "deliverable": "Document locator list"
+      },
+      {
+        "week": "Week 2",
+        "focus": "Map QAPI and board reporting flow",
+        "deliverable": "Meeting flow map"
+      },
+      {
+        "week": "Weeks 3-4",
+        "focus": "Start monitoring rhythm and priority queue",
+        "deliverable": "Starter monitoring calendar"
+      }
+    ],
+    "reminder_rules": [
+      {
+        "name": "Weekly First 30 Days check-in",
+        "lead_time": "1 week",
+        "buffer": "No buffer",
+        "owner": "Quality Director"
+      },
+      {
+        "name": "Monthly QAPI starter packet",
+        "lead_time": "2 weeks",
+        "buffer": "3 days",
+        "owner": "Quality Director"
+      }
+    ]
+  },
+  "warnings": [
+    "Several required plan dates are not yet known.",
+    "Backup preparer has not been assigned for MBQIP reporting."
+  ],
+  "missing_inputs": [
+    "State survey agency contact",
+    "QAPI Plan approval date",
+    "Backup quality user"
+  ],
+  "sources": [
+    {
+      "title": "Day 0 Setup answers",
+      "type": "QualiNav onboarding",
+      "confidence": "high"
+    },
+    {
+      "title": "CMS/state survey pathway fixture assumptions",
+      "type": "local QA fixture",
+      "confidence": "fixture"
+    }
+  ],
+  "source_count": 2
+}

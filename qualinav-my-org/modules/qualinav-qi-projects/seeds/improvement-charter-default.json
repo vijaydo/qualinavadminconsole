@@ -1,0 +1,399 @@
+{
+  "version": 1,
+  "name": "Improvement Charter",
+  "slug": "improvement-charter",
+  "description": "The default 4-canvas QI project journey: Improvement Canvas, Matrix Diagram, Gameplan Canvas, Commit. Based on the dotank Improvement Canvas + Heartland Intellicare workflow.",
+  "tabs": [
+    {
+      "key": "improvement_canvas",
+      "label": "1. Improvement Canvas",
+      "title": "The Improvement Canvas",
+      "description": "This canvas is the most comprehensive of all the improvement canvases within the suite of implementation materials, and is also the most critical. This is where you are mapping out the specifics around what your team is trying to accomplish, how you will measure your progress, and what tangible action steps you will take to achieve your aim. Follow the steps below to use this canvas to map out your improvement journey.",
+      "image": "assets/canvas/improvement-canvas.webp",
+      "canvas_overlays": [
+        { "n": 9, "zone_key": "team",         "label": "Team Members",             "source": "improvement_canvas.team_members",  "position": "12.4%,2.9%,18.1%,34.4%" },
+        { "n": 1, "zone_key": "done_before",  "label": "What have we done before?","source": "improvement_canvas.previous_work", "position": "12.4%,23.4%,53.7%,16.8%" },
+        { "n": 2, "zone_key": "scope_in",     "label": "In Scope",                 "source": "improvement_canvas.scope", "source_slot": "in_scope",     "position": "16.5%,79.6%,18.1%,14.6%" },
+        { "n": 2, "zone_key": "scope_out",    "label": "Out of Scope",             "source": "improvement_canvas.scope", "source_slot": "out_of_scope", "position": "32.9%,79.6%,18.1%,13.9%" },
+        { "n": 3, "zone_key": "population",   "label": "Population",               "source": "improvement_canvas.accomplish", "source_slot": "population", "position": "33%,26%,9.5%,12.5%" },
+        { "n": 3, "zone_key": "goal",         "label": "Goal",                     "source": "improvement_canvas.accomplish", "source_slot": "goal",       "position": "33%,36.5%,9.5%,12.5%" },
+        { "n": 3, "zone_key": "time",         "label": "Time Expectation",         "source": "improvement_canvas.accomplish", "source_slot": "time",       "position": "33%,47%,9.5%,12.5%" },
+        { "n": 3, "zone_key": "location",     "label": "Location",                 "source": "improvement_canvas.accomplish", "source_slot": "location",   "position": "33%,57.5%,9.5%,12.5%" },
+        { "n": 3, "zone_key": "guidance",     "label": "Guidance",                 "source": "improvement_canvas.accomplish", "source_slot": "guidance",   "position": "33%,68%,9.5%,12.5%" },
+        { "n": 5, "zone_key": "outcome",      "label": "Outcome Measure",          "source": "improvement_canvas.measures", "source_slot": "outcome",       "position": "49.8%,36.5%,9.5%,10.2%" },
+        { "n": 5, "zone_key": "process",      "label": "Process Measure",          "source": "improvement_canvas.measures", "source_slot": "process",       "position": "49.8%,47%,9.5%,10.2%" },
+        { "n": 5, "zone_key": "tracking",     "label": "Tracking Tool",            "source": "improvement_canvas.measures", "source_slot": "tracking_tool", "position": "49.8%,57.5%,9.5%,10.2%" },
+        { "n": 6, "zone_key": "idea_1",       "label": "Idea 1",                   "source": "improvement_canvas.change_ideas", "source_slot": "idea_1", "position": "67%,26%,9.5%,10.2%" },
+        { "n": 6, "zone_key": "idea_2",       "label": "Idea 2",                   "source": "improvement_canvas.change_ideas", "source_slot": "idea_2", "position": "67%,36.5%,9.5%,10.2%" },
+        { "n": 6, "zone_key": "idea_3",       "label": "Idea 3",                   "source": "improvement_canvas.change_ideas", "source_slot": "idea_3", "position": "67%,47%,9.5%,10.2%" },
+        { "n": 6, "zone_key": "idea_4",       "label": "Idea 4",                   "source": "improvement_canvas.change_ideas", "source_slot": "idea_4", "position": "67%,57.5%,9.5%,10.2%" },
+        { "n": 6, "zone_key": "idea_5",       "label": "Idea 5",                   "source": "improvement_canvas.change_ideas", "source_slot": "idea_5", "position": "67%,68%,9.5%,10.2%" },
+        { "n": 7, "zone_key": "supports",     "label": "Supports",                 "source": "improvement_canvas.supports", "position": "50.5%,2.9%,18.1%,42.5%" },
+        { "n": 8, "zone_key": "barriers",     "label": "Barriers",                 "source": "improvement_canvas.barriers", "position": "50.5%,79.6%,18.1%,42.5%" },
+        { "n": 4, "zone_key": "aim",          "label": "Aim Statement",            "source": "improvement_canvas.aim_statement", "position": "79.8%,23.4%,53.7%,13.2%" }
+      ],
+      "steps": [
+        {
+          "key": "previous_work",
+          "title": "Step 1: What have we done before?",
+          "helper": "What work have we done in this space? What is work we've done that is comparable? What prior work should we look to or be aware of as we hone in on our focus area? (Add as many initiatives or examples as you have!)",
+          "color": "blue",
+          "fields": [
+            { "type": "card_list", "field_path": "improvement_canvas.previous_work" }
+          ]
+        },
+        {
+          "key": "scope",
+          "title": "Step 2: Scope",
+          "helper": "Think of this as an exercise in setting boundaries! Within our focus area-what is in scope of this project and what is out of scope? Out of scope activities or focuses don't mean they're things you'll never do, but could be things you can't do right now.",
+          "color": "blue",
+          "fields": [
+            {
+              "type": "card_list_2col",
+              "field_path": "improvement_canvas.scope",
+              "columns": [
+                { "key": "in_scope",     "label": "IN SCOPE" },
+                { "key": "out_of_scope", "label": "OUT OF SCOPE" }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "accomplish",
+          "title": "Step 3: What are we Trying to Accomplish?",
+          "helper": "Your aim statement should be explicit, clear, unambiguous, precise, and plain. An aim statement should include the following essential components: Population (Who are the stakeholders you are aiming to make improvements for?), Goal (What is the goal you are trying to achieve?), Time Expectation (when will this work take place? From when to when?), Location (Where will this work take place? Be specific: site, department, etc.), Guidance (Under the guidance of who?)",
+          "color": "green",
+          "fields": [
+            {
+              "type": "card_slots_named",
+              "field_path": "improvement_canvas.accomplish",
+              "slots": [
+                { "key": "population", "label": "POPULATION" },
+                { "key": "goal",       "label": "GOAL" },
+                { "key": "time",       "label": "TIME" },
+                { "key": "location",   "label": "LOCATION" },
+                { "key": "guidance",   "label": "GUIDANCE" }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "aim_statement",
+          "title": "Step 4: Aim Statement",
+          "helper": "Using the components you defined in Step 3, write your aim statement as a clear and concise sentence that you can share to communicate the aim of your work, and to use as a \"North Star\" for your team moving forward.",
+          "color": "green",
+          "fields": [
+            { "type": "single_textarea", "field_path": "improvement_canvas.aim_statement" }
+          ]
+        },
+        {
+          "key": "measures",
+          "title": "Step 5: How Will We Measure This?",
+          "helper": "Strong measurement requires thinking through three key components: Outcome Measure (What you are measuring in your aim statement. The ultimate quantitative number you want to achieve.), Process Measure (The specific steps in the process that lead to your outcome metric.), Tracking Tool (The system you will have in place to monitor and track your Outcome and Process measures.)",
+          "color": "yellow",
+          "fields": [
+            {
+              "type": "card_slots_named",
+              "field_path": "improvement_canvas.measures",
+              "slots": [
+                { "key": "outcome",       "label": "OUTCOME" },
+                { "key": "process",       "label": "PROCESS" },
+                { "key": "tracking_tool", "label": "TRACKING TOOL" }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "change_ideas",
+          "title": "Step 6: What Will We Do Differently?",
+          "helper": "A change idea is an actionable, specific idea for changing a process. Change ideas come from research, best practices or other organizations that have used the idea (technique) to achieve gains. Write out the actions you think need to take place to achieve your aim statement to help you make progress within your selected focus area and help you reach your ultimate goal.",
+          "color": "pink",
+          "fields": [
+            {
+              "type": "card_slots_numbered",
+              "field_path": "improvement_canvas.change_ideas",
+              "count": 5,
+              "slot_label_format": "IDEA {n}"
+            }
+          ]
+        },
+        {
+          "key": "supports",
+          "title": "Step 7: Supports",
+          "helper": "What supports do we have going into this work that we can utilize or will help us in this effort?",
+          "color": "lavender",
+          "fields": [
+            { "type": "card_list", "field_path": "improvement_canvas.supports" }
+          ]
+        },
+        {
+          "key": "barriers",
+          "title": "Step 8: Barriers",
+          "helper": "What barriers exist that might make this work challenging that we should be aware of or work to mitigate?",
+          "color": "purple",
+          "fields": [
+            { "type": "card_list", "field_path": "improvement_canvas.barriers" }
+          ]
+        },
+        {
+          "key": "team_members",
+          "title": "Step 9: Team Members",
+          "helper": "Who will be essential members of this team? Think about both specific people and departments/roles.",
+          "color": "gray",
+          "fields": [
+            { "type": "card_list", "field_path": "improvement_canvas.team_members", "picker": "org_users" }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "matrix_diagram",
+      "label": "2. Matrix Diagram",
+      "title": "The Matrix Diagram",
+      "description": "This canvas is the most comprehensive of all the improvement canvases within the suite of implementation materials, and is also the most critical.\n\nThis is where you are mapping out the specifics around what your team is trying to accomplish, how you will measure your progress, and what tangible action steps you will take to achieve your aim. Follow the steps below to use this canvas to map out your improvement journey.",
+      "image": "assets/canvas/matrix-diagram.png",
+      "canvas_score_grid": {
+        "ideas_source":         "improvement_canvas.change_ideas",
+        "scores_source":        "matrix_diagram.scores",
+        "lock_path":            "matrix_diagram.locked",
+        "criteria": [
+          { "key": "achievable_in_90_days" },
+          { "key": "will_to_support" },
+          { "key": "within_control" },
+          { "key": "sponsor_buyin" }
+        ],
+        "row_count":           5,
+        "header_top":          21.05,
+        "row_height":          14.26,
+        "criteria_left":       11.23,
+        "criterion_col_width": 17.48,
+        "cumulative_left":     81.35,
+        "cumulative_width":    17.29
+      },
+      "fields": [
+        {
+          "type": "idea_score_matrix",
+          "field_path": "matrix_diagram.scores",
+          "ideas_source": "improvement_canvas.change_ideas",
+          "lock_path": "matrix_diagram.locked",
+          "criteria": [
+            { "key": "achievable_in_90_days", "label": "The solution can be accomplished in 90 days" },
+            { "key": "will_to_support",       "label": "There is the will to support this solution" },
+            { "key": "within_control",        "label": "The solution is within our control" },
+            { "key": "sponsor_buyin",         "label": "We have a sponsor and buy-in for this solution" }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "gameplan",
+      "label": "3. Gameplan Canvas",
+      "title": "The Gameplan Canvas",
+      "description": "Translate your highest-scoring ideas into a phased implementation plan with action steps, supports, and team responsibility.",
+      "image": "assets/canvas/gameplan-canvas.webp",
+      "canvas_overlays": [
+        { "zone_key": "gp_team",         "label": "Team Members",                 "source": "improvement_canvas.team_members",  "position": "5%,28%,22%,13%" },
+        { "zone_key": "gp_change_idea",  "label": "Change Idea",                  "source": "improvement_canvas.change_ideas",  "position": "5%,60%,12%,13%" },
+        { "zone_key": "gp_p1_actions",   "label": "Phase 1 Action Steps",         "source": "gameplan.phase_1.action_steps",   "position": "30%,4%,21%,38%" },
+        { "zone_key": "gp_p1_support",   "label": "Phase 1 Support Needed",       "source": "gameplan.phase_1.support_needed", "position": "72%,4%,10%,21%" },
+        { "zone_key": "gp_p1_chal",      "label": "Phase 1 Potential Challenges", "source": "gameplan.challenges",             "position": "72%,14.5%,10%,21%" },
+        { "zone_key": "gp_p2_actions",   "label": "Phase 2 Action Steps",         "source": "gameplan.phase_2.action_steps",   "position": "30%,26.5%,21%,38%" },
+        { "zone_key": "gp_p2_support",   "label": "Phase 2 Support Needed",       "source": "gameplan.phase_2.support_needed", "position": "72%,26.5%,10%,21%" },
+        { "zone_key": "gp_p2_chal",      "label": "Phase 2 Potential Challenges", "source": "gameplan.challenges",             "position": "72%,37%,10%,21%" },
+        { "zone_key": "gp_p3_actions",   "label": "Phase 3 Action Steps",         "source": "gameplan.phase_3.action_steps",   "position": "30%,50%,21%,38%" },
+        { "zone_key": "gp_p3_support",   "label": "Phase 3 Support Needed",       "source": "gameplan.phase_3.support_needed", "position": "72%,50%,10%,21%" },
+        { "zone_key": "gp_p3_chal",      "label": "Phase 3 Potential Challenges", "source": "gameplan.challenges",             "position": "72%,60.5%,10%,21%" },
+        { "zone_key": "gp_p4_actions",   "label": "Phase 4 Action Steps",         "source": "gameplan.phase_4.action_steps",   "position": "30%,73%,21%,38%" },
+        { "zone_key": "gp_p4_support",   "label": "Phase 4 Support Needed",       "source": "gameplan.phase_4.support_needed", "position": "72%,73%,10%,21%" },
+        { "zone_key": "gp_p4_chal",      "label": "Phase 4 Potential Challenges", "source": "gameplan.challenges",             "position": "72%,83.5%,10%,21%" }
+      ],
+      "steps": [
+        {
+          "key": "targets",
+          "title": "Step 1: Our Targets",
+          "helper": "What is the ultimate goal we are aiming for? What are other secondary objectives we might look to accomplish? What other stakeholders (beyond our team members) may we need to bring into the process?",
+          "color": "blue",
+          "fields": [
+            {
+              "type": "field_reference",
+              "field_path": "gameplan.aim_to_execute",
+              "source": "improvement_canvas.accomplish",
+              "source_slot": "population",
+              "label": "AIM TO EXECUTE"
+            },
+            {
+              "type": "card_list_2col",
+              "field_path": "gameplan.other",
+              "columns": [
+                { "key": "objectives",   "label": "OTHER OBJECTIVES" },
+                { "key": "stakeholders", "label": "OTHER STAKEHOLDERS TO ENGAGE" }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "timeline",
+          "title": "Step 2: Set Your Timeline",
+          "helper": "What is the timeline you would like to set your work to? (Think weeks, months, quarters?)",
+          "color": "blue",
+          "fields": [
+            {
+              "type": "phase_timeline",
+              "field_path": "gameplan.timeline",
+              "phases": [
+                { "key": "phase_1", "label": "PHASE 1" },
+                { "key": "phase_2", "label": "PHASE 2" },
+                { "key": "phase_3", "label": "PHASE 3" },
+                { "key": "phase_4", "label": "PHASE 4" }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "phase_1_actions",
+          "title": "Step 3: Phase 1 Action Steps and Supports",
+          "helper": "In the time you've specified, what action steps you need to accomplish? What additional supports may you require? Who on your team will be responsible for this work?",
+          "color": "green",
+          "fields": [
+            { "type": "card_list", "field_path": "gameplan.phase_1.action_steps",   "label": "ACTION STEPS" },
+            { "type": "card_list", "field_path": "gameplan.phase_1.support_needed", "label": "SUPPORT NEEDED" },
+            { "type": "card_list", "field_path": "gameplan.phase_1.team_members",   "label": "TEAM MEMBERS", "picker": "org_users" }
+          ]
+        },
+        {
+          "key": "phase_2_actions",
+          "title": "Step 4: Phase 2 Action Steps and Supports",
+          "helper": "In the time you've specified, what action steps you need to accomplish? What additional supports may you require? Who on your team will be responsible for this work?",
+          "color": "yellow",
+          "fields": [
+            { "type": "card_list", "field_path": "gameplan.phase_2.action_steps",   "label": "ACTION STEPS" },
+            { "type": "card_list", "field_path": "gameplan.phase_2.support_needed", "label": "SUPPORT NEEDED" },
+            { "type": "card_list", "field_path": "gameplan.phase_2.team_members",   "label": "TEAM MEMBERS", "picker": "org_users" }
+          ]
+        },
+        {
+          "key": "phase_3_actions",
+          "title": "Step 5: Phase 3 Action Steps and Supports",
+          "helper": "In the time you've specified, what action steps you need to accomplish? What additional supports may you require? Who on your team will be responsible for this work?",
+          "color": "cream",
+          "compact": true,
+          "fields": [
+            { "type": "card_list", "field_path": "gameplan.phase_3.action_steps",   "label": "ACTION STEPS" },
+            { "type": "card_list", "field_path": "gameplan.phase_3.support_needed", "label": "SUPPORT NEEDED" },
+            { "type": "card_list", "field_path": "gameplan.phase_3.team_members",   "label": "TEAM MEMBERS", "picker": "org_users" }
+          ]
+        },
+        {
+          "key": "phase_4_actions",
+          "title": "Step 6: Phase 4 Action Steps and Supports",
+          "helper": "In the time you've specified, what action steps you need to accomplish? What additional supports may you require? Who on your team will be responsible for this work?",
+          "color": "pink",
+          "compact": true,
+          "fields": [
+            { "type": "card_list", "field_path": "gameplan.phase_4.action_steps",   "label": "ACTION STEPS" },
+            { "type": "card_list", "field_path": "gameplan.phase_4.support_needed", "label": "SUPPORT NEEDED" },
+            { "type": "card_list", "field_path": "gameplan.phase_4.team_members",   "label": "TEAM MEMBERS", "picker": "org_users" }
+          ]
+        },
+        {
+          "key": "challenges",
+          "title": "Step 7: Challenges",
+          "helper": "What challenges or risks should the team be aware of as they execute this gameplan?",
+          "color": "lavender",
+          "compact": true,
+          "fields": [
+            { "type": "card_list", "field_path": "gameplan.challenges" }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "commit",
+      "label": "4. Commit",
+      "title": "Commit",
+      "description": "Finalize your action plan and share it with leadership or other stakeholders. Refine the work you've done in the last three sessions to have an easily shareable concise charter that you can use to secure necessary buy-in to move to action towards your goal.",
+      "steps": [
+        {
+          "key": "commit_aim",
+          "title": "What are we trying to accomplish?",
+          "color": "blue",
+          "fields": [
+            {
+              "type": "field_reference",
+              "field_path": "commit.aim_statement",
+              "source": "improvement_canvas.aim_statement",
+              "label": "AIM STATEMENT",
+              "editable": true
+            }
+          ]
+        },
+        {
+          "key": "commit_measures",
+          "title": "How are we going to measure this?",
+          "helper": "Refine your outcome and process measures with current and target values.",
+          "color": "blue",
+          "fields": [
+            { "type": "measure_row", "field_path": "commit.outcome_measures", "measure_type": "outcome", "label": "OUTCOME MEASURES" },
+            { "type": "measure_row", "field_path": "commit.process_measures", "measure_type": "process", "label": "PROCESS MEASURES" },
+            {
+              "type": "field_reference",
+              "field_path": "commit.tracking_tools",
+              "source": "improvement_canvas.measures",
+              "source_slot": "tracking_tool",
+              "label": "TRACKING TOOLS"
+            }
+          ]
+        },
+        {
+          "key": "commit_changes",
+          "title": "What changes will we make?",
+          "color": "green",
+          "fields": [
+            {
+              "type": "scored_ideas_summary",
+              "field_path": "commit.ideas",
+              "ideas_source": "improvement_canvas.change_ideas",
+              "scores_source": "matrix_diagram.scores",
+              "changes_field_path": "commit.changes"
+            },
+            {
+              "type": "field_reference",
+              "field_path": "commit.supports_barriers",
+              "source": "improvement_canvas.supports_barriers",
+              "label": "Supports / Barriers (mirrored)"
+            },
+            {
+              "type": "field_reference",
+              "field_path": "commit.scope",
+              "source": "improvement_canvas.scope",
+              "label": "Scope (mirrored)"
+            }
+          ]
+        },
+        {
+          "key": "commit_team",
+          "title": "Team",
+          "color": "green",
+          "fields": [
+            { "type": "card_list", "field_path": "commit.executive_sponsors", "label": "EXECUTIVE SPONSORS" },
+            {
+              "type": "field_reference",
+              "field_path": "commit.team_members",
+              "source": "improvement_canvas.team_members",
+              "label": "TEAM MEMBERS"
+            }
+          ]
+        },
+        {
+          "key": "commit_submit",
+          "title": "Team Submission",
+          "helper": "Once your team is satisfied with the information entered above, click \"Mark Complete\" to submit your charter. This will indicate that your QI work is finalized and we will generate your final report.",
+          "color": "cream",
+          "fields": [
+            { "type": "submit_button", "field_path": "commit.mark_complete", "label": "Mark Complete and Generate Report" }
+          ]
+        }
+      ]
+    }
+  ]
+}

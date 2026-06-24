@@ -1,0 +1,478 @@
+/**
+ * Do Tank Uploader – Final Compact DHCI Theme (Complete Version)
+ */
+
+:root {
+  --dtu-primary-color: #4285F4;
+  --dtu-success-color: #34A853;
+  --dtu-error-color: #EA4335;
+  --dtu-heading-color: #7ea728;
+
+  --dtu-bg-color: #fdfbf7;
+  --dtu-surface-color: #ffffff;
+
+  --dtu-text-primary: #202124;
+  --dtu-text-secondary: #5f6368;
+  --dtu-border-color: #e5e7eb;
+
+  --dtu-font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial;
+}
+
+body {
+  font-family: var(--dtu-font);
+  background: var(--dtu-bg-color);
+  color: var(--dtu-text-primary);
+}
+
+/* =========================================================
+   MAIN WRAPPER (Compact)
+   ========================================================= */
+.dtu-wrapper {
+  max-width: 1040px;
+  margin: 40px auto;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* =========================================================
+   CARD BASE
+   ========================================================= */
+#dtu-card,
+#dtu-file-list.dtu-card {
+  background: var(--dtu-surface-color);
+  border-radius: 10px;
+  padding: 20px 24px;
+  border: 1px solid var(--dtu-border-color);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+/* =========================================================
+   TITLE & SUBTEXT
+   ========================================================= */
+#dtu-card h1 {
+  font-size: 28px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--dtu-heading-color);
+  margin: 0 0 6px 0;
+}
+
+#dtu-card .dtu-subtext {
+  font-size: 14px;
+  color: var(--dtu-text-secondary);
+  text-align: center;
+  margin-bottom: 18px;
+}
+
+/* =========================================================
+   DROPZONE
+   ========================================================= */
+#dtu-dropzone {
+  border: 2px dashed var(--dtu-border-color);
+  border-radius: 8px;
+  padding: 26px;
+  text-align: center;
+  cursor: pointer;
+  transition: 0.2s all;
+  position: relative;
+}
+
+#dtu-dropzone.active {
+  border-color: var(--dtu-primary-color);
+  background: #eef4ff;
+}
+
+#dtu-dropzone input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.dtu-dropzone-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: var(--dtu-text-secondary);
+  gap: 6px;
+}
+
+.dtu-dropzone-content svg {
+  width: 36px;
+  height: 36px;
+}
+
+/* =========================================================
+   UPLOAD LIST (Pending uploads)
+   ========================================================= */
+#dtu-file-list-area {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dtu-file-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--dtu-border-color);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.dtu-file-row .file-icon {
+  width: 48px;
+  min-width: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dtu-file-row .file-icon svg {
+  display: block;
+}
+
+/* File name text */
+.file-name {
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Status text */
+.file-status {
+  font-size: 12px;
+  color: var(--dtu-text-secondary);
+}
+
+/* Progress bar */
+.file-progress {
+  width: 100%;
+  height: 3px;
+  background: #e0e0e0;
+  border-radius: 2px;
+  margin-top: 4px;
+}
+
+.file-progress-bar {
+  width: 0%;
+  height: 100%;
+  background: var(--dtu-primary-color);
+  transition: width 0.3s ease-out;
+}
+
+/* Result icons */
+.file-result-icon {
+  display: none;
+  width: 22px;
+  height: 22px;
+}
+
+.dtu-file-row.success .file-status { color: var(--dtu-success-color); }
+.dtu-file-row.success .file-progress { display: none; }
+.dtu-file-row.success .file-result-icon.success { display: block; }
+
+.dtu-file-row.error .file-status { color: var(--dtu-error-color); }
+.dtu-file-row.error .file-progress { display: none; }
+.dtu-file-row.error .file-result-icon.error { display: block; }
+
+/* =========================================================
+   UPLOAD BUTTON
+   ========================================================= */
+#dtu-upload-btn {
+  width: 100%;
+  margin-top: 16px;
+  padding: 10px 0;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--dtu-primary-color);
+  border: none;
+  cursor: pointer;
+  transition: 0.2s all;
+}
+
+#dtu-upload-btn:disabled {
+  background: #9e9e9e;
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   FILE LIST TITLE
+   ========================================================= */
+#dtu-file-list h2 {
+  font-size: 20px;
+  margin: 0 0 0 0;
+  color: var(--dtu-heading-color);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dtu-file-search {
+  position: relative;
+  margin-top: 16px;
+  max-width: 420px;
+}
+
+.dtu-file-search-icon {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  display: inline-flex;
+  color: var(--dtu-text-secondary);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+#dtu-file-search-input {
+  width: 100%;
+  height: 40px;
+  padding: 8px 12px 8px 42px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--dtu-text-primary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.2;
+  outline: none;
+  box-shadow: none;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+#dtu-file-search-input:focus {
+  border-color: var(--dtu-primary-color);
+  box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.16);
+}
+
+#dtu-file-search-input::placeholder {
+  color: #7b8593;
+}
+
+/* =========================================================
+   Refresh Button
+   ========================================================= */
+#dtu-file-list h2 #dtu-refresh-btn {
+  all: unset !important;
+  display: inline-block !important;
+  padding: 6px 14px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  background: var(--dtu-primary-color) !important;
+  color: #fff !important;
+  border-radius: 6px !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  text-align: center !important;
+  box-shadow: none !important;
+  margin-left: 12px !important;
+}
+
+#dtu-file-list h2 #dtu-refresh-btn:hover {
+  background: #2c6cd8 !important;
+}
+
+
+
+/* =========================================================
+   FILE LIST TABLE
+   ========================================================= */
+#dtu-file-list-container {
+  margin-top: 14px;
+  overflow-x: auto;
+  min-height: 100px;
+}
+
+#dtu-file-list-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 860px;
+}
+
+#dtu-file-list-table th,
+#dtu-file-list-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--dtu-border-color);
+  font-size: 14px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.file-name-cell {
+  max-width: 250px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.file-uploader-cell {
+  max-width: 160px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.file-icon-cell {
+  width: 62px;
+}
+
+.file-icon-cell .file-icon {
+  width: 42px;
+  min-width: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-icon-cell .file-icon svg {
+  width: 34px;
+  height: 38px;
+  display: block;
+}
+
+.file-link-cell {
+  text-align: left;
+}
+
+.dtu-file-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+#dtu-file-list-table .dtu-icon-button {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #fff;
+  color: #0b2133;
+  text-decoration: none !important;
+  box-shadow: none !important;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+#dtu-file-list-table .dtu-icon-button:hover,
+#dtu-file-list-table .dtu-icon-button:focus {
+  background: #eef4ff;
+  border-color: var(--dtu-primary-color);
+  color: var(--dtu-primary-color);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+#dtu-file-list-table .dtu-icon-button--download {
+  background: var(--dtu-primary-color);
+  border-color: var(--dtu-primary-color);
+  color: #fff;
+}
+
+#dtu-file-list-table .dtu-icon-button--download:hover,
+#dtu-file-list-table .dtu-icon-button--download:focus {
+  background: #2c6cd8;
+  border-color: #2c6cd8;
+  color: #fff;
+}
+
+#dtu-file-list-table .dtu-icon-button--disabled,
+#dtu-file-list-table .dtu-icon-button--disabled:hover,
+#dtu-file-list-table .dtu-icon-button--disabled:focus {
+  background: #f4f6f8;
+  border-color: #e2e7ee;
+  color: #9aa4b2;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* =========================================================
+   EMPTY STATE
+   ========================================================= */
+#dtu-file-list-empty {
+  padding: 12px 0;
+  font-size: 14px;
+  color: var(--dtu-text-secondary);
+  text-align: center;
+}
+
+#dtu-file-list-no-results {
+  padding: 12px 0;
+  font-size: 14px;
+  color: var(--dtu-text-secondary);
+  text-align: center;
+}
+
+/* =========================================================
+   OVERLAY LOADER
+   ========================================================= */
+#dtu-overlay-loader {
+  position: fixed;
+  inset: 0;
+  background: rgba(255,255,255,0.75);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.dtu-loader-spinner {
+  width: 42px;
+  height: 42px;
+  border: 5px solid #ccc;
+  border-top-color: var(--dtu-primary-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* =========================================================
+   BUTTON OVERRIDES (BuddyBoss-safe)
+   ========================================================= */
+.dtu-button,
+#dtu-refresh-btn {
+  background: var(--dtu-primary-color) !important;
+  color: #fff !important;
+  box-shadow: 0 2px 6px rgba(66,133,244,.4) !important;
+  border-radius: 8px !important;
+}
+
+/* Normalize VIEW button (BuddyBoss override fix) */
+#dtu-file-list-table .dtu-button {
+  padding: 4px 12px !important;
+  font-size: 12px !important;
+  border-radius: 6px !important;
+  line-height: 1 !important;
+  box-shadow: none !important;
+  background: var(--dtu-primary-color) !important;
+  color: #fff !important;
+}
+
+#dtu-file-list-table .dtu-button:hover {
+  background: #2c6cd8 !important;
+}
+
+.file-progress {
+  height: 3px !important;
+  min-height: 3px !important;
+  max-height: 3px !important;
+  overflow: hidden !important;
+  border-radius: 2px !important;
+}
+
+.file-progress-bar {
+  height: 100% !important;
+  max-height: 3px !important;
+}

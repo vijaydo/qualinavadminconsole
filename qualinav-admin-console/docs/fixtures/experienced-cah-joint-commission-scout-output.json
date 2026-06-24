@@ -1,0 +1,224 @@
+{
+  "status": "ok",
+  "request_id": "fixture-exp-cah-jc-001",
+  "workflow_version": "day0_workflow_v1_fixture",
+  "generated_at": "2026-06-18T10:00:00Z",
+  "persona_experience_summary": {
+    "summary": "Experienced Critical Access Hospital Quality Director with a Joint Commission readiness pathway and light-touch guidance needs.",
+    "guidance_level": "light",
+    "first_30_days_track": false,
+    "program_maturity": "maturing"
+  },
+  "persona_context": {
+    "hospital_category": "critical_access_hospital",
+    "payment_model": "cost_based_cah",
+    "service_model": "rural_full_service",
+    "survey_pathway": "joint_commission",
+    "accreditation_pathway": "accreditor_deeming_authority",
+    "accreditation_body": "joint_commission",
+    "quality_director_experience": "experienced",
+    "guidance_level": "light",
+    "program_maturity": "maturing",
+    "first_30_days_track": false
+  },
+  "workflows": {
+    "persona_experience_summary": [
+      {
+        "title": "Experienced CAH Quality Director",
+        "summary": "Use concise reminders, survey readiness prompts, and targeted escalation for missing owners or overdue reviews."
+      }
+    ],
+    "master_reporting_schedule": [
+      {
+        "report_name": "MBQIP quarterly measure submission",
+        "frequency": "Quarterly",
+        "due_date_rule": "Q1 May 15; Q2 Aug 15; Q3 Nov 15; Q4 Feb 15",
+        "owner": "Quality Director",
+        "backup_preparer": "HIM Director",
+        "approval_required": "CEO review",
+        "status": "Ready"
+      },
+      {
+        "report_name": "NHSN annual facility survey",
+        "frequency": "Annual",
+        "due_date_rule": "Known date from NHSN notice",
+        "owner": "Infection Preventionist",
+        "backup_preparer": "Quality Coordinator",
+        "approval_required": "None",
+        "status": "Needs review"
+      }
+    ],
+    "meeting_report_flow_map": [
+      {
+        "committee_name": "QAPI Committee",
+        "frequency_timing": "Monthly",
+        "user_role": "Chair / facilitator",
+        "reports_to": "Board Quality Committee",
+        "preparation_lead_time": "2 weeks",
+        "information_flow": "Clinical monitoring summaries route to QAPI before board quality reporting.",
+        "sequencing_rule": "Prepare dashboard one week before QAPI packet.",
+        "status": "Ready"
+      },
+      {
+        "committee_name": "Infection Control Committee",
+        "frequency_timing": "Monthly",
+        "user_role": "Primary presenter",
+        "reports_to": "QAPI Committee",
+        "preparation_lead_time": "1 week",
+        "information_flow": "Infection trends and NHSN readiness feed QAPI dashboard.",
+        "status": "Ready"
+      }
+    ],
+    "survey_readiness_timeline": [
+      {
+        "milestone": "Joint Commission readiness review",
+        "timing": "Next 6 months",
+        "owner": "Quality Director",
+        "status": "Needs review"
+      },
+      {
+        "milestone": "Life Safety document check",
+        "timing": "Monthly until survey",
+        "owner": "Facilities Director",
+        "status": "Ready"
+      }
+    ],
+    "recurring_clinical_monitoring": [
+      {
+        "monitoring_area": "Medication safety monitoring",
+        "cadence": "Monthly",
+        "reviewed_by": "Pharmacy & Therapeutics",
+        "current_state": "Functioning well",
+        "priority": "No current gap",
+        "action_needed": "Continue aggregate trend review"
+      },
+      {
+        "monitoring_area": "Blood usage review",
+        "cadence": "Quarterly",
+        "reviewed_by": "Medical Executive Committee",
+        "current_state": "Developing",
+        "priority": "Medium priority gap",
+        "action_needed": "Confirm review owner and documentation location"
+      }
+    ],
+    "aggregate_data_uploads": [
+      {
+        "measure": "Patient experience survey",
+        "cadence": "Quarterly",
+        "source_system": "Survey vendor portal",
+        "owner": "Quality Director",
+        "status": "Ready"
+      },
+      {
+        "measure": "NHSN HCP flu vaccination",
+        "cadence": "Annual",
+        "source_system": "NHSN",
+        "owner": "Infection Preventionist",
+        "status": "Ready"
+      }
+    ],
+    "routine_task_rhythm": [
+      {
+        "task": "Environment of care rounding summary",
+        "cadence": "Monthly",
+        "owner": "Quality Director",
+        "monitoring_area": "Physical environment"
+      },
+      {
+        "task": "Board quality dashboard preparation",
+        "cadence": "Quarterly",
+        "owner": "Quality Director",
+        "monitoring_area": "Board reporting"
+      }
+    ],
+    "active_improvement_projects": [
+      {
+        "project_aim": "Improve transfer communication completeness",
+        "method": "Model for Improvement / PDSA",
+        "measure": "Transfer communication checklist completion",
+        "current_status": "Monitoring results",
+        "next_step": "Review aggregate trend at QAPI"
+      }
+    ],
+    "plan_policy_tasks": [
+      {
+        "plan_name": "QAPI Plan",
+        "current_status": "Exists",
+        "owner": "Quality Director",
+        "last_approved": "2026-03-01",
+        "board_approval": "Board approved",
+        "action_needed": "Annual review",
+        "priority": "Medium"
+      },
+      {
+        "plan_name": "Emergency Preparedness Plan",
+        "current_status": "Exists",
+        "owner": "Emergency Preparedness Coordinator",
+        "last_approved": "2025-11-15",
+        "board_approval": "Not required",
+        "action_needed": "Verify next exercise schedule",
+        "priority": "Medium"
+      }
+    ],
+    "template_needs": [
+      "Board quality report template",
+      "Survey readiness checklist"
+    ],
+    "priority_queue": [
+      {
+        "priority": "High",
+        "item": "Confirm blood usage review ownership",
+        "why_it_matters": "Scout needs a clear owner and cadence for transfusion review.",
+        "target": "Next QAPI cycle",
+        "related_monitoring_area": "Blood usage review"
+      },
+      {
+        "priority": "Medium",
+        "item": "Refresh QAPI Plan annual review evidence",
+        "why_it_matters": "Survey readiness depends on current plan approval evidence.",
+        "target": "Before next board packet",
+        "related_monitoring_area": "Plans and Policies"
+      }
+    ],
+    "learning_journey": [
+      {
+        "topic": "Joint Commission readiness refresher",
+        "format": "Short on-demand module",
+        "status": "Recommended"
+      }
+    ],
+    "reminder_rules": [
+      {
+        "name": "Quarterly MBQIP preparation",
+        "lead_time": "4 weeks",
+        "buffer": "1 week",
+        "owner": "Quality Director"
+      },
+      {
+        "name": "Board quality packet",
+        "lead_time": "2 weeks",
+        "buffer": "3 days",
+        "owner": "Quality Director"
+      }
+    ]
+  },
+  "warnings": [
+    "Confirm blood usage review owner before relying on the monitoring calendar."
+  ],
+  "missing_inputs": [
+    "Life Safety survey agency contact"
+  ],
+  "sources": [
+    {
+      "title": "Day 0 Setup answers",
+      "type": "QualiNav onboarding",
+      "confidence": "high"
+    },
+    {
+      "title": "Scout fixture reference",
+      "type": "local QA fixture",
+      "confidence": "fixture"
+    }
+  ],
+  "source_count": 2
+}

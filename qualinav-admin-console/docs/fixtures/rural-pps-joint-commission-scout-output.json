@@ -1,0 +1,240 @@
+{
+  "status": "ok",
+  "request_id": "fixture-rural-pps-jc-001",
+  "workflow_version": "day0_workflow_v1_fixture",
+  "generated_at": "2026-06-18T10:10:00Z",
+  "persona_experience_summary": {
+    "summary": "Experienced Rural PPS Quality Director with Joint Commission accreditation and broader value-based reporting exposure.",
+    "guidance_level": "light",
+    "first_30_days_track": false,
+    "program_maturity": "advanced"
+  },
+  "persona_context": {
+    "hospital_category": "rural_pps",
+    "payment_model": "pps",
+    "service_model": "rural_acute_care",
+    "survey_pathway": "joint_commission",
+    "accreditation_pathway": "accreditor_deeming_authority",
+    "accreditation_body": "joint_commission",
+    "quality_director_experience": "experienced",
+    "guidance_level": "light",
+    "program_maturity": "advanced",
+    "first_30_days_track": false
+  },
+  "workflows": {
+    "persona_experience_summary": [
+      {
+        "title": "Experienced Rural PPS Quality Director",
+        "summary": "Prioritize value-based reporting visibility, committee sequencing, and dashboard currency."
+      }
+    ],
+    "master_reporting_schedule": [
+      {
+        "report_name": "IQR measure review",
+        "frequency": "Quarterly",
+        "due_date_rule": "Per QualityNet calendar",
+        "owner": "Quality Director",
+        "backup_preparer": "Reporting Analyst",
+        "approval_required": "CNO review",
+        "status": "Needs review"
+      },
+      {
+        "report_name": "OQR measure review",
+        "frequency": "Quarterly",
+        "due_date_rule": "Per QualityNet calendar",
+        "owner": "Quality Director",
+        "backup_preparer": "Clinic Quality Coordinator",
+        "approval_required": "None",
+        "status": "Draft"
+      },
+      {
+        "report_name": "HCAHPS trend review",
+        "frequency": "Monthly",
+        "due_date_rule": "Same day each month: 10",
+        "owner": "Patient Experience Lead",
+        "backup_preparer": "Quality Director",
+        "approval_required": "Board Quality Committee",
+        "status": "Ready"
+      }
+    ],
+    "meeting_report_flow_map": [
+      {
+        "committee_name": "Quality and Safety Committee",
+        "frequency_timing": "Monthly",
+        "user_role": "Primary presenter",
+        "reports_to": "Medical Executive Committee",
+        "preparation_lead_time": "2 weeks",
+        "information_flow": "Dashboard, infection prevention, and value-based reporting status flow into MEC.",
+        "status": "Ready"
+      },
+      {
+        "committee_name": "Board Quality Committee",
+        "frequency_timing": "Quarterly",
+        "user_role": "Contributor",
+        "reports_to": "Full Governing Board",
+        "preparation_lead_time": "3 weeks",
+        "sequencing_rule": "Board packet materials follow MEC review.",
+        "status": "Ready"
+      }
+    ],
+    "survey_readiness_timeline": [
+      {
+        "milestone": "Joint Commission standards update review",
+        "timing": "Monthly",
+        "owner": "Quality Director",
+        "status": "Ready"
+      },
+      {
+        "milestone": "Tracer readiness review",
+        "timing": "Quarterly",
+        "owner": "Quality and Safety Committee",
+        "status": "Needs review"
+      }
+    ],
+    "recurring_clinical_monitoring": [
+      {
+        "monitoring_area": "Antibiotic stewardship monitoring",
+        "cadence": "Quarterly",
+        "reviewed_by": "Pharmacy & Therapeutics",
+        "current_state": "Developing",
+        "priority": "Medium priority gap",
+        "action_needed": "Tie dashboard to P&T agenda"
+      },
+      {
+        "monitoring_area": "OPPE / FPPE process monitoring",
+        "cadence": "Semiannual",
+        "reviewed_by": "Medical Executive Committee",
+        "current_state": "Inconsistent",
+        "priority": "High priority gap",
+        "action_needed": "Confirm process owner and reporting cadence"
+      }
+    ],
+    "aggregate_data_uploads": [
+      {
+        "measure": "IQR",
+        "cadence": "Quarterly",
+        "source_system": "QualityNet",
+        "owner": "Reporting Analyst",
+        "status": "Needs review"
+      },
+      {
+        "measure": "eCQMs",
+        "cadence": "Annual",
+        "source_system": "EHR reporting module",
+        "owner": "Informatics Analyst",
+        "status": "Draft"
+      }
+    ],
+    "routine_task_rhythm": [
+      {
+        "task": "Value-based program dashboard refresh",
+        "cadence": "Monthly",
+        "owner": "Quality Director",
+        "monitoring_area": "Payment-linked reporting"
+      },
+      {
+        "task": "Medical staff quality file check",
+        "cadence": "Quarterly",
+        "owner": "Medical Staff Coordinator",
+        "monitoring_area": "OPPE / FPPE"
+      }
+    ],
+    "active_improvement_projects": [
+      {
+        "project_aim": "Improve discharge follow-up communication",
+        "method": "Lean",
+        "measure": "Timely follow-up documentation rate",
+        "current_status": "Active testing",
+        "next_step": "Compare monthly aggregate trend"
+      },
+      {
+        "project_aim": "Reduce avoidable readmission signals",
+        "method": "Model for Improvement / PDSA",
+        "measure": "Readmission dashboard trend",
+        "current_status": "Planning",
+        "next_step": "Define baseline denominator"
+      }
+    ],
+    "plan_policy_tasks": [
+      {
+        "plan_name": "Patient Safety Plan",
+        "current_status": "Exists",
+        "owner": "Patient Safety Officer",
+        "last_approved": "2026-01-20",
+        "board_approval": "Board approved",
+        "action_needed": "Review/update",
+        "priority": "Medium"
+      },
+      {
+        "policy_name": "Medical staff quality review policy",
+        "current_status": "Review needed",
+        "owner": "Medical Staff Coordinator",
+        "last_reviewed": "2025-08-01",
+        "board_approval": "Medical Staff approval",
+        "action_needed": "Route for approval",
+        "priority": "High"
+      }
+    ],
+    "template_needs": [
+      "Board quality report template",
+      "Run chart template",
+      "Corrective action plan template"
+    ],
+    "priority_queue": [
+      {
+        "priority": "High",
+        "item": "Clarify OPPE / FPPE monitoring cadence",
+        "why_it_matters": "Medical staff quality monitoring needs clear ownership and review rhythm.",
+        "target": "Next MEC agenda",
+        "related_monitoring_area": "OPPE / FPPE"
+      },
+      {
+        "priority": "Medium",
+        "item": "Update medical staff quality review policy",
+        "why_it_matters": "Policy review supports survey readiness and reporting consistency.",
+        "target": "Next policy review cycle",
+        "related_monitoring_area": "Plans and Policies"
+      }
+    ],
+    "learning_journey": [
+      {
+        "topic": "Value-based reporting refresher",
+        "format": "Templates and examples",
+        "status": "Recommended"
+      }
+    ],
+    "reminder_rules": [
+      {
+        "name": "Monthly dashboard refresh",
+        "lead_time": "1 week",
+        "buffer": "3 days",
+        "owner": "Quality Director"
+      },
+      {
+        "name": "Quarterly Board Quality packet",
+        "lead_time": "3 weeks",
+        "buffer": "1 week",
+        "owner": "Quality Director"
+      }
+    ]
+  },
+  "warnings": [
+    "OPPE / FPPE monitoring cadence needs confirmation."
+  ],
+  "missing_inputs": [
+    "Primary backup preparer for eCQM reporting"
+  ],
+  "sources": [
+    {
+      "title": "Day 0 Setup answers",
+      "type": "QualiNav onboarding",
+      "confidence": "high"
+    },
+    {
+      "title": "Rural PPS fixture assumptions",
+      "type": "local QA fixture",
+      "confidence": "fixture"
+    }
+  ],
+  "source_count": 2
+}

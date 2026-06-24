@@ -1,0 +1,1636 @@
+/* Qualinav QI Projects — front-end styles
+   Palette inherited from qualinav-pages My QI Projects (#03283E navy + #a8dbe6 teal)
+   plus the Improvement Canvas pastel step colors. */
+
+/* Hide theme/WP page title on pages that render our shortcodes or templates.
+   The teal header bar already provides the title. Mirrors the qualinav-pages pattern. */
+.qi-page .entry-title,
+.qi-page .page-title,
+.qi-page .post-title,
+.qi-page .elementor-page-title,
+.qi-page .elementor-widget-theme-post-title,
+.qi-page .elementor-widget-heading h1.elementor-heading-title,
+.qi-page .wp-block-post-title,
+.qi-page header.entry-header,
+.qi-page header.entry-header h1,
+.qi-page .qm-page-title,
+.qi-page .qualinav-page-title,
+.qi-page main > h1:first-child,
+.qi-page article > h1:first-child,
+.qi-page .site-content > h1:first-child {
+	display: none !important;
+}
+
+/* Expand the dashboard / canvas to fill the platform content area edge-to-edge.
+   Most themes wrap content in a max-width container — we strip those constraints
+   on .qi-page so our wrapper can use the full available width. Mirrors how
+   qualinav-pages's My Org dashboard escapes the same containers. */
+/* Grapevine shell-specific overrides (per platform docs):
+   - .gv-content-wrap has max-width: 1200px → remove
+   - .gv-main has padding: 2rem → remove
+   The .gv-sidebar and .gv-header keep their layout untouched. */
+.qi-page .gv-main {
+	padding: 0 !important;
+}
+.qi-page .gv-content-wrap {
+	max-width: none !important;
+	width: 100% !important;
+	padding: 0 !important;
+	margin: 0 !important;
+}
+
+/* Generic theme content-wrapper resets (for non-Grapevine themes) */
+.qi-page .entry-content,
+.qi-page .post-content,
+.qi-page article,
+.qi-page article > div,
+.qi-page article > .entry-content,
+.qi-page main > article,
+.qi-page main > .entry-content,
+.qi-page #primary,
+.qi-page #content > article,
+.qi-page .site-main > article {
+	max-width: none !important;
+	width: auto !important;
+	padding: 0 !important;
+	margin: 0 !important;
+}
+
+.qi-dashboard, .qi-canvas {
+	font-family: var(--scout-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+	color: #03283E;
+	background: #ffffff;
+	border-radius: 0;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	height: calc(100vh - 80px);
+	width: 100%;
+	position: relative;
+}
+
+/* Tile grid + canvas content scroll inside the wrapper */
+.qi-dashboard .qi-projects-grid,
+.qi-canvas .qi-canvas-content {
+	overflow-y: auto;
+	min-height: 0;
+}
+
+@media (max-width: 768px) {
+	.qi-dashboard, .qi-canvas {
+		height: auto;
+		min-height: calc(100vh - 80px);
+		overflow-y: auto;
+	}
+}
+
+/* ---------- Dashboard ---------- */
+
+/* Top bar — solid cyan, padding 14px 32px, no border radius */
+.qi-dashboard-topbar {
+	background: #d0f5f9;
+	padding: 12px 32px;
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	flex-shrink: 0;
+	border-radius: 0;
+}
+.qi-back-circle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 50%;
+	background: rgba(3, 40, 62, 0.1);
+	color: #03283E !important;
+	text-decoration: none !important;
+	flex-shrink: 0;
+	transition: background 0.15s, transform 0.15s;
+}
+.qi-back-circle:hover { background: rgba(3, 40, 62, 0.18); transform: translateX(-2px); }
+.qi-back-circle:focus { outline: 2px solid #03283E; outline-offset: 2px; }
+.qi-topbar-title {
+	margin: 0;
+	font-size: 20px;
+	font-weight: 600;
+	color: #03283E;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+.qi-topbar-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: #03283E;
+}
+.qi-topbar-divider {
+	width: 1px;
+	height: 24px;
+	background: rgba(3, 40, 62, 0.25);
+	flex-shrink: 0;
+}
+.qi-topbar-subtitle {
+	flex: 1;
+	min-width: 0;
+	font-size: 16px;
+	font-weight: 500;
+	color: rgba(3, 40, 62, 0.85);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.qi-back-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 14px;
+	border-radius: 8px;
+	background: rgba(3, 40, 62, 0.08);
+	color: #03283E !important;
+	text-decoration: none !important;
+	font-size: 13px;
+	font-weight: 600;
+	transition: background 0.2s ease;
+}
+.qi-back-btn:hover { background: rgba(3, 40, 62, 0.15); }
+
+/* Search row — same banded style as My Org's stats bar */
+.qi-dashboard-search {
+	background: #f8fafc;
+	border-bottom: 1px solid rgba(3, 40, 62, 0.1);
+	padding: 16px 32px;
+	flex-shrink: 0;
+}
+.qi-dashboard-search .qi-search-input-wrap {
+	position: relative;
+	display: block;
+	width: 100%;
+	max-width: 480px;
+}
+.qi-dashboard-search .qi-search-icon {
+	position: absolute;
+	left: 16px;
+	top: 50%;
+	transform: translateY(-50%);
+	color: rgba(3, 40, 62, 0.4);
+	pointer-events: none;
+	z-index: 2;
+	transition: color 0.15s ease;
+}
+.qi-dashboard-search input[type="search"] {
+	width: 100%;
+	height: 42px;
+	padding: 0 18px 0 46px;
+	border: 1px solid rgba(3, 40, 62, 0.12);
+	border-radius: 999px;
+	background: #fff;
+	font-size: 14px;
+	color: #03283E;
+	font-family: inherit;
+	box-shadow: 0 1px 2px rgba(3, 40, 62, 0.04);
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+	-webkit-appearance: none;
+	appearance: none;
+	box-sizing: border-box;
+}
+.qi-dashboard-search input[type="search"]::placeholder {
+	color: rgba(3, 40, 62, 0.4);
+}
+.qi-dashboard-search input[type="search"]::-webkit-search-cancel-button,
+.qi-dashboard-search input[type="search"]::-webkit-search-decoration {
+	-webkit-appearance: none;
+	display: none;
+}
+.qi-dashboard-search input[type="search"]:hover {
+	border-color: rgba(3, 40, 62, 0.22);
+}
+.qi-dashboard-search input[type="search"]:focus {
+	outline: none;
+	border-color: #7ccae2;
+	box-shadow: 0 0 0 3px rgba(124, 202, 226, 0.25);
+}
+.qi-dashboard-search .qi-search-input-wrap:focus-within .qi-search-icon {
+	color: #03283E;
+}
+
+/* Tiles grid — matches My Org pattern (3 columns, tiles size to content) */
+.qi-projects-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	grid-auto-rows: min-content;
+	align-content: start;
+	gap: 16px;
+	padding: 16px 32px;
+	flex: 1;
+	min-height: 0;
+}
+@media (max-width: 1024px) { .qi-projects-grid { grid-template-columns: repeat(2, 1fr); padding: 14px 20px; } }
+@media (max-width: 768px)  { .qi-projects-grid { grid-template-columns: 1fr; } }
+
+/* Tile base (matches .myorg-tile) */
+.qi-tile {
+	background-color: #7ccae2;
+	border-radius: 14px;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	text-decoration: none !important;
+	color: #03283E !important;
+	min-height: 240px;
+	position: relative;
+	overflow: hidden;
+	cursor: pointer;
+	transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+	border: none;
+	font: inherit;
+}
+.qi-tile:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(3, 40, 62, 0.15); }
+.qi-tile:disabled { opacity: 0.6; cursor: not-allowed; }
+.qi-tile:disabled:hover { transform: none; box-shadow: none; }
+
+/* High-specificity overrides to defeat Grapevine's default a:hover { text-decoration: underline }
+   (mirrors the pattern used by .myorg-tile in qualinav-pages CSS) */
+html body .gv-shell a.qi-tile,
+html body .gv-shell a.qi-tile:link,
+html body .gv-shell a.qi-tile:visited,
+html body .gv-shell a.qi-tile:hover,
+html body .gv-shell a.qi-tile:focus,
+html body .gv-shell a.qi-tile:active,
+html body a.qi-tile,
+html body a.qi-tile:hover,
+html body a.qi-tile:focus,
+html body a.qi-tile:active {
+	color: #03283E !important;
+	text-decoration: none !important;
+}
+html body .gv-shell a.qi-tile:hover *,
+html body a.qi-tile:hover *,
+html body .gv-shell a.qi-tile *,
+html body a.qi-tile * {
+	text-decoration: none !important;
+}
+html body .gv-shell a.qi-back-btn,
+html body .gv-shell a.qi-back-btn:hover,
+html body .gv-shell a.qi-back-btn:focus,
+html body a.qi-back-btn,
+html body a.qi-back-btn:hover {
+	text-decoration: none !important;
+}
+
+.qi-tile-body {
+	position: relative;
+	z-index: 2;
+	padding: 24px;
+	text-align: center;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	width: 100%;
+}
+
+/* Icon (matches .myorg-tile-icon) */
+.qi-tile-icon {
+	width: 56px;
+	height: 56px;
+	border-radius: 14px;
+	background: rgba(3, 40, 62, 0.12);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	margin-bottom: 12px;
+	color: #03283E;
+	transition: all 0.3s ease;
+}
+.qi-tile:hover .qi-tile-icon { transform: scale(1.1); background: rgba(3, 40, 62, 0.18); }
+
+/* Title (matches .myorg-tile-title) */
+.qi-tile-title {
+	font-size: 20px;
+	font-weight: 700;
+	margin-bottom: 4px;
+	color: #03283E !important;
+}
+
+/* Desc (matches .myorg-tile-desc) */
+.qi-tile-desc {
+	font-size: 13px;
+	color: rgba(3, 40, 62, 0.7);
+	line-height: 1.4;
+	margin-bottom: 0;
+	display: -webkit-box;
+	-webkit-line-clamp: 3;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+.qi-tile-desc-empty { font-style: italic; color: rgba(3, 40, 62, 0.5); }
+
+/* Status pill in tile corner (top-right) */
+.qi-tile-status {
+	position: absolute;
+	top: 12px;
+	right: 12px;
+	padding: 3px 10px;
+	border-radius: 999px;
+	background: rgba(3, 40, 62, 0.12);
+	color: #03283E;
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.05em;
+	z-index: 3;
+}
+
+/* Add tile — same teal family but with dashed border to mark as CTA */
+.qi-tile-add {
+	background-color: rgba(124, 202, 226, 0.45);
+	border: 2px dashed #7ccae2;
+}
+.qi-tile-add:hover:not(:disabled) {
+	background-color: rgba(124, 202, 226, 0.65);
+}
+.qi-tile-icon-add {
+	background: #ffffff;
+	color: #03283E;
+	box-shadow: 0 2px 6px rgba(3, 40, 62, 0.08);
+}
+
+.qi-status {
+	display: inline-block;
+	padding: 2px 10px;
+	border-radius: 12px;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+.qi-status-draft       { background: #f1f5f9; color: #475569; }
+.qi-status-in_progress { background: #dbeafe; color: #1e40af; }
+.qi-status-completed   { background: #dcfce7; color: #166534; }
+.qi-status-archived    { background: #fef3c7; color: #92400e; }
+
+/* ---------- Canvas ---------- */
+
+/* Canvas-specific scroll area */
+.qi-canvas-content {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 20px 32px 32px;
+}
+
+/* Flat dark-bar tabs (matches the Data Hub pattern) */
+.qi-tabs {
+	display: flex;
+	gap: 0;
+	background: #03283E;
+	padding: 0 32px;
+	border-bottom: 2px solid rgba(166, 231, 242, 0.15);
+	flex-shrink: 0;
+}
+.qi-tab {
+	padding: 14px 24px;
+	background: transparent;
+	border: none;
+	border-bottom: 3px solid transparent;
+	font-size: 13px;
+	font-weight: 600;
+	color: rgba(255, 255, 255, 0.5);
+	cursor: pointer;
+	white-space: nowrap;
+	transition: all 0.2s ease;
+	font-family: inherit;
+	margin-bottom: -2px;
+}
+.qi-tab:hover {
+	color: rgba(255, 255, 255, 0.85);
+	background: rgba(255, 255, 255, 0.03);
+}
+.qi-tab.is-active {
+	color: #ffffff;
+	border-bottom-color: #A6E7F2;
+	background: transparent;
+}
+
+.qi-tab-panel { display: none; }
+.qi-tab-panel.is-active { display: block; }
+
+/* 2-column tab intro (text + optional canvas reference image) */
+.qi-tab-intro {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 40px;
+	margin-bottom: 32px;
+	align-items: start;
+}
+.qi-tab-intro--no-image {
+	grid-template-columns: 1fr;
+	max-width: 820px;
+}
+.qi-tab-intro-text { padding-top: 8px; }
+.qi-tab-title {
+	margin: 0 0 16px;
+	font-size: 26px;
+	font-weight: 700;
+	color: #03283E;
+	line-height: 1.25;
+}
+.qi-tab-desc {
+	margin: 0 0 14px;
+	font-size: 15px;
+	line-height: 1.7;
+	color: #334155;
+}
+.qi-tab-desc:last-child { margin-bottom: 0; }
+.qi-tab-intro-image {
+	position: relative;
+	line-height: 0;
+}
+.qi-tab-intro-image img {
+	width: 100%;
+	height: auto;
+	border-radius: 12px;
+	display: block;
+}
+
+/* Matrix-diagram score overlays (shown once scores are locked) */
+.qi-matrix-score-overlays {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	font-family: inherit;
+}
+.qi-matrix-score-cell {
+	position: absolute;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: #03283E;
+	font-weight: 700;
+	font-size: clamp(12px, 1.4vw, 20px);
+	line-height: 1;
+}
+.qi-matrix-score-cell--total {
+	font-size: clamp(12px, 1.4vw, 18px);
+	color: #03283E;
+}
+
+/* Populated-canvas overlay: zones positioned by % map to image coordinates */
+.qi-canvas-overlays {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}
+.qi-canvas-overlay {
+	position: absolute;
+	background: transparent;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	padding: 0;
+	overflow: visible;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	pointer-events: auto;
+	transition: background 0.15s ease, border-color 0.15s ease;
+	cursor: pointer;
+	font-family: inherit;
+}
+.qi-canvas-overlay:hover {
+	background: rgba(124, 202, 226, 0.12);
+	border-color: rgba(92, 196, 217, 0.6);
+}
+.qi-canvas-overlay.is-textarea { cursor: default; pointer-events: none; }
+
+/* Numbered step badge — gray circle with white number, mirrors dotank canvas style */
+.qi-canvas-overlay-number {
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	background: #8a99a6;
+	color: #ffffff;
+	font-size: 14px;
+	font-weight: 700;
+	line-height: 1;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+	transition: background 0.15s ease, transform 0.15s ease;
+}
+.qi-canvas-overlay:hover .qi-canvas-overlay-number {
+	background: #5cc4d9;
+	transform: scale(1.08);
+}
+/* Pinned zones get a teal-tinted badge so the user can tell which numbers
+   already have a saved pick — still no card content rendered on the canvas */
+.qi-canvas-overlay.has-pins .qi-canvas-overlay-number {
+	background: #5cc4d9;
+}
+
+/* Smaller badges for tight sub-cells */
+@media (max-width: 1100px) {
+	.qi-canvas-overlay-number { width: 26px; height: 26px; font-size: 12px; }
+}
+
+/* Custom hover tooltip — shows the zone's friendly label (Population, Idea 1, etc.) */
+.qi-canvas-overlay-tooltip {
+	position: absolute;
+	bottom: calc(100% + 6px);
+	left: 50%;
+	transform: translateX(-50%) translateY(4px);
+	background: #03283E;
+	color: #ffffff;
+	padding: 4px 10px;
+	border-radius: 6px;
+	font-size: 11px;
+	font-weight: 600;
+	white-space: nowrap;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.15s ease, transform 0.15s ease;
+	z-index: 100;
+	box-shadow: 0 2px 8px rgba(3, 40, 62, 0.25);
+}
+.qi-canvas-overlay-tooltip::after {
+	content: '';
+	position: absolute;
+	top: 100%;
+	left: 50%;
+	transform: translateX(-50%);
+	border: 4px solid transparent;
+	border-top-color: #03283E;
+}
+.qi-canvas-overlay:hover .qi-canvas-overlay-tooltip {
+	opacity: 1;
+	transform: translateX(-50%) translateY(0);
+}
+/* Suppress native title tooltip so only the styled one appears */
+.qi-canvas-overlay { -webkit-user-select: none; user-select: none; }
+
+/* Zone picker modal */
+.qi-zone-modal,
+.qi-zone-modal * { line-height: normal; }
+.qi-zone-modal .qi-modal-card {
+	width: min(94vw, 560px);
+	max-height: 80vh;
+	display: flex;
+	flex-direction: column;
+	line-height: 1.5;
+}
+.qi-zone-modal h2 { line-height: 1.25; }
+.qi-zone-modal-desc {
+	margin: 0 0 16px;
+	font-size: 13px;
+	color: rgba(3, 40, 62, 0.7);
+	line-height: 1.5;
+}
+.qi-zone-cards-list {
+	flex: 1;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 4px;
+	min-height: 80px;
+	border: 1px solid #e2e8f0;
+	border-radius: 8px;
+	background: #f8fafc;
+}
+.qi-zone-card-option {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 10px 12px;
+	background: #fff;
+	border: 1px solid #e2e8f0;
+	border-radius: 6px;
+	cursor: pointer;
+	transition: border-color 0.15s ease;
+}
+.qi-zone-card-option:hover { border-color: #5cc4d9; }
+.qi-zone-card-option input[type="checkbox"] {
+	margin-top: 2px;
+	flex-shrink: 0;
+	cursor: pointer;
+}
+.qi-zone-card-option-content {
+	font-size: 13px;
+	line-height: 1.5;
+	color: #1e293b;
+	flex: 1;
+}
+.qi-zone-card-option-meta {
+	margin-top: 4px;
+	font-size: 11px;
+	color: #94a3b8;
+}
+.qi-zone-empty {
+	padding: 24px 16px;
+	text-align: center;
+	color: #94a3b8;
+	font-size: 13px;
+	font-style: italic;
+}
+.qi-modal-actions { justify-content: space-between; }
+.qi-modal-actions-right { display: flex; gap: 8px; }
+.qi-btn-link {
+	background: transparent;
+	border: none;
+	color: #2563eb;
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+	padding: 6px 0;
+	font-family: inherit;
+}
+.qi-btn-link:hover { text-decoration: underline; }
+.qi-canvas-overlay-item {
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+	border-bottom: 1px dashed rgba(3, 40, 62, 0.08);
+	padding-bottom: 2px;
+}
+.qi-canvas-overlay-item:last-child { border-bottom: none; padding-bottom: 0; }
+.qi-canvas-overlay-empty {
+	display: block;
+	width: 100%;
+	height: 100%;
+}
+
+@media (max-width: 800px) {
+	.qi-tab-intro { grid-template-columns: 1fr; }
+}
+
+/* ---------- Steps (color-coded by Improvement Canvas palette) ---------- */
+
+.qi-step {
+	margin-bottom: 24px;
+	padding: 20px;
+	border-radius: 12px;
+	background: var(--qi-step-bg, #f1f5f9);
+}
+.qi-color-blue     { --qi-step-bg: #e6f3f7; }
+.qi-color-green    { --qi-step-bg: #e7f0e2; }
+.qi-color-yellow   { --qi-step-bg: #faf3d9; }
+.qi-color-pink     { --qi-step-bg: #f9e0d4; }
+.qi-color-cream    { --qi-step-bg: #faf3e6; }
+.qi-color-lavender { --qi-step-bg: #f5dadc; }
+.qi-color-purple   { --qi-step-bg: #e6e2f0; }
+.qi-color-gray     { --qi-step-bg: #ebecee; }
+
+.qi-step-header {
+	font-size: 16px;
+	font-weight: 700;
+	color: #03283E;
+	margin-bottom: 8px;
+	padding: 10px 16px;
+	background: rgba(255, 255, 255, 0.6);
+	border-radius: 8px;
+}
+.qi-step-helper {
+	margin: 0 0 16px;
+	font-size: 13px;
+	line-height: 1.6;
+	color: #475569;
+}
+
+/* ---------- Field types ---------- */
+
+.qi-field { margin-bottom: 16px; }
+
+/* Brief highlight when a canvas zone jumps the user to its step. */
+.qi-zone-flash {
+	animation: qi-zone-flash 1.6s ease-out;
+	border-radius: 8px;
+}
+@keyframes qi-zone-flash {
+	0%   { box-shadow: 0 0 0 3px rgba(15, 106, 103, 0.55); }
+	100% { box-shadow: 0 0 0 3px rgba(15, 106, 103, 0); }
+}
+.qi-field-label,
+.qi-col-label,
+.qi-slot-label {
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-align: center;
+	padding: 8px;
+	background: rgba(255, 255, 255, 0.7);
+	border-radius: 6px 6px 0 0;
+	color: #03283E;
+}
+
+.qi-cards {
+	min-height: 40px;
+	padding: 8px;
+	background: rgba(255, 255, 255, 0.4);
+	border: 1px dashed #cbd5e1;
+	border-radius: 0 0 6px 6px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.qi-card-list .qi-cards,
+.qi-card-list .qi-add-card { border-radius: 8px; }
+.qi-card-list .qi-cards {
+	display: grid !important;
+	grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)) !important;
+	gap: 12px !important;
+	padding: 12px !important;
+	background: rgba(255, 255, 255, 0.5);
+	border: 1px dashed #94a3b8;
+	align-items: start !important;
+	flex-direction: row !important;  /* defeat any cached flex-column rule */
+}
+.qi-card-list .qi-card {
+	margin: 0;
+	width: auto !important;
+}
+@media (max-width: 600px) {
+	.qi-card-list .qi-cards { grid-template-columns: 1fr !important; }
+}
+
+/* Compact step: tighter padding/typography on cards (Gameplan steps 5-7).
+   Grid layout is left untouched so card metadata (author, timestamp, edit/delete)
+   still fits on one line. */
+.qi-step--compact .qi-card {
+	padding: 8px 10px;
+	font-size: 12px;
+	line-height: 1.4;
+}
+.qi-step--compact .qi-card-meta {
+	margin-top: 6px;
+	padding-top: 6px;
+	font-size: 10px;
+	gap: 6px;
+}
+.qi-step--compact .qi-card-meta button { font-size: 10px; padding: 1px 6px; }
+.qi-step--compact .qi-cards { gap: 8px; }
+
+/* card_list_2col layout */
+.qi-2col {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 32px;
+	position: relative;
+}
+.qi-2col::before {
+	content: '';
+	position: absolute;
+	top: 8px;
+	bottom: 8px;
+	left: 50%;
+	width: 0;
+	border-left: 1px dashed rgba(3, 40, 62, 0.3);
+	pointer-events: none;
+}
+.qi-col { display: flex; flex-direction: column; }
+
+/* card_slots_named (responsive grid based on slot count) */
+.qi-card-slots-named {
+	display: grid;
+	grid-template-columns: repeat(var(--qi-slot-cols, 5), 1fr);
+	gap: 12px;
+}
+.qi-slot { display: flex; flex-direction: column; }
+
+/* card_slots_numbered (Idea 1-5: 3-column grid responsive) */
+.qi-card-slots-numbered {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+	gap: 12px;
+}
+.qi-numbered-slot { display: flex; flex-direction: column; }
+
+@media (max-width: 800px) {
+	.qi-card-slots-named { grid-template-columns: 1fr; }
+	.qi-2col { grid-template-columns: 1fr; }
+}
+
+/* Card */
+.qi-card {
+	padding: 12px;
+	background: #fff;
+	border: 1px solid #e2e8f0;
+	border-radius: 8px;
+	font-size: 13px;
+	line-height: 1.5;
+}
+.qi-card.is-editing { border-color: #a8dbe6; box-shadow: 0 0 0 3px rgba(168, 219, 230, 0.3); }
+.qi-card-content { color: #1e293b; white-space: pre-wrap; word-wrap: break-word; }
+.qi-card-content[contenteditable="true"] {
+	outline: none;
+	padding: 4px;
+	background: #fffef0;
+	border-radius: 4px;
+}
+.qi-card-meta {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 8px;
+	padding-top: 8px;
+	border-top: 1px solid #f1f5f9;
+	font-size: 11px;
+	color: #64748b;
+}
+.qi-card-author { font-weight: 600; }
+.qi-card-meta button {
+	margin-left: auto;
+	padding: 2px 8px;
+	background: transparent;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	font-size: 11px;
+	color: #64748b;
+	cursor: pointer;
+}
+.qi-card-meta button:hover { background: #f1f5f9; color: #03283E; }
+.qi-card-meta .qi-card-delete:hover { background: #fee2e2; color: #b91c1c; }
+.qi-card-meta .qi-card-edit + .qi-card-delete { margin-left: 4px; }
+
+/* Add card button */
+.qi-add-card {
+	margin-top: 8px;
+	padding: 8px 12px;
+	background: transparent;
+	border: 1px dashed #94a3b8;
+	border-radius: 6px;
+	font-size: 12px;
+	color: #475569;
+	cursor: pointer;
+	transition: all 0.15s;
+}
+.qi-add-card:hover { background: #fff; border-color: #03283E; color: #03283E; }
+
+/* Inline new-card editor */
+.qi-new-card-editor {
+	padding: 8px;
+	background: #fff;
+	border: 1px solid #a8dbe6;
+	border-radius: 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.qi-new-card-editor textarea {
+	width: 100%;
+	min-height: 60px;
+	padding: 6px 8px;
+	border: 1px solid #cbd5e1;
+	border-radius: 4px;
+	font-family: inherit;
+	font-size: 13px;
+	resize: vertical;
+}
+.qi-new-card-editor .qi-actions {
+	display: flex;
+	gap: 6px;
+	justify-content: flex-end;
+}
+.qi-new-card-editor button {
+	padding: 4px 12px;
+	border: none;
+	border-radius: 4px;
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+}
+.qi-new-card-editor .qi-save { background: #03283E; color: #fff; }
+.qi-new-card-editor .qi-cancel { background: #f1f5f9; color: #475569; }
+
+/* Single textarea */
+.qi-textarea {
+	width: 100%;
+	padding: 12px;
+	border: 1px solid #cbd5e1;
+	border-radius: 8px;
+	font-family: inherit;
+	font-size: 14px;
+	line-height: 1.6;
+	resize: vertical;
+	background: #fff;
+}
+.qi-textarea:focus {
+	outline: none;
+	border-color: #a8dbe6;
+	box-shadow: 0 0 0 3px rgba(168, 219, 230, 0.3);
+}
+
+/* ---------- Matrix Diagram (idea_score_matrix field) ---------- */
+
+.qi-idea-matrix {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+.qi-idea-score-row {
+	background: #fff;
+	border: 1px solid rgba(3, 40, 62, 0.08);
+	border-radius: 12px;
+	overflow: hidden;
+}
+.qi-idea-score-header {
+	background: #f0f9fb;
+	padding: 12px 18px;
+	font-size: 14px;
+	font-weight: 700;
+	color: #03283E;
+	border-bottom: 1px solid rgba(3, 40, 62, 0.06);
+}
+.qi-idea-score-header .qi-idea-num { color: #03283E; }
+.qi-idea-score-header .qi-idea-text { font-weight: 500; opacity: 0.85; }
+
+.qi-idea-score-body {
+	display: grid;
+	grid-template-columns: 1fr 200px;
+	gap: 24px;
+	padding: 16px 20px;
+	align-items: center;
+}
+@media (max-width: 720px) {
+	.qi-idea-score-body { grid-template-columns: 1fr; }
+}
+
+.qi-idea-criteria {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+.qi-idea-criterion {
+	display: grid;
+	grid-template-columns: 280px 1fr 28px;
+	gap: 12px;
+	align-items: center;
+}
+@media (max-width: 900px) {
+	.qi-idea-criterion { grid-template-columns: 1fr; }
+}
+.qi-idea-criterion-label {
+	font-size: 13px;
+	color: #334155;
+	line-height: 1.35;
+}
+.qi-idea-slider-wrap {
+	display: contents;
+}
+.qi-idea-slider {
+	-webkit-appearance: none;
+	appearance: none;
+	width: 100%;
+	height: 4px;
+	background: #d6e8ed;
+	border-radius: 2px;
+	outline: none;
+	cursor: pointer;
+}
+.qi-idea-slider::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	appearance: none;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	background: #fff;
+	border: 2px solid #03283E;
+	cursor: grab;
+	transition: transform 0.1s ease;
+}
+.qi-idea-slider::-webkit-slider-thumb:hover { transform: scale(1.1); }
+.qi-idea-slider::-webkit-slider-thumb:active { cursor: grabbing; transform: scale(1.15); }
+.qi-idea-slider::-moz-range-thumb {
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	background: #fff;
+	border: 2px solid #03283E;
+	cursor: grab;
+}
+.qi-idea-slider-value {
+	font-size: 13px;
+	font-weight: 700;
+	color: #03283E;
+	text-align: center;
+}
+
+.qi-idea-cumulative {
+	background: #f8fafc;
+	border-left: 1px solid rgba(3, 40, 62, 0.06);
+	border-radius: 8px;
+	padding: 16px;
+	text-align: center;
+}
+@media (max-width: 720px) {
+	.qi-idea-cumulative { border-left: none; border-top: 1px solid rgba(3, 40, 62, 0.06); }
+}
+.qi-idea-cumulative-value {
+	font-size: 28px;
+	font-weight: 800;
+	color: #03283E;
+	line-height: 1;
+}
+.qi-idea-cumulative-label {
+	margin-top: 6px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: rgba(3, 40, 62, 0.6);
+}
+.qi-idea-score-row.qi-saving .qi-idea-cumulative-value { opacity: 0.5; }
+
+/* Locked state: scores have been submitted — sliders read-only */
+.qi-idea-matrix.is-locked .qi-idea-slider {
+	cursor: not-allowed;
+	opacity: 0.7;
+	pointer-events: none;
+}
+.qi-idea-matrix.is-locked .qi-idea-slider::-webkit-slider-thumb {
+	cursor: not-allowed;
+	background: #94a3b8;
+	border-color: #64748b;
+}
+.qi-idea-matrix.is-locked .qi-idea-slider::-moz-range-thumb {
+	cursor: not-allowed;
+	background: #94a3b8;
+	border-color: #64748b;
+}
+
+/* Submit / Lock bar */
+.qi-matrix-lock-bar {
+	margin-top: 16px;
+	padding: 12px 16px;
+	background: rgba(255, 255, 255, 0.6);
+	border: 1px dashed #94a3b8;
+	border-radius: 8px;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px;
+}
+.qi-matrix-lock-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 22px;
+	background: #a8dbe6;
+	color: #03283E;
+	border: 1.5px solid #a8dbe6;
+	border-radius: 999px;
+	font-size: 14px;
+	font-weight: 600;
+	font-family: inherit;
+	cursor: pointer;
+	white-space: nowrap;
+	transition: all 0.15s;
+}
+.qi-matrix-lock-btn:hover { border-color: #84c2cc; }
+.qi-matrix-lock-btn:disabled { opacity: 0.6; cursor: wait; }
+.qi-matrix-lock-btn.is-locked {
+	background: #a8dbe6;
+	color: #03283E;
+	border-color: #a8dbe6;
+}
+.qi-matrix-lock-btn.is-locked:hover { border-color: #84c2cc; }
+.qi-matrix-lock-note {
+	margin: 0;
+	flex: 1;
+	min-width: 220px;
+	font-size: 12px;
+	color: #475569;
+}
+
+/* ---------- Field reference (read-only mirror of another field) ---------- */
+
+.qi-field-reference {
+	display: flex;
+	flex-direction: column;
+}
+.qi-field-reference-body {
+	background: rgba(255, 255, 255, 0.6);
+	border: 1px dashed #cbd5e1;
+	border-radius: 0 0 8px 8px;
+	padding: 12px 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.qi-field-reference-card {
+	padding: 10px 12px;
+	background: #fff;
+	border-radius: 6px;
+	font-size: 13px;
+	color: #1e293b;
+	border: 1px solid rgba(3, 40, 62, 0.06);
+}
+.qi-field-reference-text {
+	padding: 4px 0;
+	font-size: 14px;
+	line-height: 1.6;
+	color: #1e293b;
+	white-space: pre-wrap;
+}
+.qi-field-reference-empty {
+	font-size: 12px;
+	color: #94a3b8;
+	font-style: italic;
+}
+
+/* ---------- Phase timeline (N-column textarea grid) ---------- */
+
+.qi-phase-timeline {
+	display: grid;
+	grid-template-columns: repeat(var(--qi-phase-cols, 4), 1fr);
+	gap: 12px;
+}
+@media (max-width: 900px) {
+	.qi-phase-timeline { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+	.qi-phase-timeline { grid-template-columns: 1fr; }
+}
+.qi-phase-column {
+	display: flex;
+	flex-direction: column;
+	border: 1px dashed #cbd5e1;
+	border-radius: 8px;
+	overflow: hidden;
+	background: rgba(255, 255, 255, 0.4);
+}
+.qi-phase-label {
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-align: center;
+	padding: 8px;
+	background: rgba(255, 255, 255, 0.7);
+	color: #03283E;
+	border-bottom: 1px dashed #cbd5e1;
+}
+.qi-phase-textarea {
+	border: none;
+	border-radius: 0;
+	background: transparent;
+	min-height: 100px;
+	padding: 10px 12px;
+	font-size: 13px;
+	line-height: 1.5;
+	resize: vertical;
+}
+.qi-phase-textarea:focus {
+	background: #fff;
+}
+
+/* ---------- Measure rows (Commit tab outcome/process measures) ---------- */
+
+.qi-measures {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.qi-measures-grid {
+	display: flex;
+	flex-direction: column;
+	background: #fff;
+	border: 1px solid rgba(3, 40, 62, 0.08);
+	border-radius: 8px;
+	overflow: hidden;
+}
+.qi-measures-header,
+.qi-measure-row {
+	display: grid;
+	grid-template-columns: 1fr 140px 140px 100px;
+	align-items: center;
+}
+.qi-measures-header {
+	background: #f0f9fb;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	color: #03283E;
+	border-bottom: 1px solid rgba(3, 40, 62, 0.06);
+}
+.qi-measure-row {
+	border-bottom: 1px solid rgba(3, 40, 62, 0.06);
+	font-size: 13px;
+	color: #1e293b;
+}
+.qi-measure-row:last-child { border-bottom: none; }
+.qi-measure-row.is-editing { background: #fffef0; }
+.qi-measures-cell {
+	padding: 12px 14px;
+}
+.qi-measures-cell-current,
+.qi-measures-cell-target {
+	text-align: center;
+	font-weight: 600;
+	border-left: 1px solid rgba(3, 40, 62, 0.06);
+}
+.qi-measures-cell-actions {
+	display: flex;
+	gap: 4px;
+	justify-content: flex-end;
+	padding-right: 12px;
+}
+.qi-measures-cell input,
+.qi-measures-cell textarea {
+	width: 100%;
+	padding: 6px 8px;
+	border: 1px solid #cbd5e1;
+	border-radius: 4px;
+	font-family: inherit;
+	font-size: 13px;
+	background: #fff;
+}
+.qi-measures-cell textarea { resize: vertical; min-height: 36px; }
+.qi-measure-edit,
+.qi-measure-delete {
+	background: transparent;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	padding: 4px 8px;
+	font-size: 11px;
+	cursor: pointer;
+	color: #64748b;
+}
+.qi-measure-edit:hover { background: #f1f5f9; color: #03283E; }
+.qi-measure-delete:hover { background: #fee2e2; color: #b91c1c; }
+.qi-measure-add {
+	margin-top: 4px;
+	padding: 8px 14px;
+	background: transparent;
+	border: 1px dashed #94a3b8;
+	border-radius: 6px;
+	font-size: 12px;
+	color: #475569;
+	cursor: pointer;
+	align-self: flex-start;
+}
+.qi-measure-add:hover { background: #fff; border-color: #03283E; color: #03283E; }
+
+@media (max-width: 720px) {
+	.qi-measures-header,
+	.qi-measure-row {
+		grid-template-columns: 1fr 1fr;
+		grid-template-rows: auto auto;
+	}
+	.qi-measures-cell-desc { grid-column: 1 / -1; }
+	.qi-measures-cell-actions { grid-column: 1 / -1; justify-content: flex-start; }
+}
+
+/* ---------- Scored ideas summary (Commit tab — read-only ideas + scores) ---------- */
+
+.qi-scored-ideas {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.qi-scored-idea-row {
+	background: #fff;
+	border: 1px dashed rgba(3, 40, 62, 0.18);
+	border-radius: 10px;
+	overflow: hidden;
+}
+.qi-scored-idea-header {
+	padding: 10px 18px;
+	background: rgba(3, 40, 62, 0.04);
+	font-size: 13px;
+	font-weight: 700;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: #03283E;
+	text-align: center;
+}
+.qi-scored-idea-body {
+	display: grid;
+	grid-template-columns: 1fr 110px;
+	gap: 16px;
+	align-items: center;
+	padding: 14px 18px;
+}
+.qi-scored-idea-main {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+.qi-scored-idea-text {
+	font-size: 14px;
+	line-height: 1.5;
+	color: #1e293b;
+}
+.qi-scored-idea-num {
+	font-weight: 700;
+	color: #03283E;
+	margin-right: 4px;
+}
+.qi-scored-idea-changes { margin: 0; }
+.qi-scored-idea-score {
+	font-size: 26px;
+	font-weight: 800;
+	color: #03283E;
+	text-align: center;
+}
+
+/* ---------- Submit button (Mark Complete) ---------- */
+
+.qi-submit-field {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	align-items: flex-start;
+}
+.qi-submit-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 14px 32px;
+	background: #03283E;
+	color: #ffffff;
+	border: none;
+	border-radius: 10px;
+	font-size: 15px;
+	font-weight: 700;
+	font-family: inherit;
+	cursor: pointer;
+	transition: background 0.15s ease, transform 0.15s ease;
+}
+.qi-submit-btn:hover:not(:disabled) {
+	background: #0a3a55;
+	transform: translateY(-1px);
+}
+.qi-submit-btn:disabled {
+	cursor: default;
+}
+.qi-submit-btn.is-completed {
+	background: #16a34a;
+	color: #ffffff;
+}
+.qi-submit-btn.is-saving {
+	opacity: 0.7;
+	pointer-events: none;
+}
+.qi-submit-note {
+	margin: 0;
+	font-size: 12px;
+	color: rgba(3, 40, 62, 0.6);
+	font-style: italic;
+}
+
+/* Stub for unimplemented field types */
+.qi-stub {
+	padding: 12px;
+	background: rgba(255, 255, 255, 0.5);
+	border: 1px dashed #cbd5e1;
+	border-radius: 6px;
+	font-size: 12px;
+	color: #94a3b8;
+	font-style: italic;
+}
+.qi-stub code {
+	font-family: monospace;
+	background: #fff;
+	padding: 1px 6px;
+	border-radius: 4px;
+	font-style: normal;
+	color: #03283E;
+}
+
+/* Saving indicator */
+.qi-saving { opacity: 0.6; pointer-events: none; }
+
+/* ---------- Modal (Create project) ---------- */
+
+.qi-modal {
+	position: fixed;
+	inset: 0;
+	z-index: 99999;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.qi-modal[hidden] { display: none; }
+.qi-modal-backdrop {
+	position: absolute;
+	inset: 0;
+	background: rgba(3, 40, 62, 0.5);
+	backdrop-filter: blur(4px);
+}
+.qi-modal-card {
+	position: relative;
+	width: min(92vw, 480px);
+	background: #fff;
+	border-radius: 14px;
+	padding: 28px;
+	box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+.qi-modal-card h2 {
+	margin: 0 0 20px;
+	font-size: 20px;
+	font-weight: 700;
+	color: #03283E;
+}
+.qi-modal-close {
+	position: absolute;
+	top: 12px;
+	right: 14px;
+	background: transparent;
+	border: none;
+	font-size: 24px;
+	color: #94a3b8;
+	cursor: pointer;
+	line-height: 1;
+	padding: 4px 8px;
+	border-radius: 6px;
+}
+.qi-modal-close:hover { background: #f1f5f9; color: #03283E; }
+.qi-modal-label {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	font-size: 13px;
+	font-weight: 600;
+	color: #334155;
+}
+.qi-modal-label input {
+	padding: 10px 12px;
+	border: 1px solid #cbd5e1;
+	border-radius: 8px;
+	font-size: 14px;
+	font-weight: 400;
+	color: #03283E;
+}
+.qi-modal-label input:focus {
+	outline: none;
+	border-color: #5cc4d9;
+	box-shadow: 0 0 0 3px rgba(92, 196, 217, 0.25);
+}
+.qi-modal-error {
+	margin-top: 10px;
+	padding: 8px 12px;
+	background: #fef2f2;
+	border: 1px solid #fecaca;
+	border-radius: 6px;
+	color: #991b1b;
+	font-size: 13px;
+}
+.qi-modal-actions {
+	display: flex;
+	gap: 8px;
+	justify-content: flex-end;
+	margin-top: 20px;
+}
+.qi-btn-primary, .qi-btn-secondary {
+	padding: 8px 18px;
+	border: none;
+	border-radius: 8px;
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+}
+.qi-btn-primary { background: #03283E; color: #fff; }
+.qi-btn-primary:hover { background: #0a3a55; }
+.qi-btn-primary:disabled { opacity: 0.6; cursor: wait; }
+.qi-btn-secondary { background: #f1f5f9; color: #475569; }
+.qi-btn-secondary:hover { background: #e2e8f0; }
+
+/* ---------- Read-only canvas (project status = completed) ---------- */
+.qi-canvas--readonly .qi-add-card,
+.qi-canvas--readonly .qi-card-edit,
+.qi-canvas--readonly .qi-card-delete,
+.qi-canvas--readonly .qi-matrix-lock-bar,
+.qi-canvas--readonly .qi-measure-add,
+.qi-canvas--readonly .qi-measure-edit,
+.qi-canvas--readonly .qi-measure-delete,
+.qi-canvas--readonly .qi-new-card-editor { display: none !important; }
+
+.qi-canvas--readonly .qi-textarea {
+	background: #f8fafc;
+	color: #475569;
+	cursor: not-allowed;
+}
+.qi-canvas--readonly .qi-idea-slider {
+	cursor: not-allowed;
+	opacity: 0.7;
+	pointer-events: none;
+}
+.qi-canvas--readonly .qi-card-content[contenteditable="true"] {
+	background: transparent;
+	outline: none;
+}
+
+
+/* ---------- Org users picker (Team Members fields) ---------- */
+.qi-org-picker {
+	margin-top: 6px;
+	padding: 10px;
+	border: 1px solid #cbd5e1;
+	border-radius: 8px;
+	background: #ffffff;
+	box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.qi-org-picker.qi-saving { opacity: 0.6; pointer-events: none; }
+
+.qi-org-picker-search input {
+	width: 100%;
+	padding: 8px 10px;
+	border: 1px solid #cbd5e1;
+	border-radius: 6px;
+	font-size: 14px;
+	box-sizing: border-box;
+}
+.qi-org-picker-search input:focus { outline: 2px solid #0a3a55; outline-offset: -1px; }
+
+.qi-org-picker-list {
+	max-height: 220px;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.qi-org-picker-item {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 2px;
+	padding: 8px 10px;
+	background: #f8fafc;
+	border: 1px solid transparent;
+	border-radius: 6px;
+	cursor: pointer;
+	text-align: left;
+	font: inherit;
+}
+.qi-org-picker-item:hover { background: #e0f2fe; border-color: #0a3a55; }
+.qi-org-picker-name { font-weight: 600; color: #0f172a; font-size: 14px; }
+.qi-org-picker-name em { font-style: italic; font-weight: 400; color: #64748b; }
+.qi-org-picker-email { font-size: 12px; color: #64748b; }
+.qi-org-picker-empty {
+	padding: 10px;
+	color: #64748b;
+	font-size: 13px;
+	font-style: italic;
+	text-align: center;
+}
+.qi-org-picker-actions {
+	display: flex;
+	justify-content: space-between;
+	gap: 8px;
+}
+.qi-org-picker-actions button {
+	padding: 6px 12px;
+	border-radius: 6px;
+	border: 1px solid #cbd5e1;
+	background: #ffffff;
+	color: #475569;
+	font: inherit;
+	font-size: 13px;
+	cursor: pointer;
+}
+.qi-org-picker-custom { color: #0a3a55 !important; border-color: #0a3a55 !important; }
+.qi-org-picker-custom:hover { background: #e0f2fe; }
+.qi-org-picker-cancel:hover { background: #f1f5f9; }
+
+.qi-canvas--readonly .qi-org-picker { display: none !important; }
+
+/* ---------- Auto-owner card (team_members fields) ---------- */
+.qi-card.qi-card-auto-owner {
+	background: #f0f9ff;
+	border-color: #bae6fd;
+	position: relative;
+}
+.qi-card.qi-card-auto-owner .qi-card-author {
+	background: #0a3a55;
+	color: #ffffff;
+	border-radius: 4px;
+	padding: 1px 8px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+.qi-card.qi-card-auto-owner .qi-card-meta { gap: 8px; }
+
+/* Hide the auto-owner card on readonly canvas? No — it's read-only by nature. */
+
+/* ---------- Submit button gated note ---------- */
+.qi-submit-note.qi-submit-note--gated {
+	color: #94a3b8;
+	font-style: italic;
+}
+
+/* ---------- Matrix scoring: team average indicator ---------- */
+.qi-idea-slider-team {
+	font-size: 0.7em;
+	color: #64748b;
+	font-weight: 500;
+	margin-left: 4px;
+}
+.qi-idea-slider-value[data-count] {
+	cursor: default;
+}
