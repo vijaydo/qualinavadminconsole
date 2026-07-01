@@ -411,12 +411,25 @@ class QN_Invitations
     {
         $handoff = self::get_valid_onboarding_handoff($user_id);
         if (!$handoff) {
+            $organization_id = self::completion_redirect_organization_id($user_id);
+            if ($organization_id) {
+                $target = self::hospital_setup_url($organization_id);
+                self::debug_onboarding_redirect('fallback', $user_id, $target);
+                return $target;
+            }
+
+            self::debug_onboarding_redirect('no', $user_id, $redirect_url);
             return $redirect_url;
         }
 
-        delete_user_meta(absint($user_id), self::ONBOARDING_HANDOFF_META);
+        $target = !empty($handoff['target']) ? esc_url_raw($handoff['target']) : self::hospital_setup_url(absint($handoff['organization_id']));
+        self::debug_onboarding_redirect('yes', $user_id, $target);
 
-        return !empty($handoff['target']) ? esc_url_raw($handoff['target']) : self::hospital_setup_url(absint($handoff['organization_id']));
+        if (self::grapevine_onboarding_completed($user_id)) {
+            delete_user_meta(absint($user_id), self::ONBOARDING_HANDOFF_META);
+        }
+
+        return $target;
     }
 
     public static function clear_completed_handoff_for_organization($user_id, $organization_id)
@@ -425,6 +438,24 @@ class QN_Invitations
         if ($handoff && absint($handoff['organization_id']) === absint($organization_id) && self::grapevine_onboarding_completed($user_id)) {
             delete_user_meta(absint($user_id), self::ONBOARDING_HANDOFF_META);
         }
+    }
+
+    public static function handle_grapevine_onboarding_reset($user_id)
+    {
+        $user_id = absint($user_id);
+        if (!$user_id) {
+            return;
+        }
+
+        delete_user_meta($user_id, self::ONBOARDING_HANDOFF_META);
+
+        $organization_id = self::completion_redirect_organization_id($user_id);
+        if (!$organization_id) {
+            return;
+        }
+
+        update_user_meta($user_id, '_dtm_welcome_pending', '1');
+        self::store_onboarding_handoff_for_organization($user_id, $organization_id);
     }
 
     public static function generate_invite_url($raw_token)
@@ -505,7 +536,9 @@ class QN_Invitations
         $labels = array(
             'qualinav_super_admin' => __('QualiNav Super Admin', 'qualinav-admin-console'),
             'qualinav_admin' => __('QualiNav Admin', 'qualinav-admin-console'),
-            'quality_director' => __('Quality Director', 'qualinav-admin-console'),
+            'quality_director' => __('Hospital Quality Director', 'qualinav-admin-console'),
+            'executive_leader' => __('Executive Leader (CEO or CFO)', 'qualinav-admin-console'),
+            'clinical_ancillary_services_leader' => __('Clinical or Ancillary Services Leader or Director', 'qualinav-admin-console'),
             'hospital_admin' => __('Hospital Admin', 'qualinav-admin-console'),
             'backup_quality_user' => __('Backup Quality User', 'qualinav-admin-console'),
             'reporting_user' => __('Reporting User', 'qualinav-admin-console'),
@@ -525,10 +558,11 @@ class QN_Invitations
     public static function allowed_invite_roles($inviter_role)
     {
         $map = array(
-            'qualinav_super_admin' => array('qualinav_admin', 'quality_director', 'hospital_admin', 'backup_quality_user', 'reporting_user', 'policy_owner', 'committee_user', 'viewer'),
-            'qualinav_admin' => array('quality_director', 'hospital_admin', 'backup_quality_user', 'reporting_user', 'policy_owner', 'committee_user', 'viewer'),
-            'quality_director' => array('hospital_admin', 'backup_quality_user', 'reporting_user', 'policy_owner', 'committee_user', 'viewer'),
-            'hospital_admin' => array('reporting_user', 'policy_owner', 'committee_user', 'viewer'),
+            'qualinav_super_admin' => array('qualinav_admin', 'quality_director', 'executive_leader', 'clinical_ancillary_services_leader', 'hospital_admin', 'backup_quality_user', 'reporting_user', 'policy_owner', 'committee_user', 'viewer'),
+            'qualinav_admin' => array('quality_director', 'executive_leader', 'clinical_ancillary_services_leader', 'hospital_admin', 'backup_quality_user', 'reporting_user', 'policy_owner', 'committee_user', 'viewer'),
+            'quality_director' => array('executive_leader', 'clinical_ancillary_services_leader', 'hospital_admin', 'backup_quality_user', 'reporting_user', 'policy_owner', 'committee_user', 'viewer'),
+            'executive_leader' => array('clinical_ancillary_services_leader', 'reporting_user', 'policy_owner', 'committee_user', 'viewer'),
+            'hospital_admin' => array('clinical_ancillary_services_leader', 'reporting_user', 'policy_owner', 'committee_user', 'viewer'),
         );
 
         return isset($map[$inviter_role]) ? $map[$inviter_role] : array();
@@ -791,6 +825,7 @@ class QN_Invitations
             'ID' => absint($row->ID),
             'display_name' => $row->display_name,
             'user_email' => $row->user_email,
+            'avatar_url' => get_avatar_url(absint($row->ID), array('size' => 96)),
             'organization_id' => $row->organization_id !== null ? absint($row->organization_id) : null,
             'organization_name' => $hospital ? $hospital['name'] : '',
             'state_id' => $row->state_id !== null ? absint($row->state_id) : null,
@@ -807,17 +842,44 @@ class QN_Invitations
     private static function store_onboarding_handoff($user_id, $invitation)
     {
         $organization_id = absint($invitation['organization_id']);
+        self::store_onboarding_handoff_for_organization(absint($user_id), $organization_id, absint($invitation['id']));
+    }
+
+    private static function store_onboarding_handoff_for_organization($user_id, $organization_id, $invite_id = 0)
+    {
         update_user_meta(
             absint($user_id),
             self::ONBOARDING_HANDOFF_META,
             array(
-                'invite_id' => absint($invitation['id']),
-                'organization_id' => $organization_id,
+                'invite_id' => absint($invite_id),
+                'organization_id' => absint($organization_id),
                 'target' => self::hospital_setup_url($organization_id),
                 'created_at' => current_time('timestamp', true),
                 'expires_at' => current_time('timestamp', true) + DAY_IN_SECONDS,
             )
         );
+    }
+
+    private static function completion_redirect_organization_id($user_id)
+    {
+        $user_id = absint($user_id);
+        if (!$user_id || !class_exists('QN_Users') || QN_Users::is_qualinav_admin($user_id) || !QN_Users::is_hospital_user($user_id)) {
+            return 0;
+        }
+
+        $organization_id = QN_Users::get_current_organization_id($user_id);
+        if ($organization_id && QN_Users::user_has_organization($user_id, $organization_id)) {
+            return absint($organization_id);
+        }
+
+        $organizations = QN_Users::get_user_organizations($user_id);
+        foreach ($organizations as $organization) {
+            if (!empty($organization['organization_id']) && (!isset($organization['status']) || $organization['status'] === 'active')) {
+                return absint($organization['organization_id']);
+            }
+        }
+
+        return 0;
     }
 
     private static function get_valid_onboarding_handoff($user_id)
@@ -836,9 +898,53 @@ class QN_Invitations
         return $handoff;
     }
 
+    private static function pending_welcome_organization_id($user_id)
+    {
+        $user_id = absint($user_id);
+        if (!$user_id || !get_user_meta($user_id, '_dtm_welcome_pending', true)) {
+            return 0;
+        }
+
+        $organization_id = QN_Users::get_current_organization_id($user_id);
+        if ($organization_id && QN_Users::user_has_organization($user_id, $organization_id)) {
+            return absint($organization_id);
+        }
+
+        $organizations = QN_Users::get_user_organizations($user_id);
+        foreach ($organizations as $organization) {
+            if (!empty($organization['organization_id']) && (!isset($organization['status']) || $organization['status'] === 'active')) {
+                return absint($organization['organization_id']);
+            }
+        }
+
+        return 0;
+    }
+
     private static function hospital_setup_url($organization_id)
     {
-        return add_query_arg('organization_id', absint($organization_id), home_url('/qualinav')) . '#day-0-setup';
+        return add_query_arg(
+            array(
+                'qualinav_welcome' => '1',
+                'organization_id' => absint($organization_id),
+            ),
+            home_url('/')
+        );
+    }
+
+    private static function debug_onboarding_redirect($handoff_found, $user_id, $url)
+    {
+        if (!defined('WP_DEBUG') || !WP_DEBUG) {
+            return;
+        }
+
+        $path = wp_parse_url($url, PHP_URL_PATH);
+        $query = wp_parse_url($url, PHP_URL_QUERY);
+        error_log(sprintf(
+            '[QN-DIAG] gv_onboarding_completion_redirect_url handoff=%s user_id=%d redirect=%s',
+            $handoff_found,
+            absint($user_id),
+            ($path ? $path : '/') . ($query ? '?' . $query : '')
+        ));
     }
 
     private static function grapevine_onboarding_completed($user_id)
