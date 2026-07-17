@@ -1,7 +1,7 @@
-(function () {
+﻿(function () {
     document.documentElement.classList.add('qualinav-console-ready');
 
-    var config = window.QualiNavConsole || (typeof QualiNavConsole !== 'undefined' ? QualiNavConsole : {});
+    var config = readConsoleConfig();
     var restUrl = config.restUrl || '';
     var nonce = config.nonce || '';
     var state = {
@@ -29,7 +29,10 @@
         onboardingOrganizationId: null,
         onboardingSubmitting: false,
         onboardingBackgroundSaving: false,
+        onboardingSaveStatusTimer: null,
         onboardingSwitchTimer: null,
+        onboardingUrlSectionApplied: false,
+        onboardingUrlQuestionApplied: false,
         onboardingGuideAutoShown: false,
         workspaceWelcomeAutoShown: false,
         scoutRuns: [],
@@ -57,7 +60,9 @@
     var roleLabels = {
         qualinav_super_admin: 'QualiNav Super Admin',
         qualinav_admin: 'QualiNav Admin',
-        quality_director: 'Quality Director',
+        quality_director: 'Hospital Quality Director',
+        executive_leader: 'Executive Leader (CEO or CFO)',
+        clinical_ancillary_services_leader: 'Clinical or Ancillary Services Leader or Director',
         hospital_admin: 'Hospital Admin',
         backup_quality_user: 'Backup Quality User',
         reporting_user: 'Reporting User',
@@ -67,13 +72,16 @@
     };
     var statuses = ['invited', 'active', 'disabled', 'archived'];
     var inviteRolesByRole = {
-        qualinav_super_admin: ['qualinav_admin', 'quality_director', 'hospital_admin', 'backup_quality_user', 'reporting_user', 'policy_owner', 'committee_user', 'viewer'],
-        qualinav_admin: ['quality_director', 'hospital_admin', 'backup_quality_user', 'reporting_user', 'policy_owner', 'committee_user', 'viewer'],
-        quality_director: ['hospital_admin', 'backup_quality_user', 'reporting_user', 'policy_owner', 'committee_user', 'viewer'],
-        hospital_admin: ['reporting_user', 'policy_owner', 'committee_user', 'viewer']
+        qualinav_super_admin: ['qualinav_admin', 'quality_director', 'executive_leader', 'clinical_ancillary_services_leader', 'hospital_admin', 'backup_quality_user', 'reporting_user', 'policy_owner', 'committee_user', 'viewer'],
+        qualinav_admin: ['quality_director', 'executive_leader', 'clinical_ancillary_services_leader', 'hospital_admin', 'backup_quality_user', 'reporting_user', 'policy_owner', 'committee_user', 'viewer'],
+        quality_director: ['executive_leader', 'clinical_ancillary_services_leader', 'hospital_admin', 'backup_quality_user', 'reporting_user', 'policy_owner', 'committee_user', 'viewer'],
+        executive_leader: ['clinical_ancillary_services_leader', 'reporting_user', 'policy_owner', 'committee_user', 'viewer'],
+        hospital_admin: ['clinical_ancillary_services_leader', 'reporting_user', 'policy_owner', 'committee_user', 'viewer']
     };
     var roleDescriptions = {
         quality_director: 'Leads the hospital quality workspace, setup, users, and Scout workflows.',
+        executive_leader: 'Executive persona for hospital leadership, workspace oversight, and reporting visibility.',
+        clinical_ancillary_services_leader: 'Clinical or ancillary services persona for quality work and reporting visibility.',
         hospital_admin: 'Can help manage hospital users and workspace administration.',
         backup_quality_user: 'Can support quality work and see backup coverage context.',
         reporting_user: 'Can support reporting workflows and related setup information.',
@@ -81,6 +89,34 @@
         committee_user: 'Can support committee and meeting workflow information.',
         viewer: 'Read-only access to the hospital workspace.'
     };
+
+    function readConsoleConfig() {
+        var win = browserWindow();
+        var inlineConfig = (win && win.QualiNavConsole) || (typeof QualiNavConsole !== 'undefined' ? QualiNavConsole : {});
+        if (inlineConfig && inlineConfig.restUrl) {
+            return inlineConfig;
+        }
+
+        var configNode = document.getElementById('qn-console-config-json');
+        if (!configNode) {
+            return inlineConfig || {};
+        }
+
+        try {
+            var parsedConfig = JSON.parse(configNode.textContent || '{}');
+            return Object.assign({}, parsedConfig, inlineConfig || {});
+        } catch (error) {
+            return inlineConfig || {};
+        }
+    }
+
+    function browserWindow() {
+        if (typeof window !== 'undefined') {
+            return window;
+        }
+        return document && document.defaultView ? document.defaultView : null;
+    }
+
     var onboardingHelpByStep = {
         hospital_director_info: [
             'Build the hospital profile',
@@ -98,59 +134,46 @@
         ],
         services_clinical_model: [
             'Select applicable service lines',
-            'Choose clinical monitoring areas',
-            'Identify contracted service touchpoints',
+            'Help Scout understand which requirements may apply',
+            'Identify clinical-model context',
             'Tailor hospital-type prompts'
         ],
         committees_reporting: [
-            'Build the meeting and report flow map',
-            'Sequence committee work before board meetings',
-            'Create report preparation reminders',
-            'Identify approval requirements',
-            'Build the master reporting schedule'
+            'Record local meeting names and functions',
+            'Capture parent and roll-up relationships',
+            'Add preparation lead time and backup coverage',
+            'Help Scout prepare information before meetings'
         ],
         plans_policies_monitoring: [
             'Build the required plan review queue',
-            'Identify missing or overdue policies',
-            'Schedule clinical monitoring tasks',
-            'Flag survey-risk gaps',
-            'Prepare templates and priority items'
+            'Identify missing or overdue plans and policies',
+            'Index approved documents for authorized Scout answers',
+            'Reuse a document when it covers multiple requirements',
+            'Assess coverage and readiness without declaring compliance'
         ],
         measures_qi_projects: [
-            'Build measure upload reminders',
-            'Power dashboard trend views',
-            'Link QI projects to measures',
-            'Create milestone check-ins',
-            'Flag projects missing charters or baselines'
-        ],
-        goals_learning_contacts: [
-            'Set your guidance level',
-            'Activate the First 30 Days track if needed',
-            'Build your learning journey',
-            'Protect time for strategic goals',
-            'Create your external contact directory'
+            'Open the hospital Data Hub',
+            'Manage measures and submissions in one source of truth',
+            'Track reporting deadlines and owners',
+            'Review aggregate performance trends'
         ],
         regulatory_tools_preferences: [
-            'Monitor the right regulatory sources',
-            'Set digest and alert preferences',
-            'Configure reminder timing',
+            'Review incomplete setup details once',
             'Identify backup visibility needs',
-            'Generate your Scout setup preview after submission'
+            'Confirm setup is ready',
+            'Generate the Scout setup preview after submission'
         ]
     };
     var onboardingMaterialsChecklist = [
         'Hospital profile details',
-        'Survey/accreditation history',
-        'Reporting obligations',
-        'Committee schedule',
-        'Required plans and last approval dates',
-        'Policy review cycle',
-        'Clinical monitoring processes',
+        'Survey/accreditation history: last survey dates and related action plans',
+        'Reporting obligations for federal, state, or other outside reporting entities',
+        'Meeting schedule for all hospital meetings that include quality reporting',
+        'Quality and Patient Safety-related policies and plans, and last approval dates',
+        'Policy review cycle process or policy',
+        'List of hospital-wide and department-specific Clinical quality measures routinely monitored',
         'Aggregate measure sources',
-        'Active QI projects',
-        'External contacts',
-        'Regulatory monitoring preferences',
-        'Tools/reminder preferences'
+        'Active QI projects'
     ];
 
     function roleLabel(role) {
@@ -165,6 +188,38 @@
         });
     }
 
+    function currentWorkspaceRole() {
+        return state.me && state.me.qualinav_role ? state.me.qualinav_role : '';
+    }
+
+    function isExecutiveReviewRole() {
+        return currentWorkspaceRole() === 'executive_leader';
+    }
+
+    function isReadOnlyWorkspaceRole() {
+        if (isGlobalAdmin()) {
+            return false;
+        }
+        return !canEditOnboarding();
+    }
+
+    function readOnlyReviewBadge() {
+        if (!isReadOnlyWorkspaceRole()) {
+            return '';
+        }
+        return '<span class="qn-status-pill qn-status-neutral">' + escapeHtml(isExecutiveReviewRole() ? 'Executive review' : 'Read-only view') + '</span>';
+    }
+
+    function readOnlyPageAction() {
+        return {
+            target: '',
+            label: '',
+            helper: 'Review-only access. Setup and workflow changes are managed by authorized workspace users.',
+            generate: false,
+            readOnly: true
+        };
+    }
+
     function api(path, options) {
         options = options || {};
         options.headers = options.headers || {};
@@ -176,12 +231,59 @@
         }
 
         return new Promise(function (resolve, reject) {
-            var request = new XMLHttpRequest();
+            var win = browserWindow();
+            var BrowserXMLHttpRequest = (typeof XMLHttpRequest !== 'undefined' && XMLHttpRequest) || (win && win.XMLHttpRequest);
+            if (!BrowserXMLHttpRequest) {
+                reject(new Error('Your browser could not start the request. Please refresh and try again.'));
+                return;
+            }
+            var request = new BrowserXMLHttpRequest();
             request.timeout = options.timeout || 60000;
             request.open(options.method || 'GET', restUrl + path, true);
             Object.keys(options.headers).forEach(function (key) {
                 request.setRequestHeader(key, options.headers[key]);
             });
+            request.onload = function () {
+                var json = {};
+                try {
+                    json = request.responseText ? JSON.parse(request.responseText) : {};
+                } catch (error) {
+                    reject(new Error('QualiNav returned an unreadable response.'));
+                    return;
+                }
+                if (request.status < 200 || request.status >= 300) {
+                    var apiError = new Error(json.message || 'QualiNav request failed.');
+                    apiError.code = json.code || '';
+                    apiError.status = request.status;
+                    apiError.questionKey = json.data && json.data.question_key ? json.data.question_key : '';
+                    reject(apiError);
+                    return;
+                }
+                resolve(json);
+            };
+            request.onerror = function () {
+                reject(new Error('QualiNav request failed.'));
+            };
+            request.ontimeout = function () {
+                reject(new Error('QualiNav request timed out. Please try again or contact support.'));
+            };
+            request.send(options.body || null);
+        });
+    }
+
+    function apiForm(path, formData, options) {
+        options = options || {};
+        return new Promise(function (resolve, reject) {
+            var win = browserWindow();
+            var BrowserXMLHttpRequest = (typeof XMLHttpRequest !== 'undefined' && XMLHttpRequest) || (win && win.XMLHttpRequest);
+            if (!BrowserXMLHttpRequest) {
+                reject(new Error('Your browser could not start the request. Please refresh and try again.'));
+                return;
+            }
+            var request = new BrowserXMLHttpRequest();
+            request.timeout = options.timeout || 360000;
+            request.open('POST', restUrl + path, true);
+            request.setRequestHeader('X-WP-Nonce', nonce);
             request.onload = function () {
                 var json = {};
                 try {
@@ -200,9 +302,9 @@
                 reject(new Error('QualiNav request failed.'));
             };
             request.ontimeout = function () {
-                reject(new Error('QualiNav request timed out. Please try again or contact support.'));
+                reject(new Error('Document processing timed out. The upload may still be processing; refresh before retrying.'));
             };
-            request.send(options.body || null);
+            request.send(formData);
         });
     }
 
@@ -267,6 +369,10 @@
         });
     }
 
+    function isMyOrgEmbeddedShell() {
+        return !!(config.isEmbeddedShell || config.shellMode === 'my-org' || document.body.classList.contains('qn-myorg-embedded-console'));
+    }
+
     function applyBrand(brand) {
         if (!brand) {
             return;
@@ -303,13 +409,9 @@
     }
 
     function loadHospitalConsole() {
-        Promise.all([api('/me'), api('/brand'), api('/my-organizations')]).then(function (results) {
-            state.me = results[0];
-            applyBrand(results[1]);
-            state.myOrganizations = results[2] || [];
-            renderHospitalSwitcher();
-
-            var previewOrganizationId = getUrlOrganizationId();
+        var previewOrganizationId = getUrlOrganizationId();
+        api('/me').then(function (me) {
+            state.me = me;
             if (previewOrganizationId && isGlobalAdmin()) {
                 state.hospitalPeopleLoaded = true;
                 state.hospitalPeoplePreviewMode = true;
@@ -317,20 +419,60 @@
                 setTableMessage('qn-hospital-invitations-table-body', 6, 'Super Admin setup preview mode.');
                 renderHospitalUsersOverview();
                 renderHospitalDashboard();
+                loadHospitalShellSupport();
                 return loadOnboarding(previewOrganizationId, {showLoading: false}).then(function () {
                     return loadScoutRuns(previewOrganizationId);
                 });
             }
 
-            renderHospitalDashboard();
-            loadHospitalPeopleData();
-            return loadOnboarding(null, {showLoading: false}).then(function () {
-                return loadScoutRuns();
+            return Promise.all([api('/brand'), api('/my-organizations')]).then(function (results) {
+                applyBrand(results[0]);
+                state.myOrganizations = results[1] || [];
+                renderHospitalSwitcher();
+            }).then(function () {
+                renderHospitalDashboard();
+                loadHospitalPeopleData();
+                return loadOnboarding(null, {showLoading: false}).then(function () {
+                    return loadScoutRuns();
+                });
             });
         }).catch(function (error) {
+            renderOnboardingLoadError(error);
             setTableMessage('qn-hospital-users-table-body', 5, error.message);
         });
     }
+
+    function loadHospitalShellSupport() {
+        Promise.all([api('/brand'), api('/my-organizations')]).then(function (results) {
+            applyBrand(results[0]);
+            state.myOrganizations = results[1] || [];
+            renderHospitalSwitcher();
+        }).catch(function (error) {
+            showToast(error.message || 'Hospital switcher data could not load.', 'warning');
+        });
+    }
+
+    function loadHomeWelcome() {
+        Promise.all([api('/me'), api('/brand'), api('/my-organizations')]).then(function (results) {
+            state.me = results[0];
+            applyBrand(results[1]);
+            state.myOrganizations = results[2] || [];
+            if (state.myOrganizations.length) {
+                var welcomeOrganizationId = config.welcomeOrganizationId ? Number(config.welcomeOrganizationId) : 0;
+                var currentId = welcomeOrganizationId || (state.me && state.me.organization_id ? Number(state.me.organization_id) : 0);
+                state.currentHospital = state.myOrganizations.find(function (item) {
+                    return Number(item.organization_id || item.id) === currentId;
+                }) || state.myOrganizations[0];
+                if (welcomeOrganizationId) {
+                    state.onboardingOrganizationId = welcomeOrganizationId;
+                }
+            }
+            maybeShowWorkspaceWelcome();
+        }).catch(function (error) {
+            showToast(error.message || 'Unable to load QualiNav welcome.', 'warning');
+        });
+    }
+
 
     function loadAdminConsole() {
         var initialData = getInitialAdminData();
@@ -510,7 +652,7 @@
         state.currentHospital = current || null;
         renderHospitalContext(current);
         if (state.myOrganizations.length > 1) {
-            name.textContent = 'Hospital workspace';
+            name.textContent = isMyOrgEmbeddedShell() && current ? current.organization_name : 'Hospital workspace';
             name.classList.add('qn-switcher-label');
             switcher.hidden = false;
             switcher.innerHTML = state.myOrganizations.map(function (item) {
@@ -552,6 +694,16 @@
         renderCommitteesPage();
         renderPlansPoliciesPage();
         renderHospitalDashboard();
+    }
+
+    function updateEmbeddedHospitalHeader(hospital) {
+        if (!isMyOrgEmbeddedShell() || !hospital) {
+            return;
+        }
+        var name = document.getElementById('qn-current-hospital-name');
+        if (name) {
+            name.textContent = hospital.organization_name || hospital.name || 'Hospital workspace';
+        }
     }
 
     function renderHospitalDataSections() {
@@ -597,6 +749,7 @@
         if (hero) {
             hero.classList.remove('qn-dashboard-loading');
         }
+        updateEmbeddedHospitalHeader(hospital);
         var setup = dashboardSetupStatus(hospital);
         var scout = dashboardScoutStatus();
         var role = state.me ? roleLabel(state.me.qualinav_role) : 'Workspace role';
@@ -659,7 +812,7 @@
                 dashboardModule('media-document', 'Plans & Policies', scout.ready ? 'Ready' : 'Available after Scout preview', scout.ready ? 'Plan and policy tasks are ready to review.' : 'Scout preview will identify plan and policy priorities.', 'View Plans', 'plans', scout.ready ? 'success' : 'neutral'),
                 dashboardModule('heart', 'Clinical Monitoring', scout.ready ? 'Ready' : 'Available after Scout preview', scout.ready ? 'Clinical monitoring areas are ready to review.' : 'Scout preview will tailor clinical monitoring areas.', 'View Monitoring', 'clinical', scout.ready ? 'success' : 'neutral'),
                 dashboardModule('flag', 'Priority Queue', scout.ready ? 'Items Found' : 'Pending Scout', scout.ready ? 'Priority items are available in the generated setup preview.' : 'Priority queue appears after Scout preview.', 'View Priorities', 'scout-preview', scout.ready ? 'warning' : 'neutral'),
-                dashboardModule('shield', 'System Health', 'Healthy', 'Workspace services are reachable for this console session.', isGlobalAdmin() ? 'View Settings' : '', isGlobalAdmin() ? 'settings' : '', 'success')
+                dashboardModule('shield', 'System Health', 'Healthy', 'Workspace services are reachable for this console session.', '', '', 'success')
             ].join('');
         }
         renderWorkspaceGuideCard(setup);
@@ -680,7 +833,7 @@
         card.hidden = false;
         var canEdit = canUseHospitalSetupEditCopy();
         setText('#qn-workspace-guide-card-copy', isGlobalAdmin() ?
-            'Preview the Quality Director welcome experience for this hospital workspace without triggering it automatically.' : (canEdit ?
+            'Preview the Hospital Quality Director welcome experience for this hospital workspace without triggering it automatically.' : (canEdit ?
             'A quick guide to Hospital Setup, Scout, and the workspace modules that organize your quality work.' :
             'A quick guide to reviewing Hospital Setup, Scout, and the workspace modules available to your role.'));
         setText('#qn-workspace-guide-setup-button', isGlobalAdmin() ? 'Review Hospital Setup' : (canEdit && setup && setup.percent > 0 ? 'Continue Hospital Setup' : (canEdit ? 'Start Hospital Setup' : 'View Hospital Setup')));
@@ -916,31 +1069,33 @@
         if (!page) {
             return;
         }
-        page.classList.add('qn-clinical-page');
+        page.classList.add('qn-reporting-page');
+        page.classList.toggle('qn-readonly-module', isReadOnlyWorkspaceRole());
         var hospital = dashboardHospital() || currentHospitalContext() || {};
         var setup = dashboardSetupStatus(hospital);
         var scout = dashboardScoutStatus();
         var reporting = reportingPreviewData();
         var action = reportingPageAction(setup, scout);
         var hospitalName = hospital.organization_name || hospital.name || 'Hospital workspace';
-        var scoutStatus = state.latestScoutRun ? scout.status : (state.scoutOnboardingSubmitted ? 'Not generated' : 'Hospital Setup pending');
+        var showScoutChip = !isDay0Pending(setup);
+        var scoutStatus = state.latestScoutRun ? scout.status : (state.scoutOnboardingSubmitted ? 'Not generated' : 'Pending Scout');
         var chips = [
             chip(hospitalName),
             chip(hospital.hospital_type_label || 'Hospital type not set'),
             chip(hospital.service_model_label || 'Service model not set'),
             hospital.payment_model_label ? chip(hospital.payment_model_label) : '',
-            chip('Scout: ' + scoutStatus)
+            showScoutChip ? chip('Scout: ' + scoutStatus) : ''
         ].filter(Boolean).join('');
+        var headerStatus = readOnlyReviewBadge() + (isDay0Pending(setup) ? '' : '<span class="qn-status-pill qn-status-' + escapeHtml(reportingStatusTone(setup, scout, reporting)) + '">' + escapeHtml(reportingStatusLabel(setup, scout, reporting)) + '</span>');
         page.innerHTML =
             renderReportingAdminBanner(hospitalName) +
             '<div class="qn-reporting-header">' +
-            '<div><p class="qn-eyebrow">Reporting</p><h2>Reporting Schedule</h2><p>Track recurring reports, due dates, owners, approvals, and preparation lead time.</p><div class="qn-reporting-context">' + chips + '</div></div>' +
-            '<span class="qn-status-pill qn-status-' + escapeHtml(reportingStatusTone(setup, scout, reporting)) + '">' + escapeHtml(reportingStatusLabel(setup, scout, reporting)) + '</span>' +
+            '<div><p class="qn-eyebrow">Reporting</p><h2>Reporting Schedule</h2><p>' + escapeHtml(isReadOnlyWorkspaceRole() ? 'Review reporting readiness, schedule signals, and missing due-date detail.' : 'Track recurring reports, due dates, owners, approvals, and preparation lead time.') + '</p><div class="qn-reporting-context">' + chips + '</div></div>' +
+            headerStatus +
             '</div>' +
             renderReportingSummary(setup, scout, reporting) +
             renderReportingPrimaryState(setup, scout, reporting, action) +
-            renderReportingCapabilityCards(setup, scout, reporting) +
-            renderReportingCtaPanel(action);
+            renderReportingCapabilityCards(setup, scout, reporting);
     }
 
     function renderReportingAdminBanner(hospitalName) {
@@ -977,6 +1132,9 @@
     }
 
     function reportingPageAction(setup, scout) {
+        if (isReadOnlyWorkspaceRole()) {
+            return readOnlyPageAction();
+        }
         if (isDay0Pending(setup)) {
             return {target: 'day-0-setup', label: 'Continue Hospital Setup', helper: 'Complete Hospital Setup to build your reporting schedule.', generate: false};
         }
@@ -994,10 +1152,10 @@
             return item.approval && !/none|not applicable|n\/a/i.test(item.approval);
         }).length;
         var cards = [
-            ['chart-bar', 'Reporting status', reportingStatusLabel(setup, scout, reporting), reporting.items.length ? 'Scout returned reporting detail.' : 'Pending Scout', reportingStatusTone(setup, scout, reporting)],
-            ['calendar-alt', 'Upcoming reports', reporting.items.length ? String(reporting.items.length) : '-', reporting.items.length ? 'Draft schedule items' : 'Pending Scout', reporting.items.length ? 'success' : 'neutral'],
-            ['yes-alt', 'Pending approvals', reporting.items.length ? String(pendingApprovals) : '-', 'Approval requirements identified', pendingApprovals ? 'warning' : 'neutral'],
-            ['editor-help', 'Missing due dates', reporting.items.length ? String(missingDueDates) : '-', 'Rows needing due date detail', missingDueDates ? 'warning' : 'neutral']
+            ['chart-bar', 'Readiness', isDay0Pending(setup) ? 'Setup required' : reportingStatusLabel(setup, scout, reporting), reporting.items.length ? 'Scout returned detail' : 'Complete setup first', isDay0Pending(setup) ? 'neutral' : reportingStatusTone(setup, scout, reporting)],
+            ['calendar-alt', 'Reports', reporting.items.length ? String(reporting.items.length) : '0', reporting.items.length ? 'Draft schedule items' : 'Not scheduled yet', reporting.items.length ? 'success' : 'neutral'],
+            ['yes-alt', 'Approvals', reporting.items.length ? String(pendingApprovals) : '0', 'Requirements found', pendingApprovals ? 'warning' : 'neutral'],
+            ['editor-help', 'Due dates', reporting.items.length ? String(missingDueDates) : '0', 'Missing detail', missingDueDates ? 'warning' : 'neutral']
         ];
         return '<div class="qn-reporting-summary-grid">' + cards.map(function (card) {
             return '<article class="qn-reporting-summary-card qn-reporting-summary-' + escapeHtml(card[4]) + '">' +
@@ -1026,10 +1184,10 @@
     }
 
     function renderReportingEmptyState(icon, title, message, action) {
-        return '<section class="qn-reporting-empty">' +
+        return '<section class="qn-reporting-empty qn-reporting-action-strip">' +
             '<span class="dashicons dashicons-' + escapeHtml(icon) + '"></span>' +
             '<div><h3>' + escapeHtml(title) + '</h3><p>' + escapeHtml(message) + '</p>' +
-            '<button class="qn-button qn-button-primary" type="button" ' + (action.generate ? 'data-reporting-generate-scout' : 'data-section-target="' + escapeHtml(action.target) + '"') + '>' + escapeHtml(action.label) + '</button></div>' +
+            (action && action.label && !action.readOnly ? '<button class="qn-button qn-button-primary" type="button" ' + (action.generate ? 'data-reporting-generate-scout' : 'data-section-target="' + escapeHtml(action.target) + '"') + '>' + escapeHtml(action.label) + '</button>' : '') + '</div>' +
             '</section>';
     }
 
@@ -1062,6 +1220,9 @@
     }
 
     function renderReportingCapabilityCards(setup, scout, reporting) {
+        if (isReadOnlyWorkspaceRole()) {
+            return '';
+        }
         var ready = scout.ready && reporting.items.length;
         var cards = [
             ['media-spreadsheet', 'Master Reporting Schedule', 'Recurring federal, state, accreditation, payer, and internal reports.'],
@@ -1069,15 +1230,19 @@
             ['admin-users', 'Owner & Backup Tracking', 'Primary preparers, backup coverage, and visibility needs.'],
             ['groups', 'Board / Committee Prep', 'Preparation timing before committee and board meetings.']
         ];
-        return '<section class="qn-reporting-capabilities"><div class="qn-section-toolbar"><div><p class="qn-eyebrow">Capabilities</p><h3>What this module will support</h3></div></div><div class="qn-future-capability-grid">' + cards.map(function (card) {
-            var status = ready ? ['Ready', 'success'] : [scout.ready ? 'Pending reporting detail' : 'Pending Scout', scout.ready ? 'neutral' : 'warning'];
-            return '<article class="qn-future-capability-card qn-reporting-capability-card"><span class="dashicons dashicons-' + escapeHtml(card[0]) + '"></span><h3>' + escapeHtml(card[1]) + '</h3><p>' + escapeHtml(card[2]) + '</p><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(status[1]) + '">' + escapeHtml(status[0]) + '</span></article>';
-        }).join('') + '</div></section>';
+        return '<section class="qn-reporting-capabilities qn-reporting-planned">' +
+            '<div class="qn-reporting-planned-head"><p class="qn-eyebrow">Planned after Scout</p><h3>Reporting workflow will include</h3></div>' +
+            '<div class="qn-reporting-planned-list">' + cards.map(function (card) {
+                return '<article><span class="dashicons dashicons-' + escapeHtml(card[0]) + '"></span><div><h4>' + escapeHtml(card[1]) + '</h4><p>' + escapeHtml(card[2]) + '</p></div></article>';
+            }).join('') + '</div></section>';
     }
 
     function renderReportingCtaPanel(action) {
+        if (action && action.readOnly) {
+            return '';
+        }
         return '<section class="qn-reporting-cta-panel">' +
-            '<div><p class="qn-eyebrow">Next step</p><h3>' + escapeHtml(action.helper) + '</h3><p>QualiNav will keep this page focused on reporting workflow setup, schedule readiness, and review actions for Quality Directors.</p></div>' +
+            '<div><p class="qn-eyebrow">Next step</p><h3>' + escapeHtml(action.helper) + '</h3><p>QualiNav will keep this page focused on reporting workflow setup, schedule readiness, and review actions for Hospital Quality Directors.</p></div>' +
             '<button class="qn-button qn-button-primary" type="button" ' + (action.generate ? 'data-reporting-generate-scout' : 'data-section-target="' + escapeHtml(action.target) + '"') + '>' + escapeHtml(action.label) + '</button>' +
             '</section>';
     }
@@ -1153,7 +1318,7 @@
             due: due || '',
             owner: firstReportingValue(item, ['owner', 'preparer', 'owner_preparer', 'responsible_party']) || '',
             backup: firstReportingValue(item, ['backup', 'backup_preparer', 'secondary_owner']) || '',
-            approval: firstReportingValue(item, ['approval', 'approval_required', 'approval_requirements', 'approver']) || '',
+            approval: firstReportingValue(item, ['approval', 'approval_required', 'approver']) || '',
             status: status,
             tone: /missing|not set|needed|review/i.test(status) || !due ? 'warning' : 'success'
         };
@@ -1176,6 +1341,8 @@
         if (!page) {
             return;
         }
+        page.classList.add('qn-committees-page');
+        page.classList.toggle('qn-readonly-module', isReadOnlyWorkspaceRole());
         var hospital = dashboardHospital() || currentHospitalContext() || {};
         var setup = dashboardSetupStatus(hospital);
         var scout = dashboardScoutStatus();
@@ -1192,8 +1359,8 @@
         page.innerHTML =
             renderCommitteesAdminBanner(hospitalName) +
             '<div class="qn-reporting-header qn-committees-header">' +
-            '<div><p class="qn-eyebrow">Committees</p><h2>Committees</h2><p>Manage meeting cadence, report flow, committee relationships, and board reporting.</p><div class="qn-reporting-context qn-committees-context">' + chips + '</div></div>' +
-            '<span class="qn-status-pill qn-status-' + escapeHtml(committeesStatusTone(setup, scout, committees)) + '">' + escapeHtml(committeesStatusLabel(setup, scout, committees)) + '</span>' +
+            '<div><p class="qn-eyebrow">Committees</p><h2>Committees</h2><p>' + escapeHtml(isReadOnlyWorkspaceRole() ? 'Review committee cadence, meeting flow, and board-reporting signals.' : 'Manage meeting cadence, report flow, committee relationships, and board reporting.') + '</p><div class="qn-reporting-context qn-committees-context">' + chips + '</div></div>' +
+            readOnlyReviewBadge() + '<span class="qn-status-pill qn-status-' + escapeHtml(committeesStatusTone(setup, scout, committees)) + '">' + escapeHtml(committeesStatusLabel(setup, scout, committees)) + '</span>' +
             '</div>' +
             renderCommitteesSummary(setup, scout, committees) +
             renderCommitteesPrimaryState(setup, scout, committees, action) +
@@ -1235,6 +1402,9 @@
     }
 
     function committeesPageAction(setup, scout) {
+        if (isReadOnlyWorkspaceRole()) {
+            return readOnlyPageAction();
+        }
         if (isDay0Pending(setup)) {
             return {target: 'day-0-setup', label: 'Continue Hospital Setup', helper: 'Complete Hospital Setup to build your committee flow map.', generate: false};
         }
@@ -1279,7 +1449,7 @@
         }
         return '<section class="qn-reporting-preview qn-committees-preview">' +
             '<div class="qn-panel-header"><div><p class="qn-eyebrow">Committee preview</p><h3>Draft committee and report flow map</h3><p>' + escapeHtml(committees.summary || 'Scout returned committee workflow details for review.') + '</p></div><span class="qn-status-pill qn-status-success">' + committees.items.length + ' committees</span></div>' +
-            '<div class="qn-reporting-table-wrap"><table class="qn-reporting-table qn-committees-table"><thead><tr><th>Committee</th><th>Frequency / timing</th><th>Your role</th><th>Reports to</th><th>Prep lead time</th><th>Status</th></tr></thead><tbody>' +
+            '<div class="qn-reporting-table-wrap"><table class="qn-reporting-table qn-committees-table"><thead><tr><th>Committee</th><th>Frequency / timing</th><th>Reports to</th><th>Prep lead time</th><th>Status</th></tr></thead><tbody>' +
             committees.items.map(renderCommitteePreviewRow).join('') +
             '</tbody></table></div>' +
             '<div class="qn-reporting-card-list qn-committees-card-list">' + committees.items.map(renderCommitteeCard).join('') + '</div>' +
@@ -1291,7 +1461,7 @@
         return '<section class="qn-reporting-empty qn-committees-empty">' +
             '<span class="dashicons dashicons-' + escapeHtml(icon) + '"></span>' +
             '<div><h3>' + escapeHtml(title) + '</h3><p>' + escapeHtml(message) + '</p>' +
-            '<button class="qn-button qn-button-primary" type="button" ' + (action.generate ? 'data-committees-generate-scout' : 'data-section-target="' + escapeHtml(action.target) + '"') + '>' + escapeHtml(action.label) + '</button></div>' +
+            (action && action.label && !action.readOnly ? '<button class="qn-button qn-button-primary" type="button" ' + (action.generate ? 'data-committees-generate-scout' : 'data-section-target="' + escapeHtml(action.target) + '"') + '>' + escapeHtml(action.label) + '</button>' : '') + '</div>' +
             '</section>';
     }
 
@@ -1299,7 +1469,6 @@
         return '<tr>' +
             '<td><strong>' + escapeHtml(item.name || 'Committee') + '</strong></td>' +
             '<td>' + escapeHtml(item.frequency || 'Not set') + '</td>' +
-            '<td>' + escapeHtml(item.role || 'Not set') + '</td>' +
             '<td>' + escapeHtml(item.reportsTo || 'Not set') + '</td>' +
             '<td>' + escapeHtml(item.leadTime || 'Not set') + '</td>' +
             '<td><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(item.tone || 'neutral') + '">' + escapeHtml(item.status || 'Draft') + '</span></td>' +
@@ -1311,7 +1480,6 @@
             '<div><h4>' + escapeHtml(item.name || 'Committee ' + (index + 1)) + '</h4><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(item.tone || 'neutral') + '">' + escapeHtml(item.status || 'Draft') + '</span></div>' +
             '<dl>' +
             reportingDatum('Frequency / timing', item.frequency || 'Not set') +
-            reportingDatum('Your role', item.role || 'Not set') +
             reportingDatum('Reports to', item.reportsTo || 'Not set') +
             reportingDatum('Prep lead time', item.leadTime || 'Not set') +
             '</dl></article>';
@@ -1334,6 +1502,9 @@
     }
 
     function renderCommitteesCapabilityCards(setup, scout, committees) {
+        if (isReadOnlyWorkspaceRole()) {
+            return '';
+        }
         var ready = scout.ready && committees.items.length;
         var cards = [
             ['calendar-alt', 'Meeting Cadence', 'Standing committees, cadence, timing, and preparation rhythm.'],
@@ -1348,8 +1519,11 @@
     }
 
     function renderCommitteesCtaPanel(action) {
+        if (action && action.readOnly) {
+            return '';
+        }
         return '<section class="qn-reporting-cta-panel qn-committees-cta-panel">' +
-            '<div><p class="qn-eyebrow">Next step</p><h3>' + escapeHtml(action.helper) + '</h3><p>Scout will use committee cadence and report relationships to help Quality Directors prepare work before each meeting.</p></div>' +
+            '<div><p class="qn-eyebrow">Next step</p><h3>' + escapeHtml(action.helper) + '</h3><p>Scout will use committee cadence and report relationships to help Hospital Quality Directors prepare work before each meeting.</p></div>' +
             '<button class="qn-button qn-button-primary" type="button" ' + (action.generate ? 'data-committees-generate-scout' : 'data-section-target="' + escapeHtml(action.target) + '"') + '>' + escapeHtml(action.label) + '</button>' +
             '</section>';
     }
@@ -1372,7 +1546,7 @@
             group = committeesPreviewLooseGroup(run);
         }
         var items = committeeItemsFromGroup(group).map(normalizeCommitteeItem).filter(function (item) {
-            return item.name || item.frequency || item.role || item.reportsTo || item.flow || item.sequence;
+            return item.name || item.frequency || item.reportsTo || item.flow || item.sequence;
         });
         return {
             group: group,
@@ -1419,13 +1593,12 @@
 
     function normalizeCommitteeItem(item) {
         if (!item || typeof item !== 'object' || Array.isArray(item)) {
-            return {name: describeScoutItem(item), frequency: '', role: '', reportsTo: '', leadTime: '', flow: '', sequence: '', status: 'Draft', tone: 'neutral'};
+            return {name: describeScoutItem(item), frequency: '', reportsTo: '', leadTime: '', flow: '', sequence: '', status: 'Draft', tone: 'neutral'};
         }
         var status = firstCommitteeValue(item, ['status', 'readiness_status', 'workflow_status']) || 'Draft';
         return {
             name: firstCommitteeValue(item, ['committee_name', 'meeting_name', 'name', 'title', 'committee', 'meeting']) || 'Committee',
             frequency: firstCommitteeValue(item, ['frequency_timing', 'frequency', 'cadence', 'timing', 'meeting_cadence']) || '',
-            role: firstCommitteeValue(item, ['user_role', 'your_role', 'role', 'quality_director_role']) || '',
             reportsTo: firstCommitteeValue(item, ['reports_to', 'reporting_to', 'parent_committee', 'board_reporting', 'destination']) || '',
             leadTime: firstCommitteeValue(item, ['preparation_lead_time', 'prep_lead_time', 'lead_time', 'report_lead_time']) || '',
             flow: firstCommitteeValue(item, ['information_flow', 'flow', 'report_flow', 'dependency', 'dependencies']) || '',
@@ -1452,6 +1625,8 @@
         if (!page) {
             return;
         }
+        page.classList.add('qn-plans-page');
+        page.classList.toggle('qn-readonly-module', isReadOnlyWorkspaceRole());
         var hospital = dashboardHospital() || currentHospitalContext() || {};
         var setup = dashboardSetupStatus(hospital);
         var scout = dashboardScoutStatus();
@@ -1468,8 +1643,8 @@
         page.innerHTML =
             renderPlansPoliciesAdminBanner(hospitalName) +
             '<div class="qn-reporting-header qn-plans-header">' +
-            '<div><p class="qn-eyebrow">Plans & Policies</p><h2>Plans & Policies</h2><p>Track required plans, policy review cycles, templates, owners, and approval status.</p><div class="qn-reporting-context qn-plans-context">' + chips + '</div></div>' +
-            '<span class="qn-status-pill qn-status-' + escapeHtml(plansPoliciesStatusTone(setup, scout, plans)) + '">' + escapeHtml(plansPoliciesStatusLabel(setup, scout, plans)) + '</span>' +
+            '<div><p class="qn-eyebrow">Plans & Policies</p><h2>Plans & Policies</h2><p>' + escapeHtml(isReadOnlyWorkspaceRole() ? 'Review plan and policy readiness, template needs, and approval signals.' : 'Track required plans, policy review cycles, templates, owners, and approval status.') + '</p><div class="qn-reporting-context qn-plans-context">' + chips + '</div></div>' +
+            readOnlyReviewBadge() + '<span class="qn-status-pill qn-status-' + escapeHtml(plansPoliciesStatusTone(setup, scout, plans)) + '">' + escapeHtml(plansPoliciesStatusLabel(setup, scout, plans)) + '</span>' +
             '</div>' +
             renderPlansPoliciesSummary(setup, scout, plans) +
             renderPlansPoliciesPrimaryState(setup, scout, plans, action) +
@@ -1511,6 +1686,9 @@
     }
 
     function plansPoliciesPageAction(setup, scout) {
+        if (isReadOnlyWorkspaceRole()) {
+            return readOnlyPageAction();
+        }
         if (isDay0Pending(setup)) {
             return {target: 'day-0-setup', label: 'Continue Hospital Setup', helper: 'Complete Hospital Setup to identify required plans and policy review needs.', generate: false};
         }
@@ -1553,9 +1731,15 @@
         if (!plans.items.length && !plans.priorityItems.length) {
             return renderPlansPoliciesEmptyState('media-document', 'Plan and policy details will appear here once Scout returns workflow details.', 'Scout has not returned plan or policy workflow details yet. You can still review the setup preview for related context.', action);
         }
+        var tableMarkup = '';
+        if (plans.items.length) {
+            tableMarkup = isReadOnlyWorkspaceRole() ?
+                '<div class="qn-reporting-table-wrap"><table class="qn-reporting-table qn-plans-table qn-review-table"><thead><tr><th>Plan / policy</th><th>Status</th><th>Owner</th><th>Priority</th></tr></thead><tbody>' + plans.items.map(renderPlansPoliciesReviewRow).join('') + '</tbody></table></div><div class="qn-reporting-card-list qn-plans-card-list">' + plans.items.map(renderPlansPoliciesCard).join('') + '</div>' :
+                '<div class="qn-reporting-table-wrap"><table class="qn-reporting-table qn-plans-table"><thead><tr><th>Plan / policy</th><th>Current status</th><th>Owner</th><th>Last approved</th><th>Board approval</th><th>Action needed</th><th>Priority</th></tr></thead><tbody>' + plans.items.map(renderPlansPoliciesRow).join('') + '</tbody></table></div><div class="qn-reporting-card-list qn-plans-card-list">' + plans.items.map(renderPlansPoliciesCard).join('') + '</div>';
+        }
         return '<section class="qn-reporting-preview qn-plans-preview">' +
             '<div class="qn-panel-header"><div><p class="qn-eyebrow">Plan and policy preview</p><h3>Draft review queue</h3><p>' + escapeHtml(plans.summary || 'Scout returned plan and policy workflow details for review.') + '</p></div><span class="qn-status-pill qn-status-success">' + plans.items.length + ' items</span></div>' +
-            (plans.items.length ? '<div class="qn-reporting-table-wrap"><table class="qn-reporting-table qn-plans-table"><thead><tr><th>Plan / policy</th><th>Current status</th><th>Owner</th><th>Last approved</th><th>Board approval</th><th>Action needed</th><th>Priority</th></tr></thead><tbody>' + plans.items.map(renderPlansPoliciesRow).join('') + '</tbody></table></div><div class="qn-reporting-card-list qn-plans-card-list">' + plans.items.map(renderPlansPoliciesCard).join('') + '</div>' : '') +
+            tableMarkup +
             renderPlansPolicyCyclePreview(plans) +
             renderPlansPriorityItems(plans.priorityItems) +
             '</section>';
@@ -1565,7 +1749,7 @@
         return '<section class="qn-reporting-empty qn-plans-empty">' +
             '<span class="dashicons dashicons-' + escapeHtml(icon) + '"></span>' +
             '<div><h3>' + escapeHtml(title) + '</h3><p>' + escapeHtml(message) + '</p>' +
-            '<button class="qn-button qn-button-primary" type="button" ' + (action.generate ? 'data-plans-generate-scout' : 'data-section-target="' + escapeHtml(action.target) + '"') + '>' + escapeHtml(action.label) + '</button></div>' +
+            (action && action.label && !action.readOnly ? '<button class="qn-button qn-button-primary" type="button" ' + (action.generate ? 'data-plans-generate-scout' : 'data-section-target="' + escapeHtml(action.target) + '"') + '>' + escapeHtml(action.label) + '</button>' : '') + '</div>' +
             '</section>';
     }
 
@@ -1578,6 +1762,15 @@
             '<td>' + escapeHtml(item.boardApproval || 'Not set') + '</td>' +
             '<td>' + escapeHtml(item.action || 'Not set') + '</td>' +
             '<td><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(item.tone || 'neutral') + '">' + escapeHtml(item.priority || 'Draft') + '</span></td>' +
+            '</tr>';
+    }
+
+    function renderPlansPoliciesReviewRow(item) {
+        return '<tr>' +
+            '<td><strong>' + escapeHtml(item.name || 'Plan or policy') + '</strong></td>' +
+            '<td>' + escapeHtml(item.status || 'Draft') + '</td>' +
+            '<td>' + escapeHtml(item.owner || 'Not assigned') + '</td>' +
+            '<td><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(item.tone || 'neutral') + '">' + escapeHtml(item.priority || 'Review') + '</span></td>' +
             '</tr>';
     }
 
@@ -1622,6 +1815,9 @@
     }
 
     function renderPlansPoliciesCapabilityCards(setup, scout, plans) {
+        if (isReadOnlyWorkspaceRole()) {
+            return '';
+        }
         var ready = scout.ready && (plans.items.length || plans.priorityItems.length);
         var cards = [
             ['portfolio', 'Required Plan Review', 'QAPI, patient safety, infection prevention, emergency preparedness, and risk plans.'],
@@ -1636,8 +1832,11 @@
     }
 
     function renderPlansPoliciesCtaPanel(action) {
+        if (action && action.readOnly) {
+            return '';
+        }
         return '<section class="qn-reporting-cta-panel qn-plans-cta-panel">' +
-            '<div><p class="qn-eyebrow">Next step</p><h3>' + escapeHtml(action.helper) + '</h3><p>Scout will use setup answers to help Quality Directors prioritize required plans, policy reviews, templates, and approval routing.</p></div>' +
+            '<div><p class="qn-eyebrow">Next step</p><h3>' + escapeHtml(action.helper) + '</h3><p>Scout will use setup answers to help Hospital Quality Directors prioritize required plans, policy reviews, templates, and approval routing.</p></div>' +
             '<button class="qn-button qn-button-primary" type="button" ' + (action.generate ? 'data-plans-generate-scout' : 'data-section-target="' + escapeHtml(action.target) + '"') + '>' + escapeHtml(action.label) + '</button>' +
             '</section>';
     }
@@ -1854,6 +2053,8 @@
         if (!page) {
             return;
         }
+        page.classList.add('qn-clinical-page');
+        page.classList.toggle('qn-readonly-module', isReadOnlyWorkspaceRole());
         var hospital = dashboardHospital() || currentHospitalContext() || {};
         var setup = dashboardSetupStatus(hospital);
         var scout = dashboardScoutStatus();
@@ -1871,8 +2072,8 @@
         page.innerHTML =
             renderClinicalMonitoringAdminBanner(hospitalName) +
             '<div class="qn-reporting-header qn-clinical-header">' +
-            '<div><p class="qn-eyebrow">Clinical Monitoring</p><h2>Clinical Monitoring</h2><p>Track required monitoring areas, review cadence, committee routing, aggregate uploads, and priority gaps.</p><div class="qn-reporting-context qn-clinical-context">' + chips + '</div></div>' +
-            '<span class="qn-status-pill qn-status-' + escapeHtml(clinicalMonitoringStatusTone(setup, scout, clinical)) + '">' + escapeHtml(clinicalMonitoringStatusLabel(setup, scout, clinical)) + '</span>' +
+            '<div><p class="qn-eyebrow">Clinical Monitoring</p><h2>Clinical Monitoring</h2><p>' + escapeHtml(isReadOnlyWorkspaceRole() ? 'Review monitoring readiness, aggregate upload signals, and priority follow-up areas.' : 'Track required monitoring areas, review cadence, committee routing, aggregate uploads, and priority gaps.') + '</p><div class="qn-reporting-context qn-clinical-context">' + chips + '</div></div>' +
+            readOnlyReviewBadge() + '<span class="qn-status-pill qn-status-' + escapeHtml(clinicalMonitoringStatusTone(setup, scout, clinical)) + '">' + escapeHtml(clinicalMonitoringStatusLabel(setup, scout, clinical)) + '</span>' +
             '</div>' +
             renderClinicalMonitoringSummary(setup, scout, clinical) +
             renderClinicalMonitoringPrimaryState(setup, scout, clinical, action) +
@@ -1914,6 +2115,9 @@
     }
 
     function clinicalMonitoringPageAction(setup, scout) {
+        if (isReadOnlyWorkspaceRole()) {
+            return readOnlyPageAction();
+        }
         if (isDay0Pending(setup)) {
             return {target: 'day-0-setup', label: 'Continue Hospital Setup', helper: 'Complete Hospital Setup to identify required clinical monitoring areas.', generate: false};
         }
@@ -1976,7 +2180,7 @@
         return '<section class="qn-reporting-empty qn-clinical-empty">' +
             '<span class="dashicons dashicons-' + escapeHtml(icon) + '"></span>' +
             '<div><h3>' + escapeHtml(title) + '</h3><p>' + escapeHtml(message) + '</p>' +
-            '<button class="qn-button qn-button-primary" type="button" ' + (action.generate ? 'data-clinical-generate-scout' : 'data-section-target="' + escapeHtml(action.target) + '"') + '>' + escapeHtml(action.label) + '</button></div>' +
+            (action && !action.readOnly && action.label ? '<button class="qn-button qn-button-primary" type="button" ' + (action.generate ? 'data-clinical-generate-scout' : 'data-section-target="' + escapeHtml(action.target) + '"') + '>' + escapeHtml(action.label) + '</button>' : '') + '</div>' +
             '</section>';
     }
 
@@ -1998,7 +2202,7 @@
             '<td>' + escapeHtml(item.reviewedBy || 'Not assigned') + '</td>' +
             '<td>' + escapeHtml(item.currentState || 'Not set') + '</td>' +
             '<td><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(item.tone || 'neutral') + '">' + escapeHtml(item.priority || 'Draft') + '</span></td>' +
-            '<td>' + escapeHtml(item.action || 'Review with Scout preview') + '</td>' +
+            '<td><span class="qn-clinical-action-chip">' + escapeHtml(item.action || 'Review with Scout preview') + '</span></td>' +
             '</tr>';
     }
 
@@ -2074,11 +2278,11 @@
         return '<section class="qn-clinical-section">' +
             '<div class="qn-panel-header"><div><p class="qn-eyebrow">Active Improvement Projects</p><h3>Projects linked to monitoring</h3><p>Scout can connect project milestones to the measures they are intended to improve.</p></div><span class="qn-status-pill">' + items.length + ' projects</span></div>' +
             '<div class="qn-clinical-project-grid">' + items.map(function (item, index) {
-                return '<article class="qn-reporting-row-card qn-clinical-project-card"><div><h4>' + escapeHtml(item.project || 'Project ' + (index + 1)) + '</h4><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(item.tone || 'neutral') + '">' + escapeHtml(item.status || 'Draft') + '</span></div><dl>' +
+                return '<article class="qn-reporting-row-card qn-clinical-project-card"><span class="dashicons dashicons-performance"></span><div class="qn-clinical-project-body"><div class="qn-clinical-project-title"><h4>' + escapeHtml(item.project || 'Project ' + (index + 1)) + '</h4><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(item.tone || 'neutral') + '">' + escapeHtml(item.status || 'Draft') + '</span></div><dl>' +
                     reportingDatum('Method', item.method || 'Not set') +
                     reportingDatum('Measure', item.measure || 'Not set') +
                     reportingDatum('Next step', item.nextStep || 'Review with Scout preview') +
-                    '</dl></article>';
+                    '</dl></div></article>';
             }).join('') + '</div>' +
             '</section>';
     }
@@ -2090,16 +2294,21 @@
         return '<section class="qn-clinical-section qn-clinical-gap-section">' +
             '<div class="qn-panel-header"><div><p class="qn-eyebrow">Priority Monitoring Gaps</p><h3>Monitoring gaps Scout flagged</h3><p>Monitoring gaps flagged by Scout will appear here with priority and target timing.</p></div><span class="qn-status-pill">' + items.length + ' gaps</span></div>' +
             '<div class="qn-clinical-gap-grid">' + items.map(function (item, index) {
-                return '<article><div><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(item.tone || 'warning') + '">' + escapeHtml(item.priority || 'Priority') + '</span><h4>' + escapeHtml(item.item || 'Monitoring gap ' + (index + 1)) + '</h4></div>' +
+                return '<article><span class="dashicons dashicons-warning"></span><div class="qn-clinical-gap-body"><div class="qn-clinical-gap-title"><h4>' + escapeHtml(item.item || 'Monitoring gap ' + (index + 1)) + '</h4><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(item.tone || 'warning') + '">' + escapeHtml(item.priority || 'Priority') + '</span></div>' +
+                    '<div class="qn-clinical-gap-meta">' +
                     (item.why ? '<p><strong>Why it matters</strong><span>' + escapeHtml(item.why) + '</span></p>' : '') +
                     (item.target ? '<p><strong>Target</strong><span>' + escapeHtml(item.target) + '</span></p>' : '') +
                     (item.area ? '<p><strong>Related area</strong><span>' + escapeHtml(item.area) + '</span></p>' : '') +
+                    '</div></div>' +
                     '</article>';
             }).join('') + '</div>' +
             '</section>';
     }
 
     function renderClinicalMonitoringCapabilityCards(setup, scout, clinical) {
+        if (isReadOnlyWorkspaceRole()) {
+            return '';
+        }
         var ready = scout.ready && clinical.hasData;
         var cards = [
             ['heart', 'Recurring Monitoring', 'Applicable monitoring areas, review cadence, and committee routing.'],
@@ -2114,8 +2323,11 @@
     }
 
     function renderClinicalMonitoringCtaPanel(action) {
+        if (action && action.readOnly) {
+            return '';
+        }
         return '<section class="qn-reporting-cta-panel qn-clinical-cta-panel">' +
-            '<div><p class="qn-eyebrow">Next step</p><h3>' + escapeHtml(action.helper) + '</h3><p>QualiNav will keep this page focused on monitoring cadence, aggregate data movement, committee review, and priority follow-up for Quality Directors.</p></div>' +
+            '<div><p class="qn-eyebrow">Next step</p><h3>' + escapeHtml(action.helper) + '</h3><p>QualiNav will keep this page focused on monitoring cadence, aggregate data movement, committee review, and priority follow-up for Hospital Quality Directors.</p></div>' +
             '<button class="qn-button qn-button-primary" type="button" ' + (action.generate ? 'data-clinical-generate-scout' : 'data-section-target="' + escapeHtml(action.target) + '"') + '>' + escapeHtml(action.label) + '</button>' +
             '</section>';
     }
@@ -2335,27 +2547,26 @@
         var scout = dashboardScoutStatus();
         var hospitalName = hospital.organization_name || hospital.name || 'Hospital workspace';
         var scoutStatus = state.latestScoutRun ? scout.status : (state.scoutOnboardingSubmitted ? 'Not generated' : 'Hospital Setup pending');
+        var pendingSetup = isDay0Pending(setup);
         var chips = [
             chip(hospitalName),
-            chip(hospital.hospital_type_label || 'Hospital type not set'),
-            chip(hospital.service_model_label || 'Service model not set'),
-            chip('Scout: ' + scoutStatus)
+            hospital.hospital_type_label ? chip(hospital.hospital_type_label) : '',
+            hospital.state_code || hospital.state_name ? chip(hospital.state_code || hospital.state_name) : '',
+            pendingSetup ? '' : chip('Scout: ' + scoutStatus)
         ].filter(Boolean).join('');
         page.innerHTML =
             renderSettingsAdminBanner(hospitalName) +
             '<div class="qn-reporting-header qn-settings-header">' +
-            '<div><p class="qn-eyebrow">Settings</p><h2>Hospital Settings</h2><p>Review workspace preferences, regulatory monitoring, reminders, tools, and backup visibility.</p><div class="qn-reporting-context qn-settings-context">' + chips + '</div></div>' +
-            '<span class="qn-status-pill qn-status-' + escapeHtml(settingsStatusTone(setup, scout)) + '">' + escapeHtml(settingsStatusLabel(setup, scout)) + '</span>' +
+            '<div><p class="qn-eyebrow">Settings</p><h2>Hospital Settings</h2><p>Review workspace preference status and setup readiness.</p><div class="qn-reporting-context qn-settings-context">' + chips + '</div></div>' +
+            (pendingSetup ? '' : '<span class="qn-status-pill qn-status-' + escapeHtml(settingsStatusTone(setup, scout)) + '">' + escapeHtml(settingsStatusLabel(setup, scout)) + '</span>') +
             '</div>' +
             renderSettingsWorkspaceContext(hospital, setup, scout) +
-            '<div class="qn-settings-grid">' +
-                renderSettingsRegulatory() +
-                renderSettingsTools() +
-                renderSettingsReminders() +
-                renderSettingsBackupVisibility() +
-            '</div>' +
-            renderSettingsSetupStatus(setup, scout) +
-            renderSettingsCtaPanel();
+            '<div class="qn-settings-compact-stack">' +
+                renderSettingsPreferenceSource(setup) +
+                renderSettingsCompactPreferenceSummary() +
+                renderSettingsCompactReadiness(setup, scout) +
+                renderSettingsCompactActions() +
+            '</div>';
     }
 
     function renderSettingsAdminBanner(hospitalName) {
@@ -2395,18 +2606,114 @@
         var previewOrganizationId = getUrlOrganizationId();
         var rows = [
             ['building', 'Hospital name', hospital.organization_name || hospital.name || 'Hospital workspace'],
-            ['location-alt', 'State', hospital.state_code || hospital.state_name || 'Not specified'],
-            ['admin-home', 'Hospital type', hospital.hospital_type_label || 'Hospital type not set'],
-            ['networking', 'Service model', hospital.service_model_label || 'Service model not set'],
-            ['chart-pie', 'Payment model', hospital.payment_model_label || 'Available after setup'],
-            ['admin-users', 'Current user role', state.me ? roleLabel(state.me.qualinav_role) : 'Workspace role'],
-            ['visibility', 'Admin preview', isGlobalAdmin() && previewOrganizationId ? 'Active for this hospital' : 'Not active']
-        ];
+            ['location-alt', 'State', hospital.state_code || hospital.state_name || 'Not set'],
+            ['admin-home', 'Hospital type', hospital.hospital_type_label || 'Not set'],
+            ['admin-users', 'Current user role', state.me ? roleLabel(state.me.qualinav_role) : 'Workspace role']
+        ].filter(function (row) {
+            return row[2] && row[2] !== 'Not specified';
+        });
+        if (isGlobalAdmin() && previewOrganizationId) {
+            rows.push(['visibility', 'Admin preview', 'Active for this hospital']);
+        }
         return '<section class="qn-settings-card qn-settings-workspace">' +
-            '<div class="qn-panel-header"><div><p class="qn-eyebrow">Workspace Context</p><h3>Hospital workspace</h3><p>These settings reflect the selected hospital workspace and the current Hospital Setup context.</p></div></div>' +
+            '<div class="qn-panel-header"><div><p class="qn-eyebrow">Workspace context</p><h3>Hospital workspace</h3><p>Settings reflect this hospital workspace and your current access level.</p></div></div>' +
             '<div class="qn-settings-context-grid">' + rows.map(function (row) {
                 return '<article><span class="dashicons dashicons-' + escapeHtml(row[0]) + '"></span><div><small>' + escapeHtml(row[1]) + '</small><strong>' + escapeHtml(row[2]) + '</strong></div></article>';
             }).join('') + '</div>' +
+            '</section>';
+    }
+
+    function renderSettingsPendingReadiness() {
+        var rows = [
+            ['visibility', 'Regulatory sources', 'Monitoring sources will populate from Hospital Setup.'],
+            ['admin-tools', 'Tools & systems', 'Workspace systems and access notes will summarize here.'],
+            ['bell', 'Reminder timing', 'Lead time and buffer preferences will support future follow-up workflows.'],
+            ['groups', 'Backup visibility', 'Backup users and visibility preferences will appear here.']
+        ];
+        return '<section class="qn-settings-card qn-settings-readiness-card">' +
+            '<div class="qn-settings-card-heading"><span class="dashicons dashicons-admin-settings"></span><div><p class="qn-eyebrow">Setup-derived preferences</p><h3>Complete Hospital Setup to activate settings</h3><p>Settings are built from the Regulatory Monitoring & Preferences section of Hospital Setup. Once submitted, this page will summarize monitoring sources, reminder timing, tools, and backup visibility.</p></div></div>' +
+            '<div class="qn-settings-readiness-list">' + rows.map(function (row) {
+                return '<article><span class="dashicons dashicons-' + escapeHtml(row[0]) + '"></span><div><strong>' + escapeHtml(row[1]) + '</strong><p>' + escapeHtml(row[2]) + '</p></div></article>';
+            }).join('') + '</div>' +
+            '</section>';
+    }
+
+    function renderSettingsPreferenceSource(setup) {
+        return '<section class="qn-settings-card qn-settings-source-card">' +
+            '<div><p class="qn-eyebrow">Preferences source</p><h3>Preferences are managed in Hospital Setup</h3><p>Regulatory sources, tools, reminder timing, and backup visibility are captured in the Regulatory Monitoring & Preferences section of Hospital Setup.</p>' +
+            (isDay0Pending(setup) ? '<span class="qn-status-pill qn-status-warning">Hospital Setup is still in progress.</span>' : '') +
+            '</div>' +
+            '</section>';
+    }
+
+    function renderSettingsCompactPreferenceSummary() {
+        var sources = settingsListValue('monitored_sources', 'monitored_sources');
+        var tools = settingsListValue('current_tools', 'current_tools');
+        var lead = settingsAnswerLabel('reminder_lead_time');
+        var buffer = settingsAnswerLabel('reminder_buffer_time');
+        var users = normalizeBackupUsersValue(settingsAnswerRaw('backup_visibility_users'));
+        var cards = [];
+
+        if (sources.length) {
+            cards.push(renderSettingsSummaryItem('visibility', 'Monitored sources', renderSettingsInlineChips(sources)));
+        }
+        if (tools.length) {
+            cards.push(renderSettingsSummaryItem('admin-tools', 'Tools & systems', renderSettingsInlineChips(tools)));
+        }
+        if (lead || buffer) {
+            cards.push(renderSettingsSummaryItem('bell', 'Reminder timing', '<p>' + escapeHtml([lead ? 'Lead time: ' + lead : '', buffer ? 'Buffer: ' + buffer : ''].filter(Boolean).join(' / ')) + '</p>'));
+        }
+        if (users.length) {
+            cards.push(renderSettingsSummaryItem('groups', 'Backup visibility', '<p>' + escapeHtml(users.map(function (user) {
+                var linked = organizationUserOptions().find(function (option) { return Number(option.user_id) === Number(user.user_id); });
+                return linked ? linked.display_name : (user.name || user.name_organization || 'Unlinked backup user');
+            }).join(', ')) + '</p>'));
+        }
+
+        if (!cards.length) {
+            return '';
+        }
+
+        return '<section class="qn-settings-card qn-settings-summary-card">' +
+            '<div><p class="qn-eyebrow">Captured preferences</p><h3>Setup preference summary</h3></div>' +
+            '<div class="qn-settings-summary-grid">' + cards.join('') + '</div>' +
+            '</section>';
+    }
+
+    function renderSettingsSummaryItem(icon, title, body) {
+        return '<article class="qn-settings-summary-item"><span class="dashicons dashicons-' + escapeHtml(icon) + '"></span><div><strong>' + escapeHtml(title) + '</strong>' + body + '</div></article>';
+    }
+
+    function renderSettingsInlineChips(values) {
+        return '<div class="qn-settings-inline-chips">' + values.map(function (value) {
+            return '<span class="qn-scout-muted-chip">' + escapeHtml(value) + '</span>';
+        }).join('') + '</div>';
+    }
+
+    function renderSettingsCompactReadiness(setup, scout) {
+        return '<section class="qn-settings-card qn-settings-compact-status">' +
+            '<div><p class="qn-eyebrow">Readiness</p><h3>Current readiness</h3></div>' +
+            '<div class="qn-settings-status-list">' +
+                renderSettingsStatusRow('Hospital Setup', setup.status + ' (' + setup.percent + '%)') +
+                renderSettingsStatusRow('Scout Preview', scout.status) +
+                renderSettingsStatusRow('Calendar sync', 'Not active in this phase') +
+                renderSettingsStatusRow('Annual review', 'Annual review prompt planned') +
+            '</div>' +
+            '</section>';
+    }
+
+    function renderSettingsStatusRow(label, value) {
+        return '<div class="qn-settings-status-row"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(value) + '</strong></div>';
+    }
+
+    function renderSettingsCompactActions() {
+        var canEdit = canEditSettingsPreferences();
+        return '<section class="qn-settings-card qn-settings-actions-card">' +
+            '<div><p class="qn-eyebrow">Actions</p><h3>Update preferences</h3><p>' + escapeHtml(canEdit ? 'Preferences are edited through Hospital Setup.' : 'Your current role can review setup-managed preferences.') + '</p></div>' +
+            '<div class="qn-settings-cta-actions">' +
+                '<button class="qn-button qn-button-secondary" type="button" data-section-target="day-0-setup">' + escapeHtml(canEdit ? 'Continue Hospital Setup' : 'View Hospital Setup') + '</button>' +
+                '<button class="qn-button qn-button-primary" type="button" data-section-target="day-0-setup" data-onboarding-section="regulatory_tools_preferences">' + escapeHtml(canEdit ? 'Open Regulatory Monitoring section' : 'View Regulatory Monitoring section') + '</button>' +
+            '</div>' +
             '</section>';
     }
 
@@ -2456,10 +2763,10 @@
             renderSettingsKeyValues([
                 ['Lead time', lead],
                 ['Buffer time', buffer],
-                ['Reminder status', configured ? 'Preferences captured' : 'Setup preferences pending'],
-                ['Calendar sync', 'Not active yet']
+                ['Reminder readiness', configured ? 'Preferences captured' : 'Complete Hospital Setup first'],
+                ['Calendar sync', 'Not active in this phase']
             ]) +
-            '<p class="qn-settings-note">Calendar sync is not active in this phase. Reminder preferences are readiness signals for future workflow scheduling.</p>' +
+            '<p class="qn-settings-note">Reminder preferences captured during Hospital Setup will support future scheduling and follow-up workflows.</p>' +
             '</section>';
     }
 
@@ -2476,28 +2783,27 @@
 
     function renderSettingsBackupUser(user, index) {
         user = user || {};
-        var access = user.access_level ? optionLabelByValue(stepEightOptions('backup_access_level'), user.access_level) : '';
+        var linked = organizationUserOptions().find(function (option) { return Number(option.user_id) === Number(user.user_id); });
+        var name = linked ? linked.display_name : (user.name || user.name_organization || 'Unlinked backup user ' + (index + 1));
+        var role = linked && linked.role ? linked.role.replace(/_/g, ' ') : (user.role || 'Not specified');
         return '<article>' +
-            '<div><strong>' + escapeHtml(user.name || user.name_organization || 'Backup user ' + (index + 1)) + '</strong><span class="qn-scout-status-badge qn-scout-status-neutral">' + escapeHtml(access || 'Access not set') + '</span></div>' +
+            '<div><strong>' + escapeHtml(name) + '</strong><span class="qn-scout-status-badge qn-scout-status-neutral">' + escapeHtml(linked ? 'Linked hospital user' : 'Needs linking') + '</span></div>' +
             '<dl>' +
-                reportingDatum('Role', user.role || 'Not specified') +
-                reportingDatum('Email', user.email || 'Not specified') +
+                reportingDatum('Role', role) +
                 (user.notes || user.legacy ? reportingDatum('Notes', user.notes || user.legacy) : '') +
             '</dl>' +
             '</article>';
     }
 
     function renderSettingsSetupStatus(setup, scout) {
-        var lastRun = state.latestScoutRun ? (state.latestScoutRun.created_at || state.latestScoutRun.updated_at || 'Available') : 'No run yet';
         var previews = scout.ready ? 'Reporting, committees, plans, and clinical monitoring previews available' : 'Module previews available after Scout Preview';
         return '<section class="qn-settings-card qn-settings-status-card">' +
-            '<div class="qn-panel-header"><div><p class="qn-eyebrow">Setup Status</p><h3>Readiness status</h3><p>Use this to confirm whether setup-derived preferences are ready for module previews.</p></div><span class="qn-status-pill qn-status-' + escapeHtml(settingsStatusTone(setup, scout)) + '">' + escapeHtml(settingsStatusLabel(setup, scout)) + '</span></div>' +
+            '<div class="qn-panel-header"><div><p class="qn-eyebrow">Setup status</p><h3>Readiness status</h3><p>One summary of setup, Scout Preview, and module readiness.</p></div></div>' +
             renderSettingsKeyValues([
-                ['Setup status', setup.status + ' (' + setup.percent + '%)'],
-                ['Scout Preview status', scout.status],
-                ['Last Scout run', lastRun],
+                ['Hospital Setup', setup.status + ' (' + setup.percent + '%)'],
+                ['Scout Preview', scout.status],
                 ['Module previews', previews],
-                ['Annual review', 'QualiNav will prompt you to review Hospital Setup information annually.']
+                ['Annual review', 'Annual review prompt planned']
             ]) +
             '</section>';
     }
@@ -2505,14 +2811,14 @@
     function renderSettingsCtaPanel() {
         var canEdit = canEditSettingsPreferences();
         return '<section class="qn-reporting-cta-panel qn-settings-cta-panel">' +
-            '<div><p class="qn-eyebrow">Preferences</p><h3>' + escapeHtml(canEdit ? 'Edit preferences from Hospital Setup.' : 'View only') + '</h3><p>' + escapeHtml(canEdit ? 'This phase reviews setup-derived preferences. Updates still happen through the Hospital Setup workflow.' : 'Your current role can review these preferences but cannot edit hospital setup preferences.') + '</p></div>' +
-            (canEdit ? '<button class="qn-button qn-button-primary" type="button" data-section-target="day-0-setup">Update preferences</button>' : '<span class="qn-status-pill qn-status-neutral">View only</span>') +
+            '<div><p class="qn-eyebrow">Hospital Setup</p><h3>' + escapeHtml(canEdit ? 'Continue setup to update settings.' : 'View only') + '</h3><p>' + escapeHtml(canEdit ? 'Regulatory sources, tools, reminders, and backup visibility are edited in Hospital Setup.' : 'Your current role can review these preferences but cannot edit hospital setup preferences.') + '</p></div>' +
+            (canEdit ? '<div class="qn-settings-cta-actions"><button class="qn-button qn-button-secondary" type="button" data-section-target="day-0-setup">Continue Hospital Setup</button><button class="qn-button qn-button-primary" type="button" data-section-target="day-0-setup" data-onboarding-section="regulatory_tools_preferences">Open Regulatory Monitoring section</button></div>' : '<span class="qn-status-pill qn-status-neutral">View only</span>') +
             '</section>';
     }
 
     function renderSettingsEmptyCard(icon, title, message) {
         return '<section class="qn-settings-card qn-settings-empty-card">' +
-            '<div class="qn-settings-card-heading"><span class="dashicons dashicons-' + escapeHtml(icon) + '"></span><div><p class="qn-eyebrow">' + escapeHtml(title) + '</p><h3>' + escapeHtml(title) + '</h3></div></div>' +
+            '<div class="qn-settings-card-heading"><span class="dashicons dashicons-' + escapeHtml(icon) + '"></span><div><p class="qn-eyebrow">Setup-derived preferences</p><h3>' + escapeHtml(title) + '</h3></div></div>' +
             '<p class="qn-muted-note">' + escapeHtml(message) + '</p>' +
             '</section>';
     }
@@ -2691,6 +2997,9 @@
             if (item.classList.contains('qn-nav-item')) {
                 item.classList.toggle('qn-nav-item-active', active);
             }
+            if (item.classList.contains('qn-myorg-subnav-link')) {
+                item.classList.toggle('qn-myorg-subnav-active', active);
+            }
             if (active && item.hasAttribute('data-title')) {
                 var title = document.getElementById('qn-page-title');
                 var eyebrow = document.getElementById('qn-page-eyebrow');
@@ -2703,7 +3012,7 @@
             }
         });
         if (updateHash) {
-            window.history.replaceState(null, '', '#' + section);
+            window.history.replaceState(null, '', window.location.pathname + window.location.search + '#' + sectionHash(section));
         }
         if (section === 'reporting') {
             renderReportingPage();
@@ -2724,6 +3033,15 @@
     }
 
     function normalizeSectionTarget(section) {
+        if (section === 'settings') {
+            return config.isSiteShellConsole ? 'day-0-setup' : 'dashboard';
+        }
+        if (config.isSiteShellConsole && section === 'dashboard') {
+            return 'day-0-setup';
+        }
+        if (config.isSiteShellConsole && !section) {
+            return 'day-0-setup';
+        }
         if (document.body.classList.contains('qn-hospital-console-page')) {
             if (section === 'users' || section === 'invitations' || section === 'hospital-invitations') {
                 return 'hospital-users';
@@ -2735,10 +3053,35 @@
         return section;
     }
 
+    function sectionHash(section) {
+        if (document.body.classList.contains('qn-hospital-console-page') && section === 'hospital-users') {
+            return 'users';
+        }
+        if (document.body.classList.contains('qn-hospital-console-page') && section === 'clinical') {
+            return 'clinical-monitoring';
+        }
+        return section;
+    }
+
     function initSections() {
-        var fallback = document.body.classList.contains('qn-admin-console-page') ? 'overview' : 'dashboard';
+        var fallback = document.body.classList.contains('qn-admin-console-page') ? 'overview' : (config.defaultSection || 'dashboard');
         var hash = window.location.hash ? window.location.hash.replace('#', '') : '';
-        activateSection(hash || fallback, false);
+        var target = hash || fallback;
+        if (config.isSiteShellConsole && !target) {
+            target = 'day-0-setup';
+            if (window.history && window.history.replaceState) {
+                window.history.replaceState(null, '', window.location.pathname + window.location.search + '#day-0-setup');
+            }
+        }
+        activateSection(target, false);
+        if (config.isSiteShellConsole) {
+            window.requestAnimationFrame(function () {
+                window.scrollTo(0, 0);
+            });
+            window.setTimeout(function () {
+                window.scrollTo(0, 0);
+            }, 120);
+        }
     }
 
     function initSidebar() {
@@ -2904,13 +3247,40 @@
         shell.classList.toggle('qn-workspace-is-loading', !!loading);
     }
 
+    function setOnboardingPanelLoading(loading) {
+        var panel = document.getElementById('day-0-setup');
+        if (panel) {
+            panel.classList.toggle('qn-onboarding-loading', !!loading);
+        }
+    }
+
+    function renderOnboardingLoadError(error) {
+        var message = error && error.message ? error.message : 'Hospital Setup could not load. Please refresh and try again.';
+        setText('#qn-onboarding-message', message);
+        setOnboardingPanelLoading(false);
+        var container = document.getElementById('qn-onboarding-fields');
+        if (container && !container.querySelector('.qn-load-error')) {
+            container.innerHTML = '<div class="qn-readonly-notice qn-load-error"><span class="dashicons dashicons-warning"></span><div><strong>Hospital Setup could not load</strong><p>' + escapeHtml(message) + '</p></div></div>';
+        }
+    }
+
     function setOnboardingSaveStatus(status, label) {
         var node = document.getElementById('qn-onboarding-save-status');
         if (!node) {
             return;
         }
-        node.textContent = label || status || 'Ready';
-        node.className = 'qn-save-status qn-save-status-' + (status || 'ready');
+        if (state.onboardingSaveStatusTimer) {
+            clearTimeout(state.onboardingSaveStatusTimer);
+            state.onboardingSaveStatusTimer = null;
+        }
+        var nextStatus = status || 'ready';
+        node.textContent = label || (nextStatus === 'ready' ? 'Ready' : nextStatus);
+        node.className = 'qn-site-header-progress-status qn-save-status qn-save-status-' + nextStatus;
+        if (nextStatus === 'saved') {
+            state.onboardingSaveStatusTimer = setTimeout(function () {
+                setOnboardingSaveStatus('ready', 'Ready');
+            }, 2400);
+        }
     }
 
     function cellPrimary(title, subtitle) {
@@ -2936,7 +3306,13 @@
     }
 
     function userCell(user) {
-        return '<div class="qn-user-cell"><span class="qn-avatar">' + escapeHtml(initials(user.display_name, user.user_email)) + '</span>' +
+        var fallback = initials(user.display_name, user.user_email);
+        var avatarUrl = text(user.avatar_url || user.profile_image_url || '');
+        var avatar = '<span class="qn-avatar qn-user-avatar-fallback" aria-hidden="true">' + escapeHtml(fallback) + '</span>';
+        if (avatarUrl) {
+            avatar = '<span class="qn-avatar qn-user-avatar"><span class="qn-user-avatar-fallback" aria-hidden="true">' + escapeHtml(fallback) + '</span><img src="' + escapeHtml(avatarUrl) + '" alt="' + escapeHtml(text(user.display_name || 'User avatar')) + '" loading="lazy" onerror="this.hidden=true;this.parentNode.classList.add(\'qn-avatar-image-failed\');"></span>';
+        }
+        return '<div class="qn-user-cell">' + avatar +
             '<div><strong>' + escapeHtml(text(user.display_name || 'Unnamed user')) + '</strong><small>' + escapeHtml(text(user.user_email)) + '</small></div></div>';
     }
 
@@ -2974,7 +3350,7 @@
                     actionMenuButton('Open Console', 'data-open-console', hospital.id, 'dashboard'),
                     actionMenuButton('View/Edit', 'data-edit-hospital', hospital.id, 'edit'),
                     actionMenuButton('Brand', 'data-brand-hospital', hospital.id, 'admin-customizer'),
-                    actionMenuButton('Invite QD', 'data-invite-qd', hospital.id, 'email-alt'),
+                    actionMenuButton('Invite Hospital QD', 'data-invite-qd', hospital.id, 'email-alt'),
                     actionMenuButton('View Setup', 'data-view-setup', hospital.id, 'clipboard'),
                     actionMenuButton('Scout Preview', 'data-view-scout', hospital.id, 'lightbulb')
                 ]) + '</td>' +
@@ -3226,8 +3602,8 @@
             var organizationId = userDefaultOrganizationId(user);
             var invite = findPendingInvitationForUser(user, organizationId);
             var actionItems = [];
+            var contextAttr = 'data-context="admin"';
             if (invite) {
-                var contextAttr = 'data-context="admin"';
                 actionItems.push(actionMenuButton('Resend Invite', 'data-resend-invite', invite.id, 'update', '', contextAttr));
                 actionItems.push(actionMenuButton('Revoke Invite', 'data-revoke-invite', invite.id, 'trash', 'danger', contextAttr));
             }
@@ -3236,6 +3612,17 @@
             }
             if (organizationId && user.qualinav_status === 'invited' && !invite) {
                 actionItems.push(actionMenuButton('Open Console', 'data-open-console', organizationId, 'dashboard'));
+            }
+            if (!isCurrentHospitalUser(user)) {
+                if (user.qualinav_status === 'active') {
+                    actionItems.push(actionMenuButton('Disable User', 'data-update-user-status', user.ID, 'hidden', 'danger', contextAttr + ' data-status="disabled"'));
+                    actionItems.push(actionMenuButton('Remove Access', 'data-update-user-status', user.ID, 'trash', 'danger', contextAttr + ' data-status="archived"'));
+                } else if (user.qualinav_status === 'disabled') {
+                    actionItems.push(actionMenuButton('Reactivate User', 'data-update-user-status', user.ID, 'yes-alt', '', contextAttr + ' data-status="active"'));
+                    actionItems.push(actionMenuButton('Remove Access', 'data-update-user-status', user.ID, 'trash', 'danger', contextAttr + ' data-status="archived"'));
+                } else if (user.qualinav_status === 'archived') {
+                    actionItems.push(actionMenuButton('Reactivate User', 'data-update-user-status', user.ID, 'yes-alt', '', contextAttr + ' data-status="active"'));
+                }
             }
             var actions = actionItems.length ? actionMenu(actionItems) : '<span class="qn-muted-text">No actions</span>';
             return '<tr><td>' + userCell(user) + '</td>' +
@@ -3262,17 +3649,16 @@
                 (!query || userSearchHaystack(user).indexOf(query) !== -1);
         });
         if (!state.users.length) {
-            setTableMessage('qn-hospital-users-table-body', 5, 'No hospital users yet. Invite a user when you are ready.');
+            setTableMessage('qn-hospital-users-table-body', 4, 'No hospital users yet. Invite a user when you are ready.');
             return;
         }
         if (!users.length) {
-            setTableMessage('qn-hospital-users-table-body', 5, 'No hospital users match your search or filters.');
+            setTableMessage('qn-hospital-users-table-body', 4, 'No hospital users match your search or filters.');
             return;
         }
         body.innerHTML = users.map(function (user) {
             var actions = hospitalUserActions(user);
             return '<tr><td>' + userCell(user) + '</td>' +
-                '<td>' + hospitalAccessCell(user) + '</td>' +
                 '<td>' + roleBadge(user.qualinav_role) + '</td>' +
                 '<td>' + statusPill(user.qualinav_status) + '</td>' +
                 '<td>' + (actions.length ? actionMenu(actions) : '<span class="qn-muted-text">No actions available</span>') + '</td></tr>';
@@ -3291,13 +3677,11 @@
         var activeUsers = users.filter(function (user) { return user.qualinav_status === 'active'; });
         var disabledUsers = users.filter(function (user) { return user.qualinav_status === 'disabled' || user.qualinav_status === 'archived'; });
         var qualityDirectors = users.filter(function (user) { return user.qualinav_role === 'quality_director'; });
-        var hospitalName = hospital ? (hospital.organization_name || hospital.name || 'this hospital') : 'this hospital';
         if (subtitle) {
-            subtitle.textContent = 'Manage access for ' + hospitalName + '.';
+            subtitle.textContent = 'Manage workspace access and invitations.';
         }
         if (context) {
             context.innerHTML = [
-                chip(hospitalName),
                 chip(state.me ? roleLabel(state.me.qualinav_role) : 'Current role'),
                 chip(activeUsers.length + ' active users'),
                 chip(pendingInvites.length + ' pending invites')
@@ -3307,13 +3691,13 @@
             summary.innerHTML = [
                 usersSummaryCard('yes-alt', activeUsers.length, 'Active Users', 'Can access this workspace', 'success'),
                 usersSummaryCard('email-alt', pendingInvites.length, 'Pending Invites', 'Awaiting acceptance', 'warning'),
-                usersSummaryCard('businessperson', qualityDirectors.length, 'Quality Directors', 'Primary quality leads', 'info'),
+                usersSummaryCard('businessperson', qualityDirectors.length, 'Hospital Quality Directors', 'Primary quality leads', 'info'),
                 usersSummaryCard('hidden', disabledUsers.length, 'Disabled Users', 'Disabled or archived', 'danger')
             ].join('');
         }
         if (inviteButton) {
             var canInvite = canInviteHospitalUsers();
-            inviteButton.hidden = false;
+            inviteButton.hidden = !canInvite;
             inviteButton.disabled = !canInvite;
             inviteButton.title = canInvite ? 'Invite a user to this hospital workspace' : 'Your role has view-only access to invitations.';
         }
@@ -3321,7 +3705,7 @@
 
     function usersSummaryCard(icon, count, label, detail, tone) {
         return '<article class="qn-users-summary-card qn-users-summary-' + escapeHtml(tone || 'neutral') + '">' +
-            '<span class="dashicons dashicons-' + escapeHtml(icon) + '"></span><div><strong>' + escapeHtml(String(count)) + '</strong><span>' + escapeHtml(label) + '</span><small>' + escapeHtml(detail) + '</small></div></article>';
+            '<span class="dashicons dashicons-' + escapeHtml(icon) + '"></span><div><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(String(count)) + '</strong><small>' + escapeHtml(detail) + '</small></div></article>';
     }
 
     function currentHospitalContext() {
@@ -3376,8 +3760,35 @@
         return canInviteHospitalUsers();
     }
 
+    function isCurrentHospitalUser(user) {
+        var currentId = state.me && state.me.user_id ? Number(state.me.user_id) : 0;
+        var targetId = user && user.ID ? Number(user.ID) : 0;
+        if (currentId && targetId && currentId === targetId) {
+            return true;
+        }
+        var currentEmail = state.me && state.me.user_email ? text(state.me.user_email).toLowerCase() : '';
+        var targetEmail = user && user.user_email ? text(user.user_email).toLowerCase() : '';
+        return !!(currentEmail && targetEmail && currentEmail === targetEmail);
+    }
+
+    function activeQualityDirectorCount() {
+        return (state.users || []).filter(function (item) {
+            return item.qualinav_role === 'quality_director' && item.qualinav_status === 'active';
+        }).length;
+    }
+
+    function isLastActiveQualityDirector(user) {
+        return !!(user &&
+            user.qualinav_role === 'quality_director' &&
+            user.qualinav_status === 'active' &&
+            activeQualityDirectorCount() <= 1);
+    }
+
     function hospitalUserActions(user) {
         if (!canManageHospitalUsers()) {
+            return [];
+        }
+        if (isCurrentHospitalUser(user) || isLastActiveQualityDirector(user)) {
             return [];
         }
         var userId = user.ID;
@@ -3387,23 +3798,28 @@
             return role !== user.qualinav_role;
         });
         if (roles.length) {
-            items.push('<span class="qn-action-menu-label">Change Role</span>');
+            items.push('<span class="qn-action-menu-label">Change role</span>');
             roles.forEach(function (role) {
                 items.push(actionMenuButton('Make ' + (roleLabels[role] || roleLabel(role)), 'data-update-user-role', userId, 'admin-users', '', contextAttr + ' data-role="' + escapeHtml(role) + '"'));
             });
         }
+        var accountItems = [];
         if (user.qualinav_status === 'active') {
-            items.push(actionMenuButton('Disable User', 'data-update-user-status', userId, 'hidden', 'danger', contextAttr + ' data-status="disabled"'));
+            accountItems.push(actionMenuButton('Disable User', 'data-update-user-status', userId, 'hidden', 'danger', contextAttr + ' data-status="disabled"'));
         }
         if (user.qualinav_status === 'disabled') {
-            items.push(actionMenuButton('Reactivate User', 'data-update-user-status', userId, 'yes-alt', '', contextAttr + ' data-status="active"'));
+            accountItems.push(actionMenuButton('Reactivate User', 'data-update-user-status', userId, 'yes-alt', '', contextAttr + ' data-status="active"'));
         }
         if (user.qualinav_status !== 'archived') {
-            items.push(actionMenuButton('Archive User', 'data-update-user-status', userId, 'trash', 'danger', contextAttr + ' data-status="archived"'));
+            accountItems.push(actionMenuButton('Archive User', 'data-update-user-status', userId, 'trash', 'danger', contextAttr + ' data-status="archived"'));
         }
         var invite = findPendingInvitationForUser(user, userDefaultOrganizationId(user));
         if (invite) {
-            items.push(actionMenuButton('Resend Invite', 'data-resend-invite', invite.id, 'update', '', contextAttr));
+            accountItems.push(actionMenuButton('Resend Invite', 'data-resend-invite', invite.id, 'update', '', contextAttr));
+        }
+        if (accountItems.length) {
+            items.push('<span class="qn-action-menu-label">Account</span>');
+            items = items.concat(accountItems);
         }
         return items;
     }
@@ -3417,6 +3833,10 @@
         }
         var invitations = filterInvitations(context);
         var totalRelevant = context === 'hospital' ? (state.invitations || []).filter(function (invite) { return invite.status === 'pending'; }).length : state.invitations.length;
+        var tools = context === 'hospital' ? document.getElementById('qn-hospital-invitation-tools') : null;
+        if (tools) {
+            tools.hidden = !totalRelevant;
+        }
         if (!totalRelevant) {
             if (context === 'hospital') {
                 body.innerHTML = '<tr><td colspan="' + colspan + '"><div class="qn-empty-state qn-users-empty-state"><span class="dashicons dashicons-email-alt"></span><h3>No pending invitations.</h3><p>Invitations you send will appear here until they are accepted, revoked, or expire.</p></div></td></tr>';
@@ -3432,10 +3852,14 @@
         body.innerHTML = invitations.map(function (invite) {
             var contextAttr = 'data-context="' + escapeHtml(context) + '"';
             var canManage = context === 'admin' || canManageHospitalUsers();
-            var actions = canManage ? actionMenu([
-                actionMenuButton('Resend', 'data-resend-invite', invite.id, 'update', '', contextAttr),
-                actionMenuButton('Revoke', 'data-revoke-invite', invite.id, 'trash', 'danger', contextAttr)
-            ]) : '<span class="qn-muted-text">No actions available</span>';
+            var actionItems = [];
+            if (canManage && isInvitationResendable(invite)) {
+                actionItems.push(actionMenuButton('Resend', 'data-resend-invite', invite.id, 'update', '', contextAttr));
+            }
+            if (canManage && isInvitationRevokable(invite)) {
+                actionItems.push(actionMenuButton('Revoke', 'data-revoke-invite', invite.id, 'trash', 'danger', contextAttr));
+            }
+            var actions = actionItems.length ? actionMenu(actionItems) : '<span class="qn-muted-text">No actions</span>';
             return '<tr><td>' + cellPrimary(invite.full_name || invite.email, invite.email) + '</td>' +
                 '<td>' + roleBadge(invite.qualinav_role) + '</td>' +
                 (context === 'hospital' ? '<td>' + statusPill(invite.email_failed ? 'email failed' : 'email sent') + '</td>' : '') +
@@ -3444,6 +3868,14 @@
                 (context === 'admin' ? '<td>' + escapeHtml(text(invite.invited_by_name || invite.invited_by)) + '</td>' : '') +
                 '<td>' + actions + '</td></tr>';
         }).join('');
+    }
+
+    function isInvitationResendable(invite) {
+        return invite && invite.status !== 'accepted' && invite.status !== 'revoked';
+    }
+
+    function isInvitationRevokable(invite) {
+        return invite && invite.status !== 'accepted' && invite.status !== 'revoked';
     }
 
     function filterInvitations(context) {
@@ -3980,6 +4412,88 @@
         });
     }
 
+    function inviteHospitalList() {
+        var hospitals = state.allHospitals && state.allHospitals.length ? state.allHospitals : (state.hospitals || []);
+        return hospitals.slice().sort(function (a, b) {
+            var stateA = inviteHospitalStateLabel(a).toLowerCase();
+            var stateB = inviteHospitalStateLabel(b).toLowerCase();
+            var nameA = text(a.name).toLowerCase();
+            var nameB = text(b.name).toLowerCase();
+            if (stateA !== stateB) {
+                return stateA < stateB ? -1 : 1;
+            }
+            return nameA < nameB ? -1 : (nameA > nameB ? 1 : 0);
+        });
+    }
+
+    function inviteHospitalStateValue(hospital) {
+        return text(hospital.state_id || hospital.state_code || hospital.state_name || 'unknown');
+    }
+
+    function inviteHospitalStateLabel(hospital) {
+        var value = inviteHospitalStateValue(hospital);
+        var matchedState = (state.states || []).find(function (item) {
+            return text(item.id) === value || text(item.code) === value || text(item.name) === value;
+        });
+        return matchedState ? text(matchedState.code || matchedState.name) : text(hospital.state_code || hospital.state_name || 'State not set');
+    }
+
+    function inviteStateOptions(hospitals) {
+        var seen = {};
+        hospitals.forEach(function (hospital) {
+            var value = inviteHospitalStateValue(hospital);
+            if (!seen[value]) {
+                seen[value] = inviteHospitalStateLabel(hospital);
+            }
+        });
+        return Object.keys(seen).map(function (value) {
+            return {value: value, label: seen[value]};
+        }).sort(function (a, b) {
+            return a.label.toLowerCase() < b.label.toLowerCase() ? -1 : 1;
+        });
+    }
+
+    function renderInviteStateOptions(selectedValue) {
+        var select = document.getElementById('qn-invite-state');
+        if (!select) {
+            return;
+        }
+        var hospitals = inviteHospitalList();
+        var selected = text(selectedValue || select.value);
+        select.innerHTML = '<option value="">All states</option>' + inviteStateOptions(hospitals).map(function (item) {
+            return '<option value="' + escapeHtml(item.value) + '"' + (selected === item.value ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>';
+        }).join('');
+        syncSearchableSelect(select);
+    }
+
+    function renderInviteHospitalOptions(selectedId) {
+        var select = document.getElementById('qn-invite-organization');
+        if (!select) {
+            return;
+        }
+        var selectedState = text(getValue('qn-invite-state'));
+        var selected = text(selectedId || select.value);
+        var hospitals = inviteHospitalList().filter(function (hospital) {
+            return !selectedState || inviteHospitalStateValue(hospital) === selectedState;
+        });
+        if (!hospitals.length) {
+            select.innerHTML = '<option value="">No hospitals available for this state</option>';
+            select.disabled = true;
+            syncSearchableSelect(select);
+            return;
+        }
+        select.disabled = false;
+        select.innerHTML = hospitals.map(function (hospital) {
+            var stateLabel = inviteHospitalStateLabel(hospital);
+            var label = selectedState ? text(hospital.name) : text(hospital.name) + ' - ' + stateLabel;
+            return '<option value="' + escapeHtml(hospital.id) + '"' + (selected && Number(selected) === Number(hospital.id) ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
+        }).join('');
+        if (selected && !select.value) {
+            select.selectedIndex = 0;
+        }
+        syncSearchableSelect(select);
+    }
+
     function openInviteModal(options) {
         options = options || {};
         state.inviteContext = options.context || (document.body.classList.contains('qn-admin-console-page') ? 'admin' : 'hospital');
@@ -3987,9 +4501,11 @@
         state.fixedInviteOrganization = options.organizationId || null;
         var modal = document.getElementById('qn-invite-modal');
         var form = document.getElementById('qn-invite-form');
+        var inviteState = document.getElementById('qn-invite-state');
         var org = document.getElementById('qn-invite-organization');
         var role = document.getElementById('qn-invite-role');
         var workspace = document.getElementById('qn-invite-workspace-name');
+        var stateField = document.getElementById('qn-invite-state-field');
         var orgField = document.getElementById('qn-invite-organization-field');
         var roleField = document.getElementById('qn-invite-role-field');
         var fixedContext = document.getElementById('qn-invite-fixed-context');
@@ -4008,13 +4524,12 @@
             var hospital = currentHospitalContext();
             workspace.textContent = hospital ? (hospital.organization_name || hospital.name || 'Current hospital') : 'Current hospital';
         }
+        if (inviteState) {
+            renderInviteStateOptions('');
+        }
         if (org) {
-            org.innerHTML = (state.allHospitals || state.hospitals).map(function (hospital) {
-                var selected = state.fixedInviteOrganization && Number(state.fixedInviteOrganization) === Number(hospital.id) ? ' selected' : '';
-                return '<option value="' + hospital.id + '"' + selected + '>' + escapeHtml(hospital.name) + '</option>';
-            }).join('');
+            renderInviteHospitalOptions(state.fixedInviteOrganization || '');
             org.disabled = !!state.fixedInviteOrganization;
-            syncSearchableSelect(org);
         }
         var selectedHospital = state.fixedInviteOrganization ? findHospital(state.fixedInviteOrganization) : null;
         if (fixedContext) {
@@ -4025,6 +4540,9 @@
         }
         if (fixedHospital) {
             fixedHospital.textContent = selectedHospital ? (selectedHospital.name || 'Selected hospital') : 'Selected hospital';
+        }
+        if (stateField) {
+            stateField.hidden = !!state.fixedInviteOrganization;
         }
         if (orgField) {
             orgField.hidden = !!state.fixedInviteOrganization;
@@ -4062,6 +4580,7 @@
         if (organizationId) {
             path += '?organization_id=' + encodeURIComponent(organizationId);
         }
+        setOnboardingPanelLoading(true);
         if (showLoading) {
             setWorkspaceLoading(true, 'Loading Hospital Setup...');
         }
@@ -4069,13 +4588,20 @@
             state.onboarding = payload;
             state.onboardingOrganizationId = payload.current_organization_id;
             state.scoutOnboardingSubmitted = !!payload.onboarding_submitted || payload.onboarding_status === 'submitted' || state.scoutOnboardingSubmitted;
-            renderOnboarding();
+            try {
+                renderOnboarding();
+            } catch (error) {
+                renderOnboardingLoadError(error);
+                throw error;
+            }
             renderHospitalContext(dashboardHospital());
             renderHospitalUsersOverview();
             renderHospitalDataSections();
+            maybeShowWorkspaceWelcome();
         }).catch(function (error) {
-            setText('#qn-onboarding-message', error.message);
+            renderOnboardingLoadError(error);
         }).finally(function () {
+            setOnboardingPanelLoading(false);
             if (showLoading) {
                 setWorkspaceLoading(false);
             }
@@ -4106,23 +4632,25 @@
     function renderScoutPreview() {
         var body = document.getElementById('qn-scout-preview-body');
         var generate = document.getElementById('qn-scout-generate-button');
+        var readOnly = isReadOnlyWorkspaceRole();
         if (!body) {
             return;
         }
+        body.classList.toggle('qn-readonly-module', readOnly);
         renderScoutPageChrome();
         if (generate) {
             generate.hidden = true;
-            generate.disabled = !state.scoutCanGenerate;
+            generate.disabled = readOnly || !state.scoutCanGenerate;
             generate.innerHTML = '<span class="dashicons dashicons-lightbulb"></span>Generate Preview';
         }
 
         if (!state.scoutOnboardingSubmitted && !state.latestScoutRun) {
             body.innerHTML = renderScoutEmptyState(
                 'clipboard',
-                'Complete Hospital Setup first',
-                'Scout needs your hospital profile, services, reporting obligations, and priorities before it can generate your setup preview.',
-                'Go to Hospital Setup',
-                'day-0-setup'
+                readOnly ? 'Scout Preview not ready yet' : 'Complete Hospital Setup first',
+                readOnly ? 'This hospital workspace does not have a Scout setup preview ready for review yet.' : 'Scout needs your hospital profile, services, meeting cadence, and plans and policies before it can generate your setup preview. Measures, deadlines, and reporting status remain in Data Hub.',
+                readOnly ? '' : 'Go to Hospital Setup',
+                readOnly ? '' : 'day-0-setup'
             );
             return;
         }
@@ -4137,12 +4665,12 @@
         if (!state.latestScoutRun) {
             body.innerHTML = renderScoutEmptyState(
                 'lightbulb',
-                'Ready to generate Scout Preview',
-                'Scout will create a draft reporting schedule, meeting flow map, survey readiness timeline, monitoring tasks, and priority queue.',
-                'Generate Scout Preview',
+                readOnly ? 'Scout Preview not generated yet' : 'Ready to generate Scout Preview',
+                readOnly ? 'Authorized workspace users can generate the draft operating-system preview from Hospital Setup answers.' : 'Scout will create a draft reporting schedule, meeting flow map, survey readiness timeline, monitoring tasks, and priority queue.',
+                readOnly ? '' : 'Generate Scout Preview',
                 ''
             );
-            if (generate && state.scoutCanGenerate) {
+            if (generate && !readOnly && state.scoutCanGenerate) {
                 generate.hidden = false;
             }
             return;
@@ -4178,15 +4706,18 @@
             return;
         }
         chips.innerHTML = [
-            scoutContextChip('Hospital type', hospital.hospital_type_label || context.hospital_category),
-            scoutContextChip('Service model', hospital.service_model_label),
-            scoutContextChip('Payment model', hospital.payment_model_label || context.payment_model),
-            scoutContextChip('Survey pathway', context.survey_pathway),
-            scoutContextChip('Guidance level', context.preferred_guidance_level)
-        ].join('');
+            scoutContextChip('Hospital type', scoutKnownValue(hospital.hospital_type_label) || scoutKnownValue(context.hospital_category) || scoutHospitalTypeFromPayment(hospital.payment_model_label || context.payment_model)),
+            scoutContextChip('Service model', scoutKnownValue(hospital.service_model_label)),
+            scoutContextChip('Payment model', scoutKnownValue(hospital.payment_model_label) || scoutKnownValue(context.payment_model)),
+            scoutContextChip('Survey pathway', scoutKnownValue(context.survey_pathway)),
+            scoutContextChip('Guidance level', scoutKnownValue(context.preferred_guidance_level))
+        ].filter(Boolean).join('');
     }
 
     function scoutContextChip(label, value) {
+        if (!scoutKnownValue(value)) {
+            return '';
+        }
         return '<span><b>' + escapeHtml(label) + '</b>' + escapeHtml(formatScoutValue(value, 'Not yet known')) + '</span>';
     }
 
@@ -4237,14 +4768,17 @@
     }
 
     function renderScoutCompleted(run) {
-        var cards = scoutWorkflowDefinitions().map(function (definition) {
+        var rows = scoutWorkflowDefinitions().map(function (definition) {
             return renderScoutWorkflowCard(run, definition);
-        }).join('');
+        }).filter(Boolean).join('');
+        var workflowList = rows ?
+            '<div class="qn-scout-workflow-list">' + rows + '</div>' :
+            '<div class="qn-empty-state"><span class="dashicons dashicons-lightbulb"></span><h3>No workflow sections returned</h3><p>Scout did not return structured workflow sections for this preview.</p></div>';
         return renderScoutStatusHero(run) +
             renderScoutPersonaContext(run) +
             renderScoutAttentionPanel(run) +
             '<section class="qn-scout-workflow-section"><div class="qn-section-toolbar"><div><p class="qn-eyebrow">Workflow draft</p><h3>Generated operating system preview</h3></div></div>' +
-            '<div class="qn-scout-grid">' + cards + '</div></section>' +
+            workflowList + '</section>' +
             renderScoutSources(scoutSources(run));
     }
 
@@ -4258,14 +4792,17 @@
             '<div class="qn-scout-status-metrics">' +
             scoutMetric('Last generated', run && run.created_at ? run.created_at : 'Not yet generated') +
             scoutMetric('Sources', counts.sources) +
-            scoutMetric('Warnings', counts.warnings) +
-            scoutMetric('Missing inputs', counts.missing) +
+            (counts.warnings ? scoutMetric('Warnings', counts.warnings) : '') +
+            (counts.missing ? scoutMetric('Missing inputs', counts.missing) : '') +
             '</div>' +
             (cta ? '<div class="qn-scout-status-action">' + cta + '</div>' : '') +
             '</section>';
     }
 
     function scoutHeroCta(run) {
+        if (isReadOnlyWorkspaceRole()) {
+            return '';
+        }
         if (!run) {
             return state.scoutCanGenerate ? '<button class="qn-button qn-button-primary" type="button" id="qn-scout-hero-generate">Generate Preview</button>' : '';
         }
@@ -4310,27 +4847,50 @@
 
     function renderScoutPersonaContext(run) {
         var context = run.persona_context || {};
-        var summary = run.persona_summary || '';
+        var summary = scoutHospitalContextSummary(run);
         if (!summary && !Object.keys(context).length) {
             return '';
         }
+        var hospital = dashboardHospital() || {};
         var rows = [
-            ['Persona summary', summary || 'Not yet known'],
-            ['Hospital category', context.hospital_category],
-            ['Payment model', context.payment_model],
-            ['Survey pathway', context.survey_pathway],
-            ['Accreditation pathway', context.accreditation_pathway],
-            ['Quality Director experience', context.quality_director_experience || context.quality_director_background],
-            ['Guidance level', context.preferred_guidance_level],
-            ['Program maturity', context.program_maturity],
-            ['First 30 Days track', context.first_30_days_track ? 'Yes' : 'No']
-        ];
+            ['Hospital category', scoutKnownValue(context.hospital_category) || scoutHospitalTypeFromPayment(context.payment_model || hospital.payment_model_label)],
+            ['Payment model', scoutKnownValue(context.payment_model) || scoutKnownValue(hospital.payment_model_label)],
+            ['Survey pathway', scoutKnownValue(context.survey_pathway)],
+            ['Accreditation pathway', scoutKnownValue(context.accreditation_pathway)],
+            ['Program maturity', scoutKnownValue(context.program_maturity)],
+            ['Guidance level', scoutKnownValue(context.preferred_guidance_level)],
+            ['First 30 days track', context.first_30_days_track ? 'Yes' : '']
+        ].filter(function (row) {
+            return row[1] !== null && row[1] !== undefined && row[1] !== '';
+        });
 
         return '<section class="qn-scout-context-panel">' +
-            '<div class="qn-panel-header"><div><p class="qn-eyebrow">Persona context</p><h3>Personalized for this hospital</h3></div><span class="dashicons dashicons-admin-users"></span></div>' +
+            '<div class="qn-panel-header"><div><p class="qn-eyebrow">Hospital context</p><h3>How Scout shaped this preview</h3></div><span class="dashicons dashicons-admin-users"></span></div>' +
             '<div class="qn-scout-persona-summary">' + escapeHtml(summary || 'Scout will personalize the preview as more Hospital Setup detail is available.') + '</div>' +
             '<div class="qn-scout-context-grid">' + rows.map(renderScoutContextRow).join('') + '</div>' +
             '</section>';
+    }
+
+    function scoutHospitalContextSummary(run) {
+        var context = run && run.persona_context ? run.persona_context : {};
+        var hospital = dashboardHospital() || {};
+        var category = scoutKnownValue(context.hospital_category) || scoutHospitalTypeFromPayment(context.payment_model || hospital.payment_model_label);
+        var pathway = scoutKnownValue(context.survey_pathway) || scoutKnownValue(context.accreditation_pathway);
+        var maturity = scoutKnownValue(context.program_maturity);
+        var parts = [];
+        if (category) {
+            parts.push(formatScoutValue(category, ''));
+        }
+        if (pathway) {
+            parts.push(formatScoutValue(pathway, ''));
+        }
+        if (maturity) {
+            parts.push(formatScoutValue(maturity, '') + ' setup maturity');
+        }
+        if (parts.length) {
+            return 'Scout used Hospital Setup answers to draft this operating-system preview for a ' + parts.join(' with ') + '.';
+        }
+        return run && run.persona_summary ? normalizePublicSetupCopy(run.persona_summary) : '';
     }
 
     function renderScoutContextRow(row) {
@@ -4343,7 +4903,7 @@
         var warnings = scoutWarnings(run);
         var backend = run && run.status === 'failed' ? [safeScoutError(run.error_message)] : [];
         if (!missing.length && !warnings.length && !backend.length) {
-            return '<section class="qn-scout-attention qn-scout-attention-quiet"><div><p class="qn-eyebrow">Needs your attention</p><h3>No immediate issues returned</h3><p>Scout did not return warnings or missing-input flags for this preview.</p></div></section>';
+            return '';
         }
         return '<section class="qn-scout-attention">' +
             '<div class="qn-section-toolbar"><div><p class="qn-eyebrow">Needs your attention</p><h3>Inputs and warnings to review</h3></div></div>' +
@@ -4366,16 +4926,21 @@
     function renderScoutWorkflowCard(run, definition) {
         var group = findScoutGroup(run, definition);
         var counts = scoutGroupCounts(group);
+        if (!group || (counts.items === 0 && counts.warnings === 0 && counts.missing === 0)) {
+            return '';
+        }
         var status = scoutGroupStatus(group, counts);
-        var previewText = scoutGroupPreviewText(group, status);
-        return '<article class="qn-card qn-scout-card qn-scout-card-' + escapeHtml(status.tone) + '">' +
+        var preview = scoutGroupPreviewContent(definition, group, counts);
+        return '<article class="qn-scout-row qn-scout-card-' + escapeHtml(status.tone) + '">' +
             '<span class="dashicons ' + scoutIcon(definition.key) + '"></span>' +
-            '<div class="qn-scout-card-body"><div class="qn-scout-card-top"><h3>' + escapeHtml(definition.title) + '</h3><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(status.tone) + '">' + escapeHtml(status.label) + '</span></div>' +
-            '<p>' + escapeHtml(previewText) + '</p>' +
-            '<div class="qn-scout-card-metrics">' +
+            '<div class="qn-scout-row-main"><div class="qn-scout-row-title"><h3>' + escapeHtml(definition.title) + '</h3><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(status.tone) + '">' + escapeHtml(status.label) + '</span></div>' +
+            '<p>' + escapeHtml(preview.summary) + '</p>' +
+            (preview.examples.length ? '<ul class="qn-scout-card-examples">' + preview.examples.map(function (example) { return '<li>' + escapeHtml(example) + '</li>'; }).join('') + '</ul>' : '') +
+            '</div>' +
+            '<div class="qn-scout-row-meta"><div class="qn-scout-card-metrics">' +
             '<span>' + escapeHtml(String(counts.items)) + ' items</span>' +
-            '<span>' + escapeHtml(String(counts.warnings)) + ' warnings</span>' +
-            '<span>' + escapeHtml(String(counts.missing)) + ' missing</span>' +
+            (counts.warnings ? '<span>' + escapeHtml(String(counts.warnings)) + ' warnings</span>' : '') +
+            (counts.missing ? '<span>' + escapeHtml(String(counts.missing)) + ' missing</span>' : '') +
             '</div>' +
             '<button class="qn-button qn-button-small" type="button" data-scout-details="' + escapeHtml(definition.key) + '">View Details</button></div>' +
             '</article>';
@@ -4429,10 +4994,71 @@
         return status.label === 'Ready' ? 'Scout returned this section without item-level detail.' : 'Review this section for completeness.';
     }
 
+    function scoutGroupPreviewContent(definition, group, counts) {
+        var samples = scoutGroupSamples(group, 3);
+        var count = counts.items || samples.length;
+        var summaries = {
+            master_reporting_schedule: count + ' reporting obligations drafted for review.',
+            meeting_report_flow_map: count + ' committee and report-flow items mapped.',
+            survey_readiness_timeline: count + ' survey readiness windows drafted.',
+            active_monitoring_improvement_tasks: count + ' monitoring and improvement actions drafted.',
+            recurring_clinical_monitoring: count + ' recurring monitoring activities drafted.',
+            aggregate_data_uploads: count + ' aggregate data upload needs drafted.',
+            routine_task_rhythm: 'Routine work rhythm drafted from setup answers.',
+            active_improvement_projects: count + ' improvement project signals drafted.',
+            priority_queue: count + ' priority items identified for follow-up.',
+            plan_policy_tasks: count + ' plan and policy priorities drafted.',
+            regulatory_monitoring_preferences: count + ' regulatory monitoring preferences drafted.',
+            external_contact_directory: count + ' external contact items drafted.',
+            first_30_days_learning_journey: count + ' first-30-days learning steps drafted.',
+            learning_journey: count + ' learning items drafted.',
+            reminder_rules: count + ' reminder rules drafted.'
+        };
+        return {
+            summary: group.summary || group.description ? describeScoutItem(group.summary || group.description) : (summaries[definition.key] || (count + ' draft items returned for review.')),
+            examples: samples
+        };
+    }
+
+    function scoutGroupSamples(group, limit) {
+        var items = group && Array.isArray(group.items) ? group.items : [];
+        var samples = [];
+        items.some(function (item) {
+            var label = scoutItemTitle(item);
+            if (label && samples.indexOf(label) === -1) {
+                samples.push(label);
+            }
+            return samples.length >= limit;
+        });
+        return samples;
+    }
+
+    function scoutItemTitle(item) {
+        if (item === null || item === undefined || item === '') {
+            return '';
+        }
+        if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') {
+            return describeScoutItem(item);
+        }
+        if (Array.isArray(item)) {
+            return item.map(scoutItemTitle).filter(Boolean).slice(0, 2).join(', ');
+        }
+        if (typeof item === 'object') {
+            var keys = ['title', 'name', 'report_name', 'committee', 'meeting', 'monitoring_activity', 'activity', 'dataset', 'project', 'priority', 'topic', 'rule', 'focus', 'timeframe'];
+            for (var i = 0; i < keys.length; i += 1) {
+                if (item[keys[i]]) {
+                    return describeScoutItem(item[keys[i]]);
+                }
+            }
+            return describeScoutItem(item);
+        }
+        return '';
+    }
+
     function renderScoutSources(sources) {
         sources = Array.isArray(sources) ? sources : [];
         if (!sources.length) {
-            return '<section class="qn-scout-sources"><div class="qn-panel-header"><div><p class="qn-eyebrow">Sources</p><h3>Sources used by Scout</h3></div><span class="qn-status-pill">0 listed</span></div><p class="qn-muted-note">No source references were returned for this preview.</p></section>';
+            return '';
         }
         return '<section class="qn-scout-sources">' +
             '<div class="qn-panel-header"><div><p class="qn-eyebrow">Sources</p><h3>Sources used by Scout</h3></div><span class="qn-status-pill">' + sources.length + ' listed</span></div>' +
@@ -4559,7 +5185,47 @@
         if (value === null || value === undefined || value === '') {
             return missingLabel || 'Not yet known';
         }
-        return normalizePublicSetupCopy(text(value).replace(/_/g, ' ').replace(/\b\w/g, function (letter) { return letter.toUpperCase(); }));
+        var raw = text(value).trim();
+        var mapped = scoutValueLabel(raw);
+        if (mapped) {
+            return mapped;
+        }
+        return normalizePublicSetupCopy(raw.replace(/_/g, ' ').replace(/\b\w/g, function (letter) { return letter.toUpperCase(); }));
+    }
+
+    function scoutKnownValue(value) {
+        if (value === null || value === undefined || value === '') {
+            return '';
+        }
+        var raw = text(value).trim();
+        var normalized = raw.toLowerCase().replace(/\.$/, '').replace(/[_\s-]+/g, ' ');
+        if (!normalized || normalized === 'not specified' || normalized === 'not yet known' || normalized === 'unknown' || normalized === 'n/a' || normalized === '-') {
+            return '';
+        }
+        return raw;
+    }
+
+    function scoutValueLabel(value) {
+        var key = text(value).trim().toLowerCase().replace(/[\s-]+/g, '_');
+        var labels = {
+            cah: 'Critical Access Hospital',
+            critical_access_hospital: 'Critical Access Hospital',
+            cms_state_survey: 'CMS/state survey',
+            cms_state_survey_only: 'CMS/state survey only',
+            tjc: 'The Joint Commission',
+            joint_commission: 'The Joint Commission',
+            the_joint_commission: 'The Joint Commission',
+            independent: 'Independent',
+            guided: 'Guided',
+            partial: 'Partial',
+            new: 'New'
+        };
+        return labels[key] || '';
+    }
+
+    function scoutHospitalTypeFromPayment(value) {
+        var label = scoutValueLabel(value);
+        return label === 'Critical Access Hospital' ? label : '';
     }
 
     function describeScoutItem(item) {
@@ -4583,10 +5249,45 @@
                 return normalizePublicSetupCopy(item.name);
             }
             return Object.keys(item).slice(0, 4).map(function (key) {
-                return normalizePublicSetupCopy(key.replace(/_/g, ' ')) + ': ' + describeScoutItem(item[key]);
+                return scoutFriendlyKey(key) + ': ' + describeScoutItem(item[key]);
             }).join(' | ');
         }
         return String(item);
+    }
+
+    function scoutFriendlyKey(key) {
+        var labels = {
+            report_name: 'Report',
+            committee: 'Committee',
+            frequency: 'Frequency',
+            owner: 'Owner',
+            destination: 'Destination',
+            sequence: 'Step',
+            quality_director_role: 'Quality director role',
+            monitoring_activity: 'Monitoring activity',
+            review_body: 'Review body',
+            dataset: 'Dataset',
+            source: 'Source',
+            timeframe: 'Timeframe',
+            focus: 'Focus',
+            detail: 'Detail',
+            priority: 'Priority',
+            domain: 'Domain',
+            reason: 'Reason',
+            urgency: 'Urgency',
+            project: 'Project',
+            method: 'Method',
+            measure: 'Measure',
+            status: 'Status',
+            week: 'Week',
+            action: 'Action',
+            topic: 'Topic',
+            format: 'Format',
+            rule: 'Rule',
+            trigger: 'Trigger',
+            lead_time: 'Lead time'
+        };
+        return labels[key] || normalizePublicSetupCopy(key.replace(/_/g, ' '));
     }
 
     function cleanScoutList(items) {
@@ -4729,9 +5430,17 @@
         setOnboardingChip('#qn-onboarding-state-context', state.onboarding.state_code || state.onboarding.state_name || 'State not set', !(state.onboarding.state_code || state.onboarding.state_name));
         setText('#qn-onboarding-step-count', 'Step ' + (state.onboardingIndex + 1) + ' of ' + steps.length);
         setText('#qn-onboarding-step-title', step.title);
-        setText('#qn-onboarding-step-description', step.section_key === 'plans_policies_monitoring' ? 'Set up required plans, policy workflows, and aggregate monitoring structure for Scout.' : step.description);
+        setText('#qn-onboarding-step-description', step.description);
         var progress = state.onboarding.progress ? state.onboarding.progress.total_percent : 0;
-        setText('#qn-onboarding-progress-text', isOnboardingSubmitted() ? 'Setup submitted - ' + progress + '% complete' : progress + '% complete');
+        var headerProgressText = document.querySelector('.qn-site-header-progress #qn-onboarding-progress-text');
+        if (headerProgressText) {
+            headerProgressText.textContent = progress + '%';
+            if (!state.onboardingBackgroundSaving && !state.onboardingSubmitting) {
+                setOnboardingSaveStatus(progress > 0 ? 'ready' : 'not-started', progress > 0 ? 'Ready' : 'Not started');
+            }
+        } else {
+            setText('#qn-onboarding-progress-text', isOnboardingSubmitted() ? 'Setup submitted - ' + progress + '% complete' : progress + '% complete');
+        }
         setText('#qn-onboarding-step-summary', 'Step ' + (state.onboardingIndex + 1) + ' of ' + steps.length + ' - ' + (isOnboardingSubmitted() ? 'submitted, ' + progress + '% answer completeness' : progress + '% complete'));
         var bar = document.getElementById('qn-onboarding-progress-bar');
         if (bar) {
@@ -4750,6 +5459,9 @@
         initializeSearchableSelects(document.getElementById('qn-onboarding-fields') || document);
         updateStepFourConditionalUI();
         updateStepSevenConditionalUI();
+        if (!applyOnboardingUrlSection()) {
+            applyOnboardingUrlQuestionFocus();
+        }
         var prev = document.getElementById('qn-onboarding-prev');
         var next = document.getElementById('qn-onboarding-next');
         var submit = document.getElementById('qn-onboarding-submit');
@@ -4786,8 +5498,14 @@
         if (!node) {
             return;
         }
+        node.hidden = !!warning;
+        if (warning) {
+            node.textContent = '';
+            node.classList.remove('qn-chip-warning');
+            return;
+        }
         node.textContent = label;
-        node.classList.toggle('qn-chip-warning', !!warning);
+        node.classList.remove('qn-chip-warning');
     }
 
     function renderStepper(steps) {
@@ -4799,11 +5517,27 @@
             var status = onboardingStepStatus(step);
             var active = index === state.onboardingIndex;
             var icon = status === 'complete' ? 'yes-alt' : 'marker';
-            return '<button type="button" class="qn-stepper-item qn-stepper-' + status + (active ? ' qn-stepper-active' : '') + '" data-onboarding-step="' + index + '">' +
+            var shortTitle = onboardingStepShortTitle(step);
+            var fullTitle = step.title || shortTitle;
+            return '<button type="button" class="qn-stepper-item qn-stepper-' + status + (active ? ' qn-stepper-active' : '') + '" data-onboarding-step="' + index + '" title="' + escapeHtml(fullTitle) + '" aria-label="Step ' + (index + 1) + ': ' + escapeHtml(fullTitle) + ', ' + escapeHtml(stepStatusLabel(status)) + '">' +
                 '<span class="qn-stepper-index"><span class="dashicons dashicons-' + icon + '"></span><b>' + (index + 1) + '</b></span>' +
-                '<span class="qn-stepper-copy"><strong>' + escapeHtml(step.title) + '</strong><small>' + escapeHtml(stepStatusLabel(status)) + '</small></span>' +
+                '<span class="qn-stepper-copy"><strong>' + escapeHtml(shortTitle) + '</strong><small>' + escapeHtml(stepStatusLabel(status)) + '</small></span>' +
             '</button>';
         }).join('');
+    }
+
+    function onboardingStepShortTitle(step) {
+        var key = step && step.section_key ? step.section_key : '';
+        var titles = {
+            hospital_director_info: 'Hospital Info',
+            accreditation_survey_readiness: 'Survey',
+            services_clinical_model: 'Services',
+            committees_reporting: 'Meetings',
+            plans_policies_monitoring: 'Plans & Policies',
+            measures_qi_projects: 'Data Hub',
+            regulatory_tools_preferences: 'Review'
+        };
+        return titles[key] || (step && step.title ? step.title : 'Step');
     }
 
     function markOnboardingStepActive(targetIndex) {
@@ -4864,16 +5598,27 @@
         if (panel) {
             panel.classList.remove('qn-onboarding-loading');
         }
-        var questions = (state.onboarding.questions || []).filter(function (question) {
+        var allSectionQuestions = (state.onboarding.questions || []).filter(function (question) {
+            return getSectionKeyForQuestion(question) === step.section_key;
+        });
+        var questions = allSectionQuestions.filter(function (question) {
             return getSectionKeyForQuestion(question) === step.section_key && conditionalVisible(question);
         });
+        if (step.section_key === 'accreditation_survey_readiness') {
+            questions = allSectionQuestions;
+        }
         if (step.section_key === 'goals_learning_contacts') {
             questions = (state.onboarding.questions || []).filter(function (question) {
                 return getSectionKeyForQuestion(question) === step.section_key;
             });
         }
+        if (step.section_key === 'hospital_director_info') {
+            questions = allSectionQuestions;
+        }
         container.innerHTML = renderQuestionGroups(step, questions);
         updateStepOneBedWarning();
+        updateStepOneAffiliationUI();
+        updateStepOneQualityLeaderTitleUI();
         updateStepTwoConditionalUI();
         updateStepThreeConditionalUI();
         updateStepSevenConditionalUI();
@@ -4886,110 +5631,180 @@
 
     function renderQuestionGroups(step, questions) {
         if (step.section_key === 'hospital_director_info') {
-            var hospitalKeys = ['hospital_name', 'hospital_city', 'hospital_state', 'licensed_beds', 'acute_beds', 'swing_beds', 'is_critical_access_hospital', 'independent_or_system'];
-            var directorKeys = ['quality_director_name', 'quality_director_role_start_date', 'quality_director_background'];
+            var hospitalKeys = ['hospital_name', 'ccn', 'hospital_city', 'hospital_state', 'hospital_zip', 'licensed_beds', 'swing_beds', 'hospital_type', 'independent_or_system'];
+            var directorKeys = ['quality_leader_name', 'quality_leader_email', 'quality_leader_title', 'quality_leader_title_other'];
+            var allQuestions = state.onboarding.questions || [];
+            var affiliationQuestion = allQuestions.find(function (question) {
+                return question.question_key === 'system_network_name';
+            });
+            var legacyStepOne = renderPreservedStepFourFields(['is_critical_access_hospital', 'acute_beds', 'licensed_for_swing_beds', 'quality_director_name']);
             return renderQuestionGroup('Hospital Information', 'building', questions.filter(function (question) {
                 return hospitalKeys.indexOf(question.question_key) !== -1;
-            }), '<div class="qn-bed-warning" id="qn-step1-bed-warning" hidden><span class="dashicons dashicons-warning"></span>Acute and swing beds exceed licensed beds. Please verify.</div>') + renderQuestionGroup('Quality Director Information', 'businessperson', questions.filter(function (question) {
+            }), '<div class="qn-bed-warning" id="qn-step1-bed-warning" hidden><span class="dashicons dashicons-warning"></span>Swing beds exceed licensed beds. Please verify.</div>' + legacyStepOne, function (question) {
+                if (question.question_key === 'independent_or_system' && affiliationQuestion) {
+                    return '<div class="qn-affiliation-cluster">' + renderQuestion(question) + renderQuestion(affiliationQuestion) + '</div>';
+                }
+                return renderQuestion(question);
+            }) + renderQuestionGroup('Quality Leader Information', 'businessperson', questions.filter(function (question) {
                 return directorKeys.indexOf(question.question_key) !== -1;
             }));
         }
         if (step.section_key === 'accreditation_survey_readiness') {
-            var pathwayKeys = ['accreditation_status', 'accrediting_body', 'cms_certification_pathway', 'state_survey_agency', 'life_safety_survey_agency', 'accreditation_360'];
-            var riskKeys = ['open_plans_of_correction', 'projected_next_survey_window', 'historical_deficiency_areas', 'current_readiness_activities'];
-            return renderQuestionGroup('Accreditation & Certification Pathway', 'awards', questions.filter(function (question) {
+            var pathwayKeys = ['survey_compliance_process', 'accrediting_body', 'accrediting_body_other'];
+            var agencyKeys = ['state_survey_agency', 'state_survey_agency_url', 'life_safety_survey_agency_status', 'life_safety_survey_agency', 'life_safety_survey_agency_url'];
+            var historyReadinessKeys = ['last_accreditation_licensing_survey_date', 'other_certification_licensing_surveys_status', 'other_certification_licensing_surveys'];
+            return renderSurveyPathwayGroup(questions.filter(function (question) {
                 return pathwayKeys.indexOf(question.question_key) !== -1;
-            }), '', renderStepTwoQuestion) + renderQuestionGroup('Current Survey Risk', 'warning', questions.filter(function (question) {
-                return riskKeys.indexOf(question.question_key) !== -1;
-            }), '', renderStepTwoQuestion) + renderQuestionGroup('Survey History', 'calendar-alt', questions.filter(function (question) {
-                return question.question_key === 'survey_history';
-            }), '', renderStepTwoQuestion);
+            })) + renderQuestionGroup('Survey History', 'calendar-alt', questions.filter(function (question) {
+                return historyReadinessKeys.indexOf(question.question_key) !== -1;
+            }), '', renderStepTwoQuestion, 'qn-survey-readiness-grid') + renderStateSurveyAgencyGroup(questions.filter(function (question) {
+                return agencyKeys.indexOf(question.question_key) !== -1;
+            }));
         }
         if (step.section_key === 'services_clinical_model') {
-            return renderQuestionGroup(step.title, 'admin-tools', questions, '', renderStepThreeQuestion);
+            var serviceLineKeys = ['service_lines_core', 'service_lines_common', 'service_lines_growth_expansion', 'service_lines_other'];
+            var modelKeys = ['laboratory_model', 'laboratory_model_other', 'radiology_model', 'radiology_model_other', 'pharmacy_model', 'pharmacy_model_other', 'anesthesia_moderate_sedation_model', 'anesthesia_moderate_sedation_model_other', 'blood_bank_model', 'blood_bank_model_other'];
+            var legacyServices = renderPreservedStepFourFields(['emergency_department', 'surgery_invasive_procedures', 'surgery_procedure_types', 'obstetrics_labor_delivery', 'respiratory_therapy', 'rehabilitation_services', 'dietary_nutrition_services', 'visiting_specialists', 'contracted_quality_monitoring_agreements', 'transfusions_per_year']);
+            return renderStepThreeServiceLinesGroup(questions.filter(function (question) {
+                return serviceLineKeys.indexOf(question.question_key) !== -1;
+            }), legacyServices) + renderStepThreeClinicalModelsGroup(questions.filter(function (question) {
+                return modelKeys.indexOf(question.question_key) !== -1;
+            }));
         }
         if (step.section_key === 'committees_reporting') {
             var committeeKeys = ['committee_list'];
-            var obligationKeys = ['reporting_obligations'];
-            var defaultsKeys = ['mbqip_measure_set', 'backup_preparer', 'report_lead_time', 'approval_requirements', 'board_agenda_timing'];
-            var hiddenCommitteeDefaults = renderPreservedStepFourFields(['committee_required_status', 'standing_agenda_items', 'minutes_owner_location']);
-            return renderQuestionGroup('Committee Structure', 'groups', questions.filter(function (question) {
+            var cadenceDefaultKeys = ['report_lead_time', 'backup_preparer'];
+            return renderQuestionGroup('Meeting Preparation Defaults', 'clock', questions.filter(function (question) {
+                return cadenceDefaultKeys.indexOf(question.question_key) !== -1;
+            }), '', renderStepFourQuestion, 'qn-cadence-default-grid', 'These defaults help Scout prepare information before recurring quality meetings.') + renderQuestionGroup('Where Quality Is Reviewed', 'groups', questions.filter(function (question) {
                 return committeeKeys.indexOf(question.question_key) !== -1;
-            }), '', renderStepFourQuestion) + renderQuestionGroup('Reporting Obligations', 'media-spreadsheet', questions.filter(function (question) {
-                return obligationKeys.indexOf(question.question_key) !== -1;
-            }), '', renderStepFourQuestion) + renderQuestionGroup('Reporting Defaults & Program Notes', 'clipboard', questions.filter(function (question) {
-                return defaultsKeys.indexOf(question.question_key) !== -1;
-            }), hiddenCommitteeDefaults, renderStepFourQuestion);
+            }), '', renderStepFourQuestion, '', 'Use the local meeting name, identify what it reports to, and record the cadence. Reporting measures and submission deadlines remain in Data Hub.');
         }
         if (step.section_key === 'plans_policies_monitoring') {
-            var planKeys = ['qapi_plan_status', 'patient_safety_plan_status', 'infection_prevention_plan_status', 'emergency_preparedness_plan_status', 'risk_management_plan_status'];
-            var policyKeys = ['plan_location_authority', 'policy_management_system', 'annual_policy_review_cycle', 'templates_needed'];
-            var monitoringKeys = ['morbidity_mortality_monitoring', 'blood_usage_review', 'medication_safety_monitoring', 'operative_invasive_review', 'anesthesia_sedation_monitoring', 'sentinel_never_event_protocol', 'ancillary_services_review', 'contracted_service_quality_data_flow'];
-            var priorityKeys = ['weakest_monitoring_areas'];
-            var phiWarning = '<div class="qn-step5-phi-warning qn-question-wide"><span class="dashicons dashicons-shield"></span><div><strong>Do not enter patient information</strong><p>Do not enter patient names, MRNs, provider case details, incident narratives, peer-review details, or specific adverse-event details. QualiNav only stores structural information and aggregate/de-identified data.</p></div></div>';
-            var monitoringReminder = '<div class="qn-step5-monitoring-note qn-question-wide"><span class="dashicons dashicons-info"></span>Process information only - no case-level details.</div>';
-            return renderQuestionGroup('Required Plans', 'portfolio', questions.filter(function (question) {
-                return planKeys.indexOf(question.question_key) !== -1;
-            }), phiWarning, renderStepFiveQuestion) + renderQuestionGroup('Policy Library & Templates', 'media-document', questions.filter(function (question) {
-                return policyKeys.indexOf(question.question_key) !== -1;
-            }), '', renderStepFiveQuestion) + renderQuestionGroup('Clinical Monitoring Areas', 'heart', questions.filter(function (question) {
-                return monitoringKeys.indexOf(question.question_key) !== -1;
-            }), monitoringReminder, renderStepFiveQuestion) + renderQuestionGroup('Monitoring Gaps & Priorities', 'flag', questions.filter(function (question) {
-                return priorityKeys.indexOf(question.question_key) !== -1;
-            }), '', renderStepFiveQuestion);
+            var inventoryKeys = ['plan_policy_inventory'];
+            return renderQuestionGroup('Plan & Policy Inventory', 'portfolio', questions.filter(function (question) {
+                return inventoryKeys.indexOf(question.question_key) !== -1;
+            }), renderDocumentPrivacyNotice(), renderStepFiveQuestion, '', 'Confirm which plans and policies are in place. One indexed document can be linked to more than one requirement when it legitimately covers multiple areas. Scout evaluates coverage and readiness; it does not declare compliance.');
         }
         if (step.section_key === 'measures_qi_projects') {
-            var uploadKeys = ['mbqip_upload', 'nhsn_hai_rates_upload', 'patient_experience_scores_upload', 'fall_rates_upload', 'pressure_injury_rates_upload', 'hand_hygiene_upload', 'other_dashboard_metrics'];
-            var dashboardKeys = ['current_quality_dashboard', 'data_source_currency'];
-            var projectKeys = ['active_qi_projects'];
-            var defaultsKeys = ['qi_framework', 'project_charters_status', 'baseline_data_status'];
-            return renderQuestionGroup('Measure Upload Plan', 'upload', questions.filter(function (question) {
-                return uploadKeys.indexOf(question.question_key) !== -1;
-            }), '', renderStepSixQuestion) + renderQuestionGroup('Current Quality Dashboard', 'chart-line', questions.filter(function (question) {
-                return dashboardKeys.indexOf(question.question_key) !== -1;
-            }), '', renderStepSixQuestion) + renderQuestionGroup('Active QI Projects', 'clipboard', questions.filter(function (question) {
-                return projectKeys.indexOf(question.question_key) !== -1;
-            }), '', renderStepSixQuestion) + renderQuestionGroup('QI Program Defaults', 'admin-generic', questions.filter(function (question) {
-                return defaultsKeys.indexOf(question.question_key) !== -1;
-            }), '', renderStepSixQuestion);
-        }
-        if (step.section_key === 'goals_learning_contacts') {
-            var goalKeys = ['department_goals_this_year', 'department_goals_two_three_years', 'protected_workflow_goals', 'program_gaps', 'strategic_plan_alignment'];
-            var experienceKeys = ['new_to_quality_director_role', 'time_in_current_role', 'quality_certifications', 'confidence_foundational', 'confidence_qi_patient_safety', 'confidence_specialized_areas', 'confidence_professional_development'];
-            var learningKeys = ['activate_first_30_days_track', 'learning_format_preference'];
-            var contactKeys = ['state_flex_contact', 'state_office_rural_health_contact', 'state_hospital_association_contact', 'state_survey_agency_contacts', 'peer_cah_contacts', 'accreditation_liaison', 'referral_hospital_contacts'];
-            return renderQuestionGroup('Strategic Goals', 'star-filled', questions.filter(function (question) {
-                return goalKeys.indexOf(question.question_key) !== -1;
-            }), '', renderStepSevenQuestion) + renderQuestionGroup('Quality Director Experience', 'businessperson', questions.filter(function (question) {
-                return experienceKeys.indexOf(question.question_key) !== -1;
-            }), '', renderStepSevenQuestion) + renderQuestionGroup('Learning Journey', 'welcome-learn-more', questions.filter(function (question) {
-                return learningKeys.indexOf(question.question_key) !== -1;
-            }), renderStepSevenLearningNote(), renderStepSevenQuestion) + renderQuestionGroup('External Contacts', 'phone', questions.filter(function (question) {
-                return contactKeys.indexOf(question.question_key) !== -1;
-            }), '', renderStepSevenQuestion);
+            return renderDataHubHandoff();
         }
         if (step.section_key === 'regulatory_tools_preferences') {
-            var monitoringKeys = ['monitored_sources', 'update_preference', 'auto_propose_task_adjustments'];
-            var toolsKeys = ['current_tools', 'calendar_system', 'ehr_system', 'incident_reporting_system', 'nhsn_qualitynet_access'];
-            var reminderKeys = ['reminder_lead_time', 'reminder_buffer_time', 'backup_visibility_users'];
+            var backupKeys = ['backup_visibility_users'];
             var confirmKeys = ['final_review_confirmation'];
-            return renderQuestionGroup('Regulatory Monitoring', 'megaphone', questions.filter(function (question) {
-                return monitoringKeys.indexOf(question.question_key) !== -1;
-            }), '', renderStepEightQuestion) + renderQuestionGroup('Tools & Systems', 'admin-tools', questions.filter(function (question) {
-                return toolsKeys.indexOf(question.question_key) !== -1;
-            }), '', renderStepEightQuestion) + renderQuestionGroup('Reminders & Backup Coverage', 'clock', questions.filter(function (question) {
-                return reminderKeys.indexOf(question.question_key) !== -1;
-            }), '', renderStepEightQuestion) + renderQuestionGroup('Review & Confirm', 'yes-alt', questions.filter(function (question) {
-                return confirmKeys.indexOf(question.question_key) !== -1;
-            }), '', renderStepEightQuestion);
+            return renderOnboardingReviewSummary() + renderQuestionGroup('Backup Access & Final Confirmation', 'yes-alt', questions.filter(function (question) {
+                return backupKeys.indexOf(question.question_key) !== -1 || confirmKeys.indexOf(question.question_key) !== -1;
+            }), '', renderStepEightQuestion, 'qn-step8-final-grid', 'Add backup users who may help maintain Hospital Setup, then confirm the information is ready. You can return and update it later.');
         }
         return renderQuestionGroup(step.title, 'clipboard', questions);
+    }
+
+    function renderDataHubHandoff() {
+        var hospitalType = state.onboarding && state.onboarding.hospital_type_label ? state.onboarding.hospital_type_label.replace(/\.$/, '') : 'your hospital';
+        var dataHubUrl = (config.homeUrl || '/') + 'data-hub/#dm';
+        return '<section class="qn-question-group qn-data-hub-handoff">' +
+            '<header><span class="dashicons dashicons-chart-area"></span><h4>Measures and reporting live in Data Hub</h4></header>' +
+            '<div class="qn-data-hub-handoff-body">' +
+                '<div><p>Data Hub is the source of truth for measure selection, hospital results, reporting deadlines, owners, submission status, and performance trends.</p>' +
+                '<p>Scout uses this hospital profile to help Data Hub prioritize the programs and measures that may apply to ' + escapeHtml(hospitalType) + '. You remain in control of the final selections.</p></div>' +
+                '<a class="qn-button qn-button-primary" href="' + escapeHtml(dataHubUrl) + '"><span class="dashicons dashicons-external"></span>Open Data Hub</a>' +
+            '</div>' +
+            '<div class="qn-data-hub-boundary"><span class="dashicons dashicons-yes-alt"></span><span>Hospital Setup does not duplicate measure values or external reporting calendars.</span></div>' +
+        '</section>';
+    }
+
+    function onboardingAnswerHasValue(value) {
+        if (Array.isArray(value)) {
+            return value.some(onboardingAnswerHasValue);
+        }
+        if (value && typeof value === 'object') {
+            return Object.keys(value).some(function (key) {
+                return onboardingAnswerHasValue(value[key]);
+            });
+        }
+        return value !== undefined && value !== null && value !== '' && value !== false;
+    }
+
+    function renderOnboardingReviewSummary() {
+        var onboarding = state.onboarding || {};
+        var answers = onboarding.answers || {};
+        var missingByStep = [];
+        (onboarding.steps || []).forEach(function (step) {
+            if (step.section_key === 'measures_qi_projects' || step.section_key === 'regulatory_tools_preferences') {
+                return;
+            }
+            var missing = (onboarding.questions || []).filter(function (question) {
+                return getSectionKeyForQuestion(question) === step.section_key &&
+                    question.question_key !== 'plan_policy_inventory' &&
+                    conditionalVisible(question) &&
+                    !onboardingAnswerHasValue(answers[question.question_key]);
+            }).map(function (question) {
+                return question.label;
+            });
+            if (step.section_key === 'plans_policies_monitoring') {
+                var inventory = normalizePlanPolicyInventory(answers.plan_policy_inventory);
+                var unfinished = inventory.filter(function (row) {
+                    return !row.status;
+                }).length;
+                if (unfinished) {
+                    missing.push(unfinished + ' plan or policy status' + (unfinished === 1 ? '' : 'es'));
+                }
+            }
+            if (missing.length) {
+                missingByStep.push({title: step.title, items: missing});
+            }
+        });
+        var content = missingByStep.length ? missingByStep.map(function (group) {
+            var visible = group.items.slice(0, 5);
+            return '<div class="qn-review-missing-group"><strong>' + escapeHtml(group.title) + '</strong><ul>' +
+                visible.map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') +
+                (group.items.length > visible.length ? '<li>' + (group.items.length - visible.length) + ' more item' + (group.items.length - visible.length === 1 ? '' : 's') + '</li>' : '') +
+            '</ul></div>';
+        }).join('') : '<div class="qn-review-complete"><span class="dashicons dashicons-yes-alt"></span><p>The active Hospital Setup sections have the information Scout needs. You can still revise them at any time.</p></div>';
+        return '<section class="qn-question-group qn-onboarding-review"><header><span class="dashicons dashicons-clipboard"></span><h4>Setup Review</h4></header>' +
+            '<div class="qn-onboarding-review-body"><p>This is one consolidated review. Missing items do not block you from moving between steps; required confirmations are checked only when you submit.</p>' + content + '</div></section>';
+    }
+
+    function renderDocumentPrivacyNotice() {
+        var key = 'qn_hospital_setup_document_privacy_ack';
+        try {
+            if (window.localStorage && window.localStorage.getItem(key) === '1') {
+                return '';
+            }
+        } catch (error) {
+            // Browser storage can be unavailable in privacy-restricted sessions.
+        }
+        return '<div class="qn-document-privacy-notice" data-document-privacy-notice><span class="dashicons dashicons-shield"></span><div><strong>Before uploading a hospital document</strong><p>Use approved operational documents only. Do not upload patient identifiers, incident narratives, peer-review case details, or other case-level information.</p></div><button type="button" class="qn-button qn-button-secondary" data-document-privacy-ack>I understand</button></div>';
+    }
+
+    function renderSurveyPathwayGroup(questions, extraHtml) {
+        var processQuestion = questions.find(function (question) {
+            return question.question_key === 'survey_compliance_process';
+        });
+        var branchQuestions = questions.filter(function (question) {
+            return question.question_key === 'accrediting_body' || question.question_key === 'accrediting_body_other';
+        });
+        if (!processQuestion) {
+            return '';
+        }
+        return '<section class="qn-question-group qn-survey-pathway-group"><header><span class="dashicons dashicons-awards"></span><h4>Survey Pathway</h4></header>' +
+            '<div class="qn-survey-pathway-layout">' +
+                renderStepTwoQuestion(processQuestion) +
+                '<div class="qn-survey-branch-row"><div class="qn-survey-branch-spacer" aria-hidden="true"></div><div class="qn-survey-branch-panel">' +
+                    branchQuestions.map(renderStepTwoQuestion).join('') +
+                '</div></div>' +
+                (extraHtml || '') +
+            '</div>' +
+        '</section>';
     }
 
     function renderPreservedStepFourFields(keys) {
         return keys.map(function (key) {
             var value = state.onboarding && state.onboarding.answers ? state.onboarding.answers[key] : '';
             if (value === undefined || value === null || value === '') {
+                return '';
+            }
+            if (Array.isArray(value)) {
                 return '';
             }
             if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -5001,14 +5816,145 @@
         }).join('');
     }
 
-    function renderQuestionGroup(title, icon, questions, extraHtml, renderer) {
+    function renderQuestionGroup(title, icon, questions, extraHtml, renderer, gridClass, titleInfo) {
         if (!questions.length) {
             return '';
         }
         renderer = renderer || renderQuestion;
-        return '<section class="qn-question-group"><header><span class="dashicons dashicons-' + icon + '"></span><h4>' + escapeHtml(title) + '</h4></header><div class="qn-question-grid">' +
+        var groupClass = title === 'Plan & Policy Inventory' ? ' qn-plan-policy-group' : '';
+        var titleInfoHtml = titleInfo ? fieldInfoIcon(titleInfo) : '';
+        return '<section class="qn-question-group' + groupClass + '"><header><span class="dashicons dashicons-' + icon + '"></span><h4>' + escapeHtml(title) + titleInfoHtml + '</h4></header><div class="qn-question-grid ' + escapeHtml(gridClass || '') + '">' +
             (extraHtml || '') +
             questions.map(renderer).join('') + '</div></section>';
+    }
+
+    function fieldInfoIcon(message) {
+        if (!message) {
+            return '';
+        }
+        return '<span class="qn-field-info-icon" tabindex="0" role="img" aria-label="' + escapeHtml(message) + '" data-tooltip="' + escapeHtml(message) + '"></span>';
+    }
+
+    function renderStateSurveyAgencyGroup(questions) {
+        var primaryKeys = ['state_survey_agency', 'state_survey_agency_url', 'life_safety_survey_agency_status'];
+        var branchKeys = ['life_safety_survey_agency', 'life_safety_survey_agency_url'];
+        var primaryQuestions = questions.filter(function (question) {
+            return primaryKeys.indexOf(question.question_key) !== -1;
+        });
+        var branchQuestions = questions.filter(function (question) {
+            return branchKeys.indexOf(question.question_key) !== -1;
+        });
+        if (!primaryQuestions.length) {
+            return '';
+        }
+        return '<section class="qn-question-group qn-state-survey-agency-group"><header><span class="dashicons dashicons-building"></span><h4>State Survey Agency</h4></header>' +
+            '<div class="qn-question-grid qn-state-survey-primary-grid">' + primaryQuestions.map(renderStepTwoQuestion).join('') + '</div>' +
+            '<div class="qn-life-safety-branch-panel" data-life-safety-branch>' +
+                '<div class="qn-life-safety-branch-label"><span class="dashicons dashicons-arrow-right-alt"></span><span>Different agency details</span></div>' +
+                '<div class="qn-question-grid qn-life-safety-branch-grid">' + branchQuestions.map(renderStepTwoQuestion).join('') + '</div>' +
+            '</div>' +
+        '</section>';
+    }
+
+    function renderStepThreeServiceLinesGroup(questions, extraHtml) {
+        var orderedKeys = ['service_lines_core', 'service_lines_common', 'service_lines_growth_expansion'];
+        var otherQuestion = questions.find(function (question) {
+            return question.question_key === 'service_lines_other';
+        });
+        var groupHtml = orderedKeys.map(function (key) {
+            var question = questions.find(function (item) {
+                return item.question_key === key;
+            });
+            if (!question) {
+                return '';
+            }
+            return '<div class="qn-service-line-category" data-service-line-category="' + escapeHtml(key) + '">' +
+                '<h5>' + escapeHtml(question.label) + '</h5>' +
+                renderInlineChecklistField(question.question_key, onboardingQuestionValue(question), stepThreeOptions(question.question_key)) +
+            '</div>';
+        }).join('');
+        return '<section class="qn-question-group qn-service-lines-group"><header><span class="dashicons dashicons-list-view"></span><h4>Hospital Service Lines</h4></header>' +
+            '<p class="qn-service-lines-intro">Please check all services currently offered at your hospital.</p>' +
+            '<div class="qn-service-lines-layout">' + groupHtml + '</div>' +
+            (otherQuestion ? '<div class="qn-service-lines-other">' + renderStepThreeQuestion(otherQuestion) + '</div>' : '') +
+            (extraHtml || '') +
+        '</section>';
+    }
+
+    function renderStepThreeClinicalModelsGroup(questions) {
+        if (!questions.length) {
+            return '';
+        }
+        var leftPairs = [
+            ['laboratory_model', 'laboratory_model_other'],
+            ['pharmacy_model', 'pharmacy_model_other'],
+            ['blood_bank_model', 'blood_bank_model_other']
+        ];
+        var rightPairs = [
+            ['radiology_model', 'radiology_model_other'],
+            ['anesthesia_moderate_sedation_model', 'anesthesia_moderate_sedation_model_other']
+        ];
+        var renderColumn = function (pairs) {
+            return '<div class="qn-clinical-model-column">' + pairs.map(function (pair) {
+                return pair.map(function (key) {
+                    var question = questions.find(function (item) {
+                        return item.question_key === key;
+                    });
+                    return question ? renderStepThreeQuestion(question) : '';
+                }).join('');
+            }).join('') + '</div>';
+        };
+        return '<section class="qn-question-group qn-clinical-models-group"><header><span class="dashicons dashicons-clipboard"></span><h4>Clinical Service Models</h4></header>' +
+            '<div class="qn-clinical-model-columns">' +
+                renderColumn(leftPairs) +
+                renderColumn(rightPairs) +
+            '</div>' +
+        '</section>';
+    }
+
+    function renderMonitoringChecklistGroup(title, intro, icon, questions, orderedKeys) {
+        if (!questions.length) {
+            return '';
+        }
+        var otherQuestion = questions.find(function (question) {
+            return question.question_key === 'internal_monitoring_other' || question.question_key === 'external_reporting_other';
+        });
+        var categoryHtml = orderedKeys.map(function (key) {
+            var question = questions.find(function (item) {
+                return item.question_key === key;
+            });
+            if (!question || question === otherQuestion) {
+                return '';
+            }
+            return renderMonitoringChecklistCategory(question);
+        }).join('');
+        return '<section class="qn-question-group qn-monitoring-checklist-group"><header><span class="dashicons dashicons-' + icon + '"></span><h4>' + escapeHtml(title) + '</h4></header>' +
+            '<p class="qn-monitoring-intro">' + escapeHtml(intro) + '</p>' +
+            '<div class="qn-monitoring-category-layout">' + categoryHtml + '</div>' +
+            (otherQuestion ? '<div class="qn-monitoring-other">' + renderStepSixQuestion(otherQuestion) + '</div>' : '') +
+        '</section>';
+    }
+
+    function externalReportingQuestionVisibleForHospitalType(question) {
+        var hospitalType = currentOnboardingFieldValue('hospital_type') || (state.onboarding && state.onboarding.hospital_type) || '';
+        hospitalType = fieldValue(hospitalType).trim().toLowerCase().replace(/[\s-]+/g, '_');
+        var key = question ? question.question_key : '';
+        var isCah = hospitalType === 'cah' || hospitalType === 'critical_access_hospital';
+        var isPps = hospitalType === 'rural_pps_hospital' || hospitalType === 'general_acute_care_ipps_hospital' || hospitalType === 'ipps_hospital';
+        if (isCah && ['external_reporting_cms_iqr', 'external_reporting_cms_oqr', 'external_reporting_cms_payment_programs'].indexOf(key) !== -1) {
+            return false;
+        }
+        if (isPps && key === 'external_reporting_flex_mbqip') {
+            return false;
+        }
+        return true;
+    }
+
+    function renderMonitoringChecklistCategory(question) {
+        return '<div class="qn-monitoring-category" data-monitoring-category="' + escapeHtml(question.question_key) + '">' +
+            '<h5>' + escapeHtml(question.label) + '</h5>' +
+            renderInlineChecklistField(question.question_key, onboardingQuestionValue(question), stepSixOptions(question.question_key)) +
+        '</div>';
     }
 
     function canEditOnboardingStep(step) {
@@ -5073,27 +6019,7 @@
         if (!node) {
             return;
         }
-        var guide = document.querySelector('.qn-onboarding-scout-guide');
-        if (guide && !guide.dataset.disclosureBound) {
-            var guideSummary = guide.querySelector('summary');
-            guide.addEventListener('toggle', updateScoutGuideDisclosureState);
-            if (guideSummary) {
-                guideSummary.addEventListener('keydown', function (event) {
-                    if (event.key !== 'Enter' && event.key !== ' ') {
-                        return;
-                    }
-                    event.preventDefault();
-                    guide.open = !guide.open;
-                    updateScoutGuideDisclosureState();
-                });
-            }
-            guide.dataset.disclosureBound = '1';
-        }
-        if (guide && guide.dataset.stepKey !== step.section_key) {
-            guide.open = false;
-            guide.dataset.stepKey = step.section_key;
-        }
-        updateScoutGuideDisclosureState();
+        setText('#qn-scout-context-description', step.description || step.informs || 'Scout uses these answers to tailor the hospital workspace.');
         var items = onboardingHelpByStep[step.section_key] || [
             step.informs || 'Prepare Scout setup recommendations',
             'Identify missing inputs',
@@ -5110,27 +6036,38 @@
             boundaryNote = '<li class="qn-data-boundary-note"><span class="dashicons dashicons-shield"></span><span>Do not enter patient, provider, peer-review, or case-level details. Only enter committee structure and report process information.</span></li>';
         }
         if (step.section_key === 'plans_policies_monitoring') {
-            boundaryNote = '<li class="qn-data-boundary-note"><span class="dashicons dashicons-shield"></span><span>Process and aggregate information only. Do not enter patient, provider, peer-review, or event-specific details.</span></li>';
+            boundaryNote = '<li class="qn-data-boundary-note"><span class="dashicons dashicons-shield"></span><span>Scout analyzes plan and policy coverage and readiness. It does not certify compliance.</span></li>';
         }
         if (step.section_key === 'measures_qi_projects') {
-            boundaryNote = '<li class="qn-data-boundary-note"><span class="dashicons dashicons-shield"></span><span>Only enter aggregate, de-identified measure and project information. Do not enter patient-level data.</span></li>';
-        }
-        if (step.section_key === 'goals_learning_contacts') {
-            boundaryNote = '<li class="qn-data-boundary-note"><span class="dashicons dashicons-shield"></span><span>Only enter professional contact and program information. Do not enter patient or case-level details.</span></li>';
+            boundaryNote = '<li class="qn-data-boundary-note"><span class="dashicons dashicons-database"></span><span>Measure values, reporting obligations, and performance trends are managed in Data Hub.</span></li>';
         }
         if (step.section_key === 'regulatory_tools_preferences') {
-            boundaryNote = '<li class="qn-data-boundary-note"><span class="dashicons dashicons-shield"></span><span>Final check: do not submit PHI, patient identifiers, incident narratives, or peer-review case details.</span></li>';
+            boundaryNote = '<li class="qn-data-boundary-note"><span class="dashicons dashicons-shield"></span><span>Final review shows missing setup context in one place. You can return and update it later.</span></li>';
         }
         node.innerHTML = items.map(function (item) {
             return '<li><span class="dashicons dashicons-yes-alt"></span><span>' + escapeHtml(item) + '</span></li>';
         }).join('') + boundaryNote;
     }
 
-    function updateScoutGuideDisclosureState() {
-        var guide = document.querySelector('.qn-onboarding-scout-guide');
-        var summary = guide ? guide.querySelector('summary') : null;
-        if (summary) {
-            summary.setAttribute('aria-expanded', guide.open ? 'true' : 'false');
+    function openScoutContextModal() {
+        var modal = document.getElementById('qn-onboarding-scout-context-modal');
+        if (!modal) {
+            return;
+        }
+        closeOpenModals('qn-onboarding-scout-context-modal');
+        modal.hidden = false;
+        window.setTimeout(function () {
+            var button = modal.querySelector('[data-close-scout-context]');
+            if (button) {
+                button.focus();
+            }
+        }, 0);
+    }
+
+    function closeScoutContextModal() {
+        var modal = document.getElementById('qn-onboarding-scout-context-modal');
+        if (modal) {
+            modal.hidden = true;
         }
     }
 
@@ -5173,6 +6110,9 @@
         if (!state.me || isGlobalAdmin() || state.workspaceWelcomeAutoShown) {
             return false;
         }
+        if (state.me.qualinav_role === 'viewer') {
+            return false;
+        }
         if (!dashboardHospital() && !state.onboarding) {
             return false;
         }
@@ -5203,8 +6143,8 @@
         var canEdit = canUseHospitalSetupEditCopy();
         setText('#qn-workspace-welcome-primary', canEdit ? (isOnboardingSubmitted() ? 'Review Hospital Setup' : 'Continue Hospital Setup') : 'View Hospital Setup');
         setText('#qn-workspace-welcome-setup-copy', canEdit ?
-            'Hospital Setup is the first step. It helps Scout understand how your hospital works so your workspace can be tailored to your actual reporting obligations, committee structure, monitoring processes, goals, and preferences.' :
-            'Hospital Setup gives Scout the context for this hospital workspace. Your role can review the setup, Scout preview, reporting schedule, committee flow, monitoring areas, and preferences without changing saved answers.');
+            'Hospital Setup gives Scout the durable context it needs: hospital profile, survey pathway, services, meeting cadence, and approved plans and policies. Measures, deadlines, and performance remain in Data Hub.' :
+            'Hospital Setup gives Scout durable hospital context. Your role can review the setup and Scout preview without changing saved answers.');
         setText('#qn-workspace-welcome-reassurance', canEdit ?
             'You do not have to complete everything today. Start with what you know, skip what you need to look up, and come back anytime. Your answers save as you go.' :
             'You can review the workspace at your own pace. Editing and submission controls are limited by your role.');
@@ -5215,7 +6155,7 @@
             dismiss.checked = true;
         }
         window.setTimeout(function () {
-            var button = document.getElementById('qn-workspace-welcome-primary');
+            var button = auto ? document.getElementById('qn-workspace-welcome-primary') : modal.querySelector('[data-close-workspace-welcome]');
             if (button) {
                 button.focus();
             }
@@ -5230,8 +6170,12 @@
         if (markSeen) {
             try {
                 var dismiss = document.getElementById('qn-workspace-welcome-dismiss-check');
-                if (window.localStorage && (!dismiss || dismiss.checked)) {
-                    window.localStorage.setItem(workspaceWelcomeStorageKey(), '1');
+                if (window.localStorage) {
+                    if (!dismiss || dismiss.checked) {
+                        window.localStorage.setItem(workspaceWelcomeStorageKey(), '1');
+                    } else {
+                        window.localStorage.removeItem(workspaceWelcomeStorageKey());
+                    }
                 }
             } catch (error) {
                 // Local storage is optional progressive enhancement.
@@ -5239,8 +6183,27 @@
         }
     }
 
+    function clearWorkspaceWelcomeDismissal() {
+        try {
+            if (window.localStorage) {
+                window.localStorage.removeItem(workspaceWelcomeStorageKey());
+            }
+        } catch (error) {
+            // Local storage is optional progressive enhancement.
+        }
+    }
+
     function goToHospitalSetupFromWelcome() {
         closeWorkspaceWelcome(true);
+        if (config.isHomeWelcomePage) {
+            var url = (config.homeUrl || '/') + 'organization-setup/';
+            var welcomeOrganizationId = config.welcomeOrganizationId ? Number(config.welcomeOrganizationId) : 0;
+            if (welcomeOrganizationId) {
+                url += '?organization_id=' + encodeURIComponent(welcomeOrganizationId);
+            }
+            window.location.href = url + '#day-0-setup';
+            return;
+        }
         activateSection('day-0-setup', true);
     }
 
@@ -5333,24 +6296,176 @@
     function renderOnboardingQuestionListHtml() {
         var steps = state.onboarding && state.onboarding.steps ? state.onboarding.steps : [];
         var questions = state.onboarding && state.onboarding.questions ? state.onboarding.questions : [];
-        var content = '<div class="qn-question-list-warning"><span class="dashicons dashicons-shield"></span><p><strong>No PHI.</strong> Do not enter patient names, MRNs, provider case details, peer-review details, or adverse-event narratives. This preparation list does not include saved answers.</p></div>';
-        content += '<div class="qn-question-list-materials"><h3>Helpful materials to gather</h3><ul>' + onboardingMaterialsChecklist.map(function (item) {
-            return '<li>' + escapeHtml(item) + '</li>';
+        var content = '<section class="qn-question-list-intro">' +
+            '<p class="qn-eyebrow">Preparation worksheet</p>' +
+            '<h3>Print setup questions</h3>' +
+            '<p>Use this worksheet to gather operational information before entering Hospital Setup. It intentionally does not include saved answers.</p>' +
+            '</section>';
+        content += '<div class="qn-question-list-warning"><span class="dashicons dashicons-shield"></span><p><strong>No PHI.</strong> When entering information throughout Hospital Setup, do not enter patient names, MRNs, provider case details, peer-review details, adverse-event narratives, or any information that may include protected health information.</p></div>';
+        content += '<div class="qn-question-list-materials"><h3>Helpful materials to gather</h3><p>You do not need every item before starting. Bring what is available and return later for details that require follow-up.</p><ul>' + onboardingMaterialsChecklist.map(function (item) {
+            return '<li><span class="dashicons dashicons-yes-alt"></span><span>' + escapeHtml(item) + '</span></li>';
         }).join('') + '</ul></div>';
+        content += '<div class="qn-question-list-divider"><p class="qn-eyebrow">Setup questions by step</p></div>';
         content += steps.map(function (step, index) {
-            var stepQuestions = questions.filter(function (question) {
-                return getSectionKeyForQuestion(question) === step.section_key;
-            });
+            var questionGroups = printableQuestionGroupsForStep(step, questions);
             return '<section class="qn-question-list-section">' +
                 '<p class="qn-eyebrow">Step ' + (index + 1) + '</p>' +
                 '<h3>' + escapeHtml(step.title) + '</h3>' +
                 '<p>' + escapeHtml(step.description || step.informs || '') + '</p>' +
-                '<ol>' + stepQuestions.map(function (question) {
-                    return '<li><strong>' + escapeHtml(question.label) + (question.is_required ? ' *' : '') + '</strong>' + (question.help_text ? '<small>' + escapeHtml(question.help_text) + '</small>' : '') + '</li>';
-                }).join('') + '</ol>' +
+                questionGroups.map(renderPrintableQuestionGroup).join('') +
                 '</section>';
         }).join('');
         return content;
+    }
+
+    function printableQuestionsByKeys(questions, keys) {
+        return keys.map(function (key) {
+            return questions.find(function (question) {
+                return question.question_key === key;
+            });
+        }).filter(Boolean);
+    }
+
+    function printableQuestionGroupsForStep(step, questions) {
+        var stepQuestions = questions.filter(function (question) {
+            return getSectionKeyForQuestion(question) === step.section_key && !isLegacyPrintableQuestion(question);
+        });
+        if (step.section_key === 'hospital_director_info') {
+            return [
+                {
+                    title: 'Hospital Information',
+                    questions: printableQuestionsByKeys(questions, ['hospital_name', 'ccn', 'hospital_city', 'hospital_state', 'hospital_zip', 'licensed_beds', 'swing_beds', 'hospital_type', 'independent_or_system', 'system_network_name'])
+                },
+                {
+                    title: 'Quality Leader Information',
+                    questions: printableQuestionsByKeys(questions, ['quality_leader_name', 'quality_leader_email', 'quality_leader_title', 'quality_leader_title_other'])
+                }
+            ];
+        }
+        if (step.section_key === 'committees_reporting') {
+            return [
+                {
+                    title: 'Hospital Data Reporting Calendar',
+                    questions: printableQuestionsByKeys(questions, ['reporting_obligations', 'report_lead_time', 'backup_preparer'])
+                },
+                {
+                    title: 'Meeting Cadence for Committees Where Quality Data Is Shared',
+                    questions: printableQuestionsByKeys(questions, ['committee_list'])
+                }
+            ];
+        }
+        return [{title: '', questions: stepQuestions}];
+    }
+
+    function isLegacyPrintableQuestion(question) {
+        if (!question) {
+            return true;
+        }
+        if (/^Legacy\b/i.test(question.label || '')) {
+            return true;
+        }
+        return [
+            'is_critical_access_hospital',
+            'acute_beds',
+            'licensed_for_swing_beds',
+            'quality_director_name',
+            'accreditation_status',
+            'cms_certification_pathway',
+            'open_plans_of_correction',
+            'historical_deficiency_areas',
+            'accreditation_360',
+            'mbqip_upload',
+            'nhsn_hai_rates_upload',
+            'patient_experience_scores_upload',
+            'fall_rates_upload',
+            'pressure_injury_rates_upload',
+            'hand_hygiene_upload',
+            'other_dashboard_metrics',
+            'current_quality_dashboard',
+            'data_source_currency',
+            'active_qi_projects',
+            'qi_framework',
+            'project_charters_status',
+            'baseline_data_status',
+            'mbqip_measure_set',
+            'committee_required_status',
+            'standing_agenda_items',
+            'minutes_owner_location',
+            'board_agenda_timing'
+        ].indexOf(question.question_key) !== -1;
+    }
+
+    function printableQuestionHelpText(question) {
+        if (!question) {
+            return '';
+        }
+        if (question.question_key === 'accrediting_body') {
+            return '';
+        }
+        return question.help_text || '';
+    }
+
+    function renderPrintableQuestionGroup(group) {
+        if (!group.questions.length) {
+            return '';
+        }
+        return (group.title ? '<h4>' + escapeHtml(group.title) + '</h4>' : '') +
+            '<ol>' + group.questions.map(function (question) {
+                var helpText = printableQuestionHelpText(question);
+                return '<li><strong>' + escapeHtml(question.label) + (question.is_required ? ' *' : '') + '</strong>' + (helpText ? '<small>' + escapeHtml(helpText) + '</small>' : '') + renderQuestionChoiceList(question) + '</li>';
+            }).join('') + '</ol>';
+    }
+
+    function normalizeQuestionChoice(option) {
+        return optionLabel(option);
+    }
+
+    function questionChoiceOptions(question) {
+        var key = question.question_key;
+        var options = [];
+        if (key === 'survey_history') {
+            return [
+                'Last survey/review date',
+                'Survey/review type',
+                'Surveying agency',
+                'Outcome',
+                'Plan of correction status',
+                'Follow-up timing'
+            ];
+        }
+        [
+            stepOneOptions,
+            stepTwoOptions,
+            stepThreeOptions,
+            stepFourOptions,
+            stepFiveOptions,
+            stepSevenOptions,
+            stepEightOptions
+        ].some(function (resolver) {
+            options = resolver(key) || [];
+            return options.length;
+        });
+        if (!options.length && question.field_type === 'yes_no') {
+            options = [{label: 'Yes'}, {label: 'No'}, {label: 'Not sure'}];
+        }
+        if (!options.length && (question.field_type === 'select' || question.field_type === 'radio' || question.field_type === 'multiselect')) {
+            options = question.options || [];
+        }
+        if (!options.length && question.field_type === 'checkbox') {
+            options = [{label: 'Checked'}, {label: 'Not checked'}];
+        }
+        if (!options.length && question.field_type === 'plan_status') {
+            options = [{label: 'Exists'}, {label: 'Does not exist'}, {label: 'Board approved: Yes'}, {label: 'Board approved: No'}];
+        }
+        return options.map(normalizeQuestionChoice).filter(Boolean);
+    }
+
+    function renderQuestionChoiceList(question) {
+        var choices = questionChoiceOptions(question);
+        if (!choices.length) {
+            return '';
+        }
+        return '<small class="qn-question-choices"><span>Choices:</span> ' + choices.map(escapeHtml).join(', ') + '</small>';
     }
 
     function printOnboardingQuestionList() {
@@ -5358,33 +6473,231 @@
             showToast('Setup questions are still loading.', 'warning');
             return;
         }
-        var printable = '<!doctype html><html><head><title>QualiNav Hospital Setup Question List</title><style>' +
-            'body{font-family:Arial,sans-serif;color:#172033;margin:32px;line-height:1.5}h1{font-size:28px;margin:0 0 8px}h2,h3{break-after:avoid}section{border-top:1px solid #dbe5ef;padding-top:18px;margin-top:18px}ol{padding-left:22px}li{margin:0 0 10px}small{display:block;color:#5f7188}.warning{border:1px solid #f6c177;background:#fff7ed;border-radius:12px;padding:14px;margin:18px 0}.materials{columns:2;gap:28px}@media print{button{display:none}.materials{columns:2}}' +
-            '</style></head><body>' +
-            '<h1>QualiNav Hospital Setup Question List</h1>' +
-            '<p>Use this preparation worksheet to gather operational information before entering Hospital Setup. It intentionally does not include saved answers.</p>' +
-            '<div class="warning"><strong>No PHI.</strong> Do not enter patient names, MRNs, provider case details, peer-review details, or adverse-event narratives.</div>' +
-            '<h2>Helpful materials to gather</h2><ul class="materials">' + onboardingMaterialsChecklist.map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') + '</ul>' +
-            renderOnboardingQuestionListHtml().replace(/<div class="qn-question-list-warning">[\s\S]*?<\/div><div class="qn-question-list-materials">[\s\S]*?<\/div>/, '') +
-            '<script>window.onload=function(){window.focus();window.print();};<\/script></body></html>';
-        var win = window.open('', '_blank', 'noopener,noreferrer,width=980,height=760');
-        if (!win) {
-            showToast('Allow pop-ups to print or save the Hospital Setup question list.', 'warning');
-            return;
+        downloadOnboardingQuestionListPdf();
+    }
+
+    function pdfSafeText(value) {
+        return fieldValue(value)
+            .replace(/[“”]/g, '"')
+            .replace(/[‘’]/g, "'")
+            .replace(/[–—]/g, '-')
+            .replace(/•/g, '-')
+            .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, '');
+    }
+
+    function pdfEscape(value) {
+        return pdfSafeText(value).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+    }
+
+    function splitPdfText(text, maxChars) {
+        var words = pdfSafeText(text).split(/\s+/).filter(Boolean);
+        var lines = [];
+        var line = '';
+        words.forEach(function (word) {
+            if (!line) {
+                line = word;
+                return;
+            }
+            if ((line + ' ' + word).length <= maxChars) {
+                line += ' ' + word;
+            } else {
+                lines.push(line);
+                line = word;
+            }
+        });
+        if (line) {
+            lines.push(line);
         }
-        win.document.open();
-        win.document.write(printable);
-        win.document.close();
+        return lines.length ? lines : [''];
+    }
+
+    function buildOnboardingQuestionListPdfLines() {
+        var steps = state.onboarding && state.onboarding.steps ? state.onboarding.steps : [];
+        var questions = state.onboarding && state.onboarding.questions ? state.onboarding.questions : [];
+        var lines = [
+            {text: 'QualiNav Hospital Setup Question List', size: 18, bold: true, spaceAfter: 8},
+            {text: 'Preparation worksheet', size: 12, bold: true, spaceAfter: 6},
+            {text: 'Use this worksheet to gather operational information before entering Hospital Setup. It intentionally does not include saved answers.', size: 10, spaceAfter: 8},
+            {text: 'No PHI: When entering information throughout Hospital Setup, do not enter patient names, MRNs, provider case details, peer-review details, adverse-event narratives, or any information that may include protected health information.', size: 10, bold: true, spaceAfter: 12},
+            {text: 'Helpful materials to gather', size: 13, bold: true, spaceAfter: 4}
+        ];
+        onboardingMaterialsChecklist.forEach(function (item) {
+            lines.push({text: '- ' + item, size: 9, indent: 12});
+        });
+        steps.forEach(function (step, index) {
+            var questionGroups = printableQuestionGroupsForStep(step, questions);
+            lines.push({text: 'Step ' + (index + 1) + ': ' + step.title, size: 14, bold: true, spaceBefore: 12, spaceAfter: 4});
+            if (step.description || step.informs) {
+                lines.push({text: step.description || step.informs, size: 9, spaceAfter: 4});
+            }
+            questionGroups.forEach(function (group) {
+                if (!group.questions.length) {
+                    return;
+                }
+                if (group.title) {
+                    lines.push({text: group.title, size: 11, bold: true, spaceBefore: 6, spaceAfter: 2});
+                }
+                group.questions.forEach(function (question, questionIndex) {
+                    var label = (questionIndex + 1) + '. ' + question.label + (question.is_required ? ' *' : '');
+                    lines.push({text: label, size: 10, bold: true, spaceBefore: 4});
+                    var helpText = printableQuestionHelpText(question);
+                    if (helpText) {
+                        lines.push({text: helpText, size: 8, indent: 12});
+                    }
+                    var choices = questionChoiceOptions(question);
+                    if (choices.length) {
+                        lines.push({text: 'Choices: ' + choices.join(', '), size: 8, indent: 12, spaceAfter: 2});
+                    }
+                });
+            });
+        });
+        return lines;
+    }
+
+    function createQuestionListPdfBlob() {
+        var pageWidth = 595;
+        var pageHeight = 842;
+        var margin = 48;
+        var yStart = pageHeight - margin;
+        var yMin = margin;
+        var pages = [];
+        var commands = [];
+        var y = yStart;
+
+        function startPage() {
+            commands = [];
+            y = yStart;
+            pages.push(commands);
+        }
+
+        function addTextLine(text, size, bold, indent) {
+            var lineHeight = Math.max(11, Math.round(size * 1.35));
+            if (y - lineHeight < yMin) {
+                startPage();
+            }
+            commands.push('BT /' + (bold ? 'F2' : 'F1') + ' ' + size + ' Tf ' + (margin + (indent || 0)) + ' ' + y + ' Td (' + pdfEscape(text) + ') Tj ET');
+            y -= lineHeight;
+        }
+
+        startPage();
+        buildOnboardingQuestionListPdfLines().forEach(function (item) {
+            var size = item.size || 10;
+            var indent = item.indent || 0;
+            var maxChars = Math.max(28, Math.floor((pageWidth - (margin * 2) - indent) / (size * 0.48)));
+            if (item.spaceBefore) {
+                y -= item.spaceBefore;
+            }
+            splitPdfText(item.text, maxChars).forEach(function (line, lineIndex) {
+                addTextLine(lineIndex && indent ? '  ' + line : line, size, item.bold, indent);
+            });
+            if (item.spaceAfter) {
+                y -= item.spaceAfter;
+            }
+        });
+
+        var objects = [];
+        function addObject(body) {
+            objects.push(body);
+            return objects.length;
+        }
+
+        var catalogId = addObject('<< /Type /Catalog /Pages 2 0 R >>');
+        var pagesId = addObject('');
+        var fontId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+        var boldFontId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
+        var pageIds = [];
+        pages.forEach(function (pageCommands) {
+            var stream = pageCommands.join('\n');
+            var contentId = addObject('<< /Length ' + stream.length + ' >>\nstream\n' + stream + '\nendstream');
+            var pageId = addObject('<< /Type /Page /Parent ' + pagesId + ' 0 R /MediaBox [0 0 ' + pageWidth + ' ' + pageHeight + '] /Resources << /Font << /F1 ' + fontId + ' 0 R /F2 ' + boldFontId + ' 0 R >> >> /Contents ' + contentId + ' 0 R >>');
+            pageIds.push(pageId);
+        });
+        objects[pagesId - 1] = '<< /Type /Pages /Kids [' + pageIds.map(function (id) { return id + ' 0 R'; }).join(' ') + '] /Count ' + pageIds.length + ' >>';
+
+        var pdf = '%PDF-1.4\n';
+        var offsets = [0];
+        objects.forEach(function (body, index) {
+            offsets.push(pdf.length);
+            pdf += (index + 1) + ' 0 obj\n' + body + '\nendobj\n';
+        });
+        var xrefOffset = pdf.length;
+        pdf += 'xref\n0 ' + (objects.length + 1) + '\n0000000000 65535 f \n';
+        offsets.slice(1).forEach(function (offset) {
+            pdf += String(offset).padStart(10, '0') + ' 00000 n \n';
+        });
+        pdf += 'trailer\n<< /Size ' + (objects.length + 1) + ' /Root ' + catalogId + ' 0 R >>\nstartxref\n' + xrefOffset + '\n%%EOF';
+        return new Blob([pdf], {type: 'application/pdf'});
+    }
+
+    function downloadOnboardingQuestionListPdf() {
+        var blob = createQuestionListPdfBlob();
+        var url = URL.createObjectURL(blob);
+        var link = document.createElement('a');
+        link.href = url;
+        link.download = 'qualinav-hospital-setup-question-list.pdf';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(function () {
+            URL.revokeObjectURL(url);
+        }, 1000);
     }
 
     function renderQuestion(question) {
         var value = onboardingQuestionValue(question);
+        if (['quality_leader_name', 'quality_leader_email'].indexOf(question.question_key) !== -1) {
+            var inputType = question.question_key === 'quality_leader_email' ? 'email' : 'text';
+            return '<div class="qn-question ' + questionLayoutClass(question) + ' qn-canonical-readonly" data-question="' + escapeHtml(question.question_key) + '"><span class="qn-question-label">' + escapeHtml(question.label) + '</span><input type="' + inputType + '" value="' + escapeFieldValue(value) + '" readonly><small>Linked to the active Quality Director in My Org &gt; People.</small></div>';
+        }
         var required = question.is_required ? ' <span class="qn-required">*</span>' : '';
-        var helpText = stepOneHelpText(question) || question.help_text;
+        var helpText = stepOneHelpText(question);
+        if (helpText === null) {
+            helpText = '';
+        } else if (!helpText) {
+            helpText = question.help_text;
+        }
         var help = helpText ? '<small>' + escapeHtml(helpText) + '</small>' : '';
+        var info = questionInfoIcon(question);
         var tag = isSegmentedQuestion(question) ? 'div' : 'label';
-        return '<' + tag + ' class="qn-question ' + questionLayoutClass(question) + '" data-question="' + escapeHtml(question.question_key) + '">' +
-            '<span>' + escapeHtml(question.label) + required + '</span>' + renderField(question, value) + help + '</' + tag + '>';
+        var hidden = questionIsHiddenOnRender(question) ? ' hidden style="display:none"' : '';
+        return '<' + tag + ' class="qn-question ' + questionLayoutClass(question) + '" data-question="' + escapeHtml(question.question_key) + '"' + hidden + '>' +
+            '<span class="qn-question-label">' + escapeHtml(question.label) + required + info + '</span>' + renderField(question, value) + help + '</' + tag + '>';
+    }
+
+    function renderCanonicalQiProjects() {
+        var answers = state.onboarding && state.onboarding.answers ? state.onboarding.answers : {};
+        var projects = Array.isArray(answers.qi_project_references) ? answers.qi_project_references : [];
+        var body = projects.length ? projects.map(function (project) {
+            return '<article class="qn-canonical-project-card"><div><strong>' + escapeHtml(project.title || ('Project #' + project.project_id)) + '</strong><span class="qn-status-pill qn-status-neutral">' + escapeHtml(String(project.status || 'draft').replace(/_/g, ' ')) + '</span></div><p>' + escapeHtml([project.focus_area, project.owner_name].filter(Boolean).join(' · ') || 'Project details are managed in QI Projects.') + '</p><small>' + escapeHtml(String(project.measure_count || 0) + ' measures · ' + String(project.member_count || 0) + ' members · Canonical project #' + String(project.project_id || '')) + '</small></article>';
+        }).join('') : '<div class="qn-calendar-empty-state"><span class="dashicons dashicons-lightbulb"></span><div><strong>No QI projects yet</strong><p>Create and manage projects in the QI Projects module; Hospital Setup does not duplicate them.</p></div></div>';
+        return '<section class="qn-question-group qn-canonical-projects"><header><span class="dashicons dashicons-lightbulb"></span><h4>Active QI Projects</h4></header><p class="qn-canonical-source-note">Linked directly from the QI Projects module for this hospital.</p><div class="qn-canonical-project-grid">' + body + '</div></section>';
+    }
+
+    function questionInfoIcon(question) {
+        var copy = {
+            licensed_beds: 'For Critical Access Hospitals, this is usually the 25 licensed-bed limit.',
+            swing_beds: 'For Critical Access Hospitals, enter the swing-bed count within the 25 licensed beds.',
+            survey_compliance_process: 'Choose the pathway your hospital uses to demonstrate Medicare Conditions of Participation compliance.',
+            accrediting_body: 'Only needed when your hospital uses deemed status through an accrediting organization.',
+            state_survey_agency: 'Example: California Department of Public Health.',
+            state_survey_agency_url: 'Link to the applicable state survey body website.',
+            life_safety_survey_agency_status: 'Life safety may be surveyed by the same state agency or by a separate fire marshal or life safety authority.',
+            life_safety_survey_agency: 'Example: State Fire Marshal.',
+            life_safety_survey_agency_url: 'Link to the applicable life safety agency website.',
+            other_certification_licensing_surveys_status: 'Use this for other certification or licensing surveys, such as CLIA, stroke center, Magnet, or similar programs.'
+        };
+        var message = copy[question.question_key] || '';
+        if (!message) {
+            return '';
+        }
+        return '<span class="qn-field-info-icon" tabindex="0" role="img" aria-label="' + escapeHtml(message) + '" data-tooltip="' + escapeHtml(message) + '"></span>';
+    }
+
+    function questionIsHiddenOnRender(question) {
+        if (question.question_key === 'system_network_name') {
+            return !affiliationSettingsForStatus(onboardingQuestionValue({question_key: 'independent_or_system'}));
+        }
+        return false;
     }
 
     function isSegmentedQuestion(question) {
@@ -5406,14 +6719,42 @@
         if (key === 'hospital_state') {
             return state.onboarding.state_code || state.onboarding.state_id || state.onboarding.state_name || '';
         }
+        if (key === 'hospital_zip') {
+            return state.onboarding.zip || '';
+        }
         if (key === 'licensed_beds') {
             return state.onboarding.licensed_beds !== undefined && state.onboarding.licensed_beds !== null ? state.onboarding.licensed_beds : '';
+        }
+        if (key === 'hospital_type' && state.onboarding.hospital_type) {
+            var type = String(state.onboarding.hospital_type || '').toLowerCase();
+            if (type === 'cah' || type === 'critical_access_hospital') {
+                return 'Critical Access Hospital';
+            }
+            if (type === 'rural_pps_hospital') {
+                return 'Rural PPS Hospital';
+            }
+            if (type === 'general_acute_care_ipps_hospital') {
+                return 'General Acute Care IPPS Hospital';
+            }
+            if (type === 'rural_emergency_hospital') {
+                return 'Rural Emergency Hospital';
+            }
+            return state.onboarding.hospital_type;
         }
         if (key === 'acute_beds') {
             return state.onboarding.acute_beds !== undefined && state.onboarding.acute_beds !== null ? state.onboarding.acute_beds : '';
         }
         if (key === 'swing_beds') {
             return state.onboarding.swing_beds !== undefined && state.onboarding.swing_beds !== null ? state.onboarding.swing_beds : '';
+        }
+        if (key === 'licensed_for_swing_beds') {
+            var hospitalType = state.onboarding ? String(state.onboarding.hospital_type || '').toLowerCase() : '';
+            var isCah = hospitalType === 'cah' || hospitalType === 'critical_access_hospital';
+            if (!isCah) {
+                return '';
+            }
+            var swingBeds = Number(fieldValue(state.onboarding.swing_beds));
+            return swingBeds > 0 ? 'yes' : '';
         }
         if (key === 'independent_or_system' && state.onboarding.service_model) {
             return state.onboarding.service_model;
@@ -5427,20 +6768,44 @@
         if (key === 'quality_director_name' && state.onboarding.primary_quality_director) {
             return state.onboarding.primary_quality_director.display_name || '';
         }
+        if (key === 'quality_leader_name') {
+            if (answers.quality_director_name) {
+                return answers.quality_director_name;
+            }
+            return state.onboarding.primary_quality_director ? (state.onboarding.primary_quality_director.display_name || '') : '';
+        }
+        if (key === 'quality_leader_email') {
+            if (state.onboarding.primary_quality_director && state.onboarding.primary_quality_director.user_email) {
+                return state.onboarding.primary_quality_director.user_email;
+            }
+            return state.me && state.me.user_email ? state.me.user_email : '';
+        }
         return '';
     }
 
     function questionLayoutClass(question) {
+        if (question.question_key === 'survey_compliance_process') {
+            return 'qn-question-wide qn-survey-pathway-question';
+        }
         if (question.field_type === 'textarea' || question.field_type === 'repeater' || question.field_type === 'plan_status') {
             return 'qn-question-wide';
         }
-        if (['licensed_beds', 'acute_beds', 'swing_beds'].indexOf(question.question_key) !== -1) {
+        if (question.question_key === 'system_network_name') {
+            return 'qn-question-affiliation-detail';
+        }
+        if (question.question_key === 'other_certification_licensing_surveys' || question.question_key === 'current_readiness_activities') {
+            return 'qn-question-wide';
+        }
+        if (['licensed_beds', 'acute_beds', 'licensed_for_swing_beds', 'swing_beds'].indexOf(question.question_key) !== -1) {
             return 'qn-question-third';
         }
         return '';
     }
 
     function optionLabel(option) {
+        if (option && typeof option === 'object') {
+            return text(option.label || option.name || option.value);
+        }
         return text(option).replace(/_/g, ' ').replace(/\b\w/g, function (letter) {
             return letter.toUpperCase();
         });
@@ -5450,10 +6815,94 @@
         return value === null || value === undefined || value === '-' ? '' : String(value);
     }
 
+    function optionValue(option) {
+        if (option && typeof option === 'object') {
+            return fieldValue(option.value !== undefined ? option.value : option.label);
+        }
+        return fieldValue(option);
+    }
+
+    function questionOptionsForKey(key) {
+        var questions = state.onboarding && Array.isArray(state.onboarding.questions) ? state.onboarding.questions : [];
+        var question = questions.find(function (item) {
+            return item.question_key === key;
+        });
+        return question && Array.isArray(question.options) ? question.options : [];
+    }
+
     function escapeFieldValue(value) {
         return fieldValue(value).replace(/[&<>"']/g, function (char) {
             return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'}[char];
         });
+    }
+
+    function padDatePart(value) {
+        value = String(value || '');
+        return value.length === 1 ? '0' + value : value;
+    }
+
+    function isValidDateParts(month, day, year) {
+        month = Number(month);
+        day = Number(day);
+        year = Number(year);
+        if (!month || !day || year < 1000 || month < 1 || month > 12 || day < 1 || day > 31) {
+            return false;
+        }
+        var test = new Date(year, month - 1, day);
+        return test.getFullYear() === year && test.getMonth() === month - 1 && test.getDate() === day;
+    }
+
+    function formatDateForDisplay(value) {
+        value = fieldValue(value).trim();
+        var iso = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (iso && isValidDateParts(iso[2], iso[3], iso[1])) {
+            return iso[2] + '/' + iso[3] + '/' + iso[1];
+        }
+        var us = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (us && isValidDateParts(us[1], us[2], us[3])) {
+            return padDatePart(us[1]) + '/' + padDatePart(us[2]) + '/' + us[3];
+        }
+        return value;
+    }
+
+    function normalizeDateForStorage(value) {
+        value = fieldValue(value).trim();
+        if (!value) {
+            return '';
+        }
+        var iso = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (iso && isValidDateParts(iso[2], iso[3], iso[1])) {
+            return iso[1] + '-' + iso[2] + '-' + iso[3];
+        }
+        var us = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (us && isValidDateParts(us[1], us[2], us[3])) {
+            return us[3] + '-' + padDatePart(us[1]) + '-' + padDatePart(us[2]);
+        }
+        return value;
+    }
+
+    function isIncompleteUsDate(value) {
+        value = fieldValue(value).trim();
+        if (!value) {
+            return false;
+        }
+        return normalizeDateForStorage(value) === value && !/^\d{4}-\d{2}-\d{2}$/.test(value);
+    }
+
+    function dateFieldValue(field) {
+        return field && field.getAttribute('data-date-format') === 'us' ? normalizeDateForStorage(field.value) : field.value;
+    }
+
+    function renderUsDateInput(attrs, value) {
+        var isoValue = normalizeDateForStorage(value);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(isoValue)) {
+            isoValue = '';
+        }
+        return '<span class="qn-us-date-wrap">' +
+            '<input type="text" inputmode="numeric" autocomplete="off" placeholder="mm/dd/yyyy" data-date-format="us" pattern="\\d{1,2}/\\d{1,2}/\\d{4}" ' + attrs + ' value="' + escapeFieldValue(formatDateForDisplay(value)) + '">' +
+            '<button class="qn-us-date-trigger" type="button" data-us-date-trigger aria-label="Open calendar"><span class="dashicons dashicons-calendar-alt"></span></button>' +
+            '<input class="qn-us-date-native" type="date" data-us-date-picker value="' + escapeFieldValue(isoValue) + '" tabindex="-1" aria-hidden="true">' +
+        '</span>';
     }
 
     function questionPlaceholder(question) {
@@ -5462,31 +6911,59 @@
             hospital_city: 'Enter city',
             licensed_beds: 'Enter licensed beds',
             acute_beds: 'Enter acute beds',
-            swing_beds: 'Enter swing beds',
-            quality_director_name: 'Enter Quality Director name',
+            swing_beds: 'Enter licensed swing beds',
+            ccn: 'Enter CMS Certification Number',
+            system_network_name: 'Enter system or network name',
+            quality_leader_name: 'Enter Quality Leader name',
+            quality_leader_email: 'Enter Quality Leader email',
+            quality_director_name: 'Enter Quality Leader name',
             quality_director_background: 'Example: RN with 10 years in quality, CPHQ certified, previously infection prevention lead.'
         };
         return placeholders[question.question_key] || '';
     }
 
     function stepOneHelpText(question) {
+        if (question.question_key === 'licensed_beds' || question.question_key === 'swing_beds') {
+            return null;
+        }
+        if (question.question_key === 'system_network_name') {
+            return 'Scout uses this to understand reporting, committee, and system-level context.';
+        }
         if (question.question_key === 'quality_director_background') {
-            return 'Scout uses this to calibrate guidance level and learning support. Do not include PHI.';
+            return 'Scout uses this to calibrate guidance level and learning support.';
+        }
+        if (question.question_key === 'acute_beds') {
+            return 'For non-CAH hospitals only. Critical Access Hospitals do not need to split the 25 licensed beds into acute beds.';
+        }
+        if (question.question_key === 'licensed_for_swing_beds') {
+            return 'If yes, enter how many of the 25 licensed beds are licensed for swing-bed use.';
         }
         return '';
     }
 
     function stepTwoPlaceholder(key) {
         var placeholders = {
-            state_survey_agency: 'Example: Tennessee Department of Health',
-            life_safety_survey_agency: 'Example: State Fire Marshal\'s Office'
+            state_survey_agency: 'Example: California Department of Public Health',
+            state_survey_agency_url: 'Enter state survey body website',
+            life_safety_survey_agency: 'Example: State Fire Marshal',
+            life_safety_survey_agency_url: 'Enter life safety agency website',
+            accrediting_body_other: 'Enter accreditation body'
         };
         return placeholders[key] || '';
     }
 
     function stepOneOptions(key) {
+        var apiOptions = questionOptionsForKey(key);
+        if (apiOptions.length) {
+            return apiOptions;
+        }
         var optionMap = {
             is_critical_access_hospital: [
+                {value: 'yes', label: 'Yes'},
+                {value: 'no', label: 'No'},
+                {value: 'not_sure', label: 'Not sure'}
+            ],
+            licensed_for_swing_beds: [
                 {value: 'yes', label: 'Yes'},
                 {value: 'no', label: 'No'},
                 {value: 'not_sure', label: 'Not sure'}
@@ -5495,9 +6972,13 @@
                 {value: 'independent', label: 'Independent'},
                 {value: 'system_owned', label: 'System-Owned'},
                 {value: 'network_affiliated', label: 'Network-Affiliated'},
-                {value: 'managed_services', label: 'Managed Services'},
-                {value: 'other', label: 'Other'},
-                {value: 'not_sure', label: 'Not sure'}
+                {value: 'other', label: 'Other'}
+            ],
+            time_in_current_role: [
+                {value: 'less_than_one_year', label: 'Less than one year'},
+                {value: 'one_to_5_years', label: '1 - 5 years'},
+                {value: 'six_to_10_years', label: '6 - 10 years'},
+                {value: 'more_than_10_years', label: 'More than 10 years'}
             ]
         };
         return optionMap[key] || [];
@@ -5506,12 +6987,21 @@
     function renderStepOneSelect(key, value, options, placeholder) {
         value = fieldValue(value);
         return '<select data-onboarding-field="' + escapeHtml(key) + '"><option value="">' + escapeHtml(placeholder || 'Select') + '</option>' + options.map(function (option) {
-            return '<option value="' + escapeFieldValue(option.value) + '"' + (value === option.value ? ' selected' : '') + '>' + escapeHtml(option.label) + '</option>';
+            var optionValueText = optionValue(option);
+            return '<option value="' + escapeFieldValue(optionValueText) + '"' + (value === optionValueText ? ' selected' : '') + '>' + escapeHtml(optionLabel(option)) + '</option>';
         }).join('') + '</select>';
     }
 
     function stepTwoOptions(key) {
+        var apiOptions = questionOptionsForKey(key);
+        if (apiOptions.length) {
+            return apiOptions;
+        }
         var optionMap = {
+            survey_compliance_process: [
+                {value: 'direct_cms_state_survey', label: 'Direct certification through a triennial CMS survey, conducted by our state survey body on behalf of CMS'},
+                {value: 'deemed_accreditation_body_survey', label: 'Deemed status through a triennial accreditation body survey, such as The Joint Commission'}
+            ],
             accreditation_status: [
                 {value: 'accredited', label: 'Accredited'},
                 {value: 'cms_state_survey_only', label: 'CMS/state survey only'},
@@ -5521,10 +7011,17 @@
             accrediting_body: [
                 {value: 'joint_commission', label: 'The Joint Commission'},
                 {value: 'dnv', label: 'DNV'},
-                {value: 'hfap', label: 'HFAP'},
-                {value: 'cihq', label: 'CIHQ'},
-                {value: 'other', label: 'Other'},
-                {value: 'not_applicable', label: 'Not applicable'},
+                {value: 'hfap_hqic', label: 'HFAP / HQIC'},
+                {value: 'other', label: 'Other'}
+            ],
+            life_safety_survey_agency_status: [
+                {value: 'same_as_state_survey_agency', label: 'Same as state survey agency'},
+                {value: 'different_agency', label: 'Different agency'},
+                {value: 'not_sure', label: 'Not sure'}
+            ],
+            other_certification_licensing_surveys_status: [
+                {value: 'yes', label: 'Yes'},
+                {value: 'no', label: 'No'},
                 {value: 'not_sure', label: 'Not sure'}
             ],
             cms_certification_pathway: [
@@ -5576,13 +7073,34 @@
             ],
             survey_type: [
                 {value: 'accreditation_survey', label: 'Accreditation survey'},
-                {value: 'cms_recertification_survey', label: 'CMS recertification survey'},
+                {value: 'cms_recertification_survey', label: 'CMS/state certification survey'},
                 {value: 'state_licensure_survey', label: 'State licensure survey'},
                 {value: 'complaint_survey', label: 'Complaint survey'},
                 {value: 'life_safety_code_survey', label: 'Life Safety Code survey'},
                 {value: 'focused_review', label: 'Focused review'},
                 {value: 'mock_survey', label: 'Mock survey'},
                 {value: 'other', label: 'Other'}
+            ],
+            survey_outcome: [
+                {value: 'no_findings', label: 'No findings'},
+                {value: 'findings_closed', label: 'Findings closed'},
+                {value: 'poc_open', label: 'Plan of correction open'},
+                {value: 'follow_up_pending', label: 'Follow-up pending'},
+                {value: 'not_sure', label: 'Not sure'}
+            ],
+            poc_status: [
+                {value: 'not_applicable', label: 'Not applicable'},
+                {value: 'closed', label: 'Closed'},
+                {value: 'open', label: 'Open'},
+                {value: 'pending_submission', label: 'Pending submission'},
+                {value: 'not_sure', label: 'Not sure'}
+            ],
+            follow_up_window: [
+                {value: 'none_expected', label: 'No follow-up expected'},
+                {value: 'next_30_days', label: 'Next 30 days'},
+                {value: 'next_90_days', label: 'Next 90 days'},
+                {value: 'next_6_months', label: 'Next 6 months'},
+                {value: 'not_sure', label: 'Not sure'}
             ],
             accreditation_360: [
                 {value: 'yes', label: 'Yes'},
@@ -5596,18 +7114,31 @@
 
     function legacyStepTwoValue(key, value) {
         var map = {
+            survey_compliance_process: {
+                'Direct certification through triennial CMS/state survey': 'direct_cms_state_survey',
+                'Direct certification through a triennial CMS survey, conducted by our state survey body on behalf of CMS': 'direct_cms_state_survey',
+                'Deemed status through accreditation body survey': 'deemed_accreditation_body_survey',
+                'Deemed status through a triennial accreditation body survey, such as The Joint Commission': 'deemed_accreditation_body_survey'
+            },
             accreditation_status: {
                 cms_certified: 'cms_state_survey_only',
                 in_progress: 'not_sure'
             },
             accrediting_body: {
                 'The Joint Commission': 'joint_commission',
+                'joint_commission': 'joint_commission',
                 DNV: 'dnv',
-                HFAP: 'hfap',
+                dnv: 'dnv',
+                HFAP: 'hfap_hqic',
+                'HFAP / HQIC': 'hfap_hqic',
+                hfap: 'hfap_hqic',
+                hfap_hqic: 'hfap_hqic',
                 CIHQ: 'cihq',
+                cihq: 'cihq',
                 ACHC: 'other',
                 'State/CMS': 'not_applicable',
-                Other: 'other'
+                Other: 'other',
+                other: 'other'
             },
             open_plans_of_correction: {
                 yes: 'yes',
@@ -5624,24 +7155,34 @@
         var required = question.is_required ? ' <span class="qn-required">*</span>' : '';
         var helpText = stepTwoHelpText(question);
         var help = helpText ? '<small>' + escapeHtml(helpText) + '</small>' : '';
-        var tag = ['historical_deficiency_areas', 'current_readiness_activities', 'survey_history'].indexOf(question.question_key) !== -1 ? 'div' : 'label';
-        return '<' + tag + ' class="qn-question ' + questionLayoutClass(question) + '" data-question="' + escapeHtml(question.question_key) + '">' +
-            '<span>' + escapeHtml(question.label) + required + '</span>' + renderStepTwoField(question, value) + help + renderStepTwoConditionalNote(question.question_key) + '</' + tag + '>';
+        var info = questionInfoIcon(question);
+        var tag = ['survey_compliance_process', 'historical_deficiency_areas', 'current_readiness_activities', 'survey_history'].indexOf(question.question_key) !== -1 ? 'div' : 'label';
+        var hidden = stepTwoQuestionHiddenOnRender(question.question_key) ? ' hidden style="display:none"' : '';
+        return '<' + tag + ' class="qn-question ' + questionLayoutClass(question) + '" data-question="' + escapeHtml(question.question_key) + '"' + hidden + '>' +
+            '<span class="qn-question-label">' + escapeHtml(question.label) + required + info + '</span>' + renderStepTwoField(question, value) + help + renderStepTwoConditionalNote(question.question_key) + '</' + tag + '>';
     }
 
     function renderStepTwoField(question, value) {
         var key = question.question_key;
-        if (['accreditation_status', 'accrediting_body', 'cms_certification_pathway', 'open_plans_of_correction', 'projected_next_survey_window'].indexOf(key) !== -1) {
+        if (key === 'survey_compliance_process') {
+            return renderSurveyPathwayCards(key, legacyStepTwoValue(key, value), stepTwoOptions(key));
+        }
+        if (['accreditation_status', 'accrediting_body', 'cms_certification_pathway', 'open_plans_of_correction', 'projected_next_survey_window', 'life_safety_survey_agency_status', 'other_certification_licensing_surveys_status'].indexOf(key) !== -1) {
             var placeholders = {
                 accreditation_status: 'Select accreditation status',
-                accrediting_body: 'Select accreditor',
+                accrediting_body: 'Select accreditation body',
                 cms_certification_pathway: 'Select pathway',
                 open_plans_of_correction: 'Select POC status',
-                projected_next_survey_window: 'Select survey window'
+                projected_next_survey_window: 'Select survey window',
+                life_safety_survey_agency_status: 'Select agency relationship',
+                other_certification_licensing_surveys_status: 'Select'
             };
             return renderStepOneSelect(key, legacyStepTwoValue(key, value), stepTwoOptions(key), placeholders[key]);
         }
         if (key === 'historical_deficiency_areas' || key === 'current_readiness_activities') {
+            if (key === 'current_readiness_activities') {
+                return renderInlineChecklistField(key, value, stepTwoOptions(key));
+            }
             return renderMultiselectField(key, value, stepTwoOptions(key), key === 'historical_deficiency_areas' ? 'Select deficiency areas' : 'Select readiness activities');
         }
         if (key === 'survey_history') {
@@ -5650,24 +7191,58 @@
         if (key === 'accreditation_360') {
             return renderStepOneSelect(key, value, stepTwoOptions(key), 'Select Accreditation 360 status');
         }
+        if (key === 'other_certification_licensing_surveys') {
+            return '<textarea class="qn-compact-textarea" data-onboarding-field="' + escapeHtml(key) + '" placeholder="Specify the survey organization, purpose of survey, frequency, and date of last survey. Example: CLIA survey, lab certification, every two years, last survey 03/2025. Do not paste survey reports.">' + escapeFieldValue(value) + '</textarea>';
+        }
         return '<input type="text" data-onboarding-field="' + escapeHtml(key) + '" value="' + escapeFieldValue(value) + '" placeholder="' + escapeHtml(stepTwoPlaceholder(key) || 'Enter agency name') + '">';
     }
 
-    function stepTwoHelpText(question) {
-        var help = {
-            cms_certification_pathway: 'This tells Scout whether to organize readiness around accreditation standards or CMS Conditions of Participation.',
-            state_survey_agency: 'Enter the agency responsible for state licensure or CMS survey activity.'
+    function renderSurveyPathwayCards(key, value, options) {
+        value = fieldValue(value);
+        var display = {
+            direct_cms_state_survey: {
+                title: 'CMS / state survey',
+                description: 'Direct certification through a triennial CMS survey conducted by the state survey body on behalf of CMS.'
+            },
+            deemed_accreditation_body_survey: {
+                title: 'Accreditation / deemed status',
+                description: 'Deemed status through a triennial accreditation body survey, such as The Joint Commission.'
+            }
         };
+        return '<div class="qn-survey-pathway-cards" role="radiogroup" aria-label="Survey compliance process">' + options.map(function (option) {
+            var optionValueText = optionValue(option);
+            var meta = display[optionValueText] || {title: optionLabel(option), description: ''};
+            var checked = value === optionValueText;
+            return '<label class="qn-survey-pathway-card' + (checked ? ' qn-survey-pathway-selected' : '') + '">' +
+                '<input type="radio" name="' + escapeHtml(key) + '" data-onboarding-field="' + escapeHtml(key) + '" value="' + escapeFieldValue(optionValueText) + '"' + (checked ? ' checked' : '') + '>' +
+                '<span class="qn-survey-pathway-marker" aria-hidden="true"></span>' +
+                '<span class="qn-survey-pathway-copy"><strong>' + escapeHtml(meta.title) + '</strong><small>' + escapeHtml(meta.description || optionLabel(option)) + '</small></span>' +
+            '</label>';
+        }).join('') + '</div>';
+    }
+
+    function stepTwoQuestionHiddenOnRender(key) {
+        if (key === 'accrediting_body') {
+            return legacyStepTwoValue('survey_compliance_process', onboardingQuestionValue({question_key: 'survey_compliance_process'})) !== 'deemed_accreditation_body_survey';
+        }
+        if (key === 'accrediting_body_other') {
+            return legacyStepTwoValue('accrediting_body', onboardingQuestionValue({question_key: 'accrediting_body'})) !== 'other';
+        }
+        if (key === 'life_safety_survey_agency' || key === 'life_safety_survey_agency_url') {
+            return onboardingQuestionValue({question_key: 'life_safety_survey_agency_status'}) !== 'different_agency';
+        }
+        if (key === 'other_certification_licensing_surveys') {
+            return onboardingQuestionValue({question_key: 'other_certification_licensing_surveys_status'}) !== 'yes';
+        }
+        return false;
+    }
+
+    function stepTwoHelpText(question) {
+        var help = {};
         return help[question.question_key] || question.help_text || '';
     }
 
     function renderStepTwoConditionalNote(key) {
-        if (key === 'accrediting_body') {
-            return '<small class="qn-conditional-note" id="qn-joint-commission-note" hidden>Scout can account for Joint Commission readiness and Accreditation 360 prompts.</small><small class="qn-conditional-note" id="qn-accreditor-not-applicable-note" hidden>CMS/state survey-only or not accredited hospitals usually do not need an accrediting body.</small>';
-        }
-        if (key === 'open_plans_of_correction') {
-            return '<small class="qn-conditional-warning" id="qn-poc-process-warning" hidden>Only describe process status. Do not enter patient, provider, peer-review, or case-level details.</small>';
-        }
         return '';
     }
 
@@ -5679,7 +7254,7 @@
         if (!value) {
             return [];
         }
-        var optionValues = options.map(function (option) { return option.value; });
+        var optionValues = options.map(optionValue);
         if (optionValues.indexOf(value) !== -1) {
             return [value];
         }
@@ -5688,9 +7263,9 @@
 
     function optionLabelByValue(options, value) {
         var found = options.find(function (option) {
-            return option.value === value;
+            return optionValue(option) === value;
         });
-        return found ? found.label : value;
+        return found ? optionLabel(found) : value;
     }
 
     function multiselectOptionsForKey(key) {
@@ -5700,7 +7275,7 @@
         if (['surgery_procedure_types', 'radiology_model', 'anesthesia_moderate_sedation_model'].indexOf(key) !== -1) {
             return stepThreeOptions(key);
         }
-        if (['mbqip_measure_set', 'approval_requirements'].indexOf(key) !== -1) {
+        if (key === 'mbqip_measure_set') {
             return stepFourOptions(key);
         }
         if (['templates_needed', 'weakest_monitoring_areas'].indexOf(key) !== -1) {
@@ -5717,7 +7292,7 @@
 
     function renderMultiselectField(key, value, options, placeholder) {
         var values = normalizeChecklistValues(value, options);
-        var optionValues = options.map(function (option) { return option.value; });
+        var optionValues = options.map(optionValue);
         var customValues = values.filter(function (item) { return optionValues.indexOf(item) === -1; });
         var chips = values.map(function (item) {
             return '<span class="qn-selected-chip" data-chip-value="' + escapeFieldValue(item) + '">' + escapeHtml(optionLabelByValue(options, item)) + '<button class="qn-chip-remove" type="button" data-multiselect-remove="' + escapeFieldValue(item) + '" aria-label="Remove ' + escapeHtml(optionLabelByValue(options, item)) + '"><span class="dashicons dashicons-no-alt"></span></button></span>';
@@ -5726,7 +7301,8 @@
             '<button class="qn-multiselect-trigger" type="button" data-multiselect-trigger aria-expanded="false"><span data-multiselect-placeholder>' + escapeHtml(placeholder) + '</span><span class="dashicons dashicons-arrow-down-alt2"></span></button>' +
             '<div class="qn-selected-chips"' + (values.length ? '' : ' hidden') + '>' + chips + '</div>' +
             '<div class="qn-multiselect-menu" role="listbox" aria-label="' + escapeHtml(placeholder) + '">' + options.map(function (option) {
-                return '<label class="qn-multiselect-option"><input type="checkbox" data-checklist-field="' + escapeHtml(key) + '" value="' + escapeFieldValue(option.value) + '"' + (values.indexOf(option.value) !== -1 ? ' checked' : '') + '><span>' + escapeHtml(option.label) + '</span></label>';
+                var optionValueText = optionValue(option);
+                return '<label class="qn-multiselect-option"><input type="checkbox" data-checklist-field="' + escapeHtml(key) + '" value="' + escapeFieldValue(optionValueText) + '"' + (values.indexOf(optionValueText) !== -1 ? ' checked' : '') + '><span>' + escapeHtml(optionLabel(option)) + '</span></label>';
             }).join('') + customValues.map(function (item) {
                 return '<input type="checkbox" data-checklist-field="' + escapeHtml(key) + '" value="' + escapeFieldValue(item) + '" checked hidden>';
             }).join('') + '</div>' +
@@ -5735,37 +7311,124 @@
 
     function renderSurveyHistoryRepeater(key, value) {
         value = Array.isArray(value) ? value : [];
-        var columns = ['survey_date', 'survey_type', 'surveying_agency', 'deficiencies_cited', 'poc_due_followup'];
+        var columns = ['survey_date', 'survey_type', 'surveying_agency', 'survey_outcome', 'poc_status', 'follow_up_window'];
         return '<div class="qn-repeater qn-survey-history" data-repeater="' + escapeHtml(key) + '" data-repeater-style="survey-history" data-columns="' + escapeHtml(JSON.stringify(columns)) + '">' +
-            (value.length ? '' : '<div class="qn-survey-empty"><strong>No survey history added yet.</strong><span>Add prior surveys if available; you can also skip this for now.</span></div>') +
+            '<div class="qn-data-boundary-note"><span class="dashicons dashicons-shield"></span><span>Enter high-level, non-sensitive survey information only. Do not upload or paste survey reports, deficiency narratives, patient details, case-level information, or PHI.</span></div>' +
+            (value.length ? '' : '<div class="qn-survey-empty"><strong>No accreditation or survey history added yet.</strong><span>Add the most recent review if available. Do not enter deficiency narratives, patient details, or case-level information.</span></div>') +
             value.map(function (row, index) {
                 return renderSurveyHistoryRow(key, columns, row, index);
-            }).join('') + '<button class="qn-button qn-button-small qn-add-survey-row" type="button" data-add-repeater="' + escapeHtml(key) + '"><span class="dashicons dashicons-plus-alt2"></span>Add survey</button></div>';
+            }).join('') + '<button class="qn-button qn-button-small qn-add-survey-row" type="button" data-add-repeater="' + escapeHtml(key) + '"><span class="dashicons dashicons-plus-alt2"></span>Add survey / review</button></div>';
     }
 
     function renderSurveyHistoryRow(key, columns, row, index) {
         row = row || {};
+        var legacyPocText = row.poc_closed_date || row.poc_due_followup || '';
+        var inferredPocStatus = row.poc_status || (legacyPocText ? (String(legacyPocText).toLowerCase().indexOf('active') !== -1 ? 'open' : 'closed') : '');
         return '<div class="qn-repeater-row qn-survey-history-row">' +
-            '<div class="qn-survey-card-header"><strong>Survey ' + (index + 1) + '</strong><button class="qn-icon-button qn-delete-survey-row" type="button" data-delete-repeater-row aria-label="Delete survey history row"><span class="dashicons dashicons-trash"></span></button></div>' +
+            '<div class="qn-survey-card-header"><strong>Survey / review ' + (index + 1) + '</strong><button class="qn-icon-button qn-delete-survey-row" type="button" data-delete-repeater-row aria-label="Delete survey history row"><span class="dashicons dashicons-trash"></span></button></div>' +
             '<div class="qn-survey-card-grid">' +
-                '<label><span>Survey date</span><input type="date" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="survey_date" value="' + escapeFieldValue(row.survey_date || '') + '"></label>' +
-                '<label><span>Survey type</span>' + renderRepeaterSelect(key, index, 'survey_type', row.survey_type || '', stepTwoOptions('survey_type'), 'Select type') + '</label>' +
-                '<label><span>Surveying agency</span><input type="text" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="surveying_agency" value="' + escapeFieldValue(row.surveying_agency || '') + '" placeholder="Enter agency name"></label>' +
-                '<label><span>Deficiencies/findings</span><textarea data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="deficiencies_cited" placeholder="Short process-level summary">' + escapeFieldValue(row.deficiencies_cited || '') + '</textarea></label>' +
-                '<label><span>POC/follow-up status</span><textarea data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="poc_due_followup" placeholder="Short follow-up status">' + escapeFieldValue(row.poc_due_followup || '') + '</textarea></label>' +
+                '<label><span>Last date</span>' + renderUsDateInput('data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="survey_date"', row.survey_date || '') + '</label>' +
+                '<label><span>Type</span>' + renderRepeaterSelect(key, index, 'survey_type', row.survey_type || '', stepTwoOptions('survey_type'), 'Select type') + '</label>' +
+                '<label><span>Agency</span><input type="text" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="surveying_agency" value="' + escapeFieldValue(row.surveying_agency || '') + '" placeholder="State agency, CMS, accreditor, or reviewer"></label>' +
+                '<label><span>Outcome</span>' + renderRepeaterSelect(key, index, 'survey_outcome', row.survey_outcome || '', stepTwoOptions('survey_outcome'), 'Select outcome') + '</label>' +
+                '<label><span>POC status</span>' + renderRepeaterSelect(key, index, 'poc_status', inferredPocStatus, stepTwoOptions('poc_status'), 'Select POC status') + '</label>' +
+                '<label><span>Follow-up</span>' + renderRepeaterSelect(key, index, 'follow_up_window', row.follow_up_window || '', stepTwoOptions('follow_up_window'), 'Select timing') + '</label>' +
             '</div>' +
             '</div>';
+    }
+
+    function renderInlineChecklistField(key, value, options) {
+        var values = normalizeChecklistValues(value, options);
+        return '<div class="qn-inline-checklist" data-checklist="' + escapeHtml(key) + '">' + options.map(function (option) {
+            var optionValueText = optionValue(option);
+            var checked = values.indexOf(optionValueText) !== -1;
+            return '<label class="qn-inline-checklist-option"><input type="checkbox" data-checklist-field="' + escapeHtml(key) + '" value="' + escapeFieldValue(optionValueText) + '"' + (checked ? ' checked' : '') + '><span>' + escapeHtml(optionLabel(option)) + '</span></label>';
+        }).join('') + '</div>';
+    }
+
+    function renderStepSevenGoalTiles(key, value, options, limit) {
+        var values = normalizeChecklistValues(value, options);
+        var optionValues = options.map(optionValue);
+        var customOptions = values.filter(function (item) { return optionValues.indexOf(item) === -1; }).map(function (item) {
+            return {value: item, label: item};
+        });
+        var visibleOptions = options.concat(customOptions);
+        var selectedCount = values.length;
+        var hasLimit = limit && limit > 0;
+        var countText = hasLimit ? selectedCount + ' of ' + limit + ' selected' : selectedCount + ' selected';
+        var meter = '<div class="qn-step7-goal-meter"><span>' + (hasLimit ? 'Choose up to ' + limit : 'Choose all that apply') + '</span><strong data-goal-count>' + escapeHtml(countText) + '</strong></div>';
+        return '<div class="qn-step7-goal-tiles" data-checklist="' + escapeHtml(key) + '"' + (hasLimit ? ' data-goal-limit="' + limit + '"' : '') + '>' + meter +
+            '<div class="qn-step7-goal-grid">' + visibleOptions.map(function (option) {
+                var optionValueText = optionValue(option);
+                var checked = values.indexOf(optionValueText) !== -1;
+                var disabled = hasLimit && selectedCount >= limit && !checked;
+                return '<label class="qn-step7-goal-tile">' +
+                    '<input type="checkbox" data-checklist-field="' + escapeHtml(key) + '" value="' + escapeFieldValue(optionValueText) + '"' + (checked ? ' checked' : '') + (disabled ? ' disabled' : '') + '>' +
+                    '<span class="qn-step7-goal-check" aria-hidden="true"></span>' +
+                    '<span class="qn-step7-goal-title">' + escapeHtml(optionLabel(option)) + '</span>' +
+                '</label>';
+            }).join('') + '</div></div>';
     }
 
     function renderRepeaterSelect(key, index, column, value, options, placeholder) {
         value = fieldValue(value);
         return '<select data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="' + escapeHtml(column) + '"><option value="">' + escapeHtml(placeholder || 'Select') + '</option>' + options.map(function (option) {
-            return '<option value="' + escapeFieldValue(option.value) + '"' + (value === option.value ? ' selected' : '') + '>' + escapeHtml(option.label) + '</option>';
+            var optionValueText = optionValue(option);
+            return '<option value="' + escapeFieldValue(optionValueText) + '"' + (value === optionValueText ? ' selected' : '') + '>' + escapeHtml(optionLabel(option)) + '</option>';
         }).join('') + '</select>';
     }
 
     function stepThreeOptions(key) {
         var optionMap = {
+            service_lines_core: [
+                {value: 'emergency_department', label: 'Emergency Department'},
+                {value: 'inpatient_acute_care', label: 'Inpatient Acute Care'},
+                {value: 'swing_bed_services', label: 'Swing Bed Services'},
+                {value: 'observation_services', label: 'Observation Services'},
+                {value: 'laboratory_services', label: 'Laboratory Services'},
+                {value: 'diagnostic_imaging', label: 'Diagnostic Imaging'},
+                {value: 'pharmacy', label: 'Pharmacy'},
+                {value: 'respiratory_therapy', label: 'Respiratory Therapy'},
+                {value: 'physical_therapy', label: 'Physical Therapy'},
+                {value: 'infusion_services', label: 'Infusion Services'},
+                {value: 'anesthesia_coverage', label: 'Anesthesia Coverage'},
+                {value: 'dietary_services', label: 'Dietary Services'}
+            ],
+            service_lines_common: [
+                {value: 'rural_health_clinic_primary_care', label: 'Rural Health Clinic / Primary Care'},
+                {value: 'general_surgery', label: 'General Surgery'},
+                {value: 'endoscopy_colonoscopy', label: 'Endoscopy and Colonoscopy'},
+                {value: 'obstetrics_labor_delivery', label: 'Obstetrics / Labor and Delivery'},
+                {value: 'gynecology', label: 'Gynecology'},
+                {value: 'orthopedics', label: 'Orthopedics'},
+                {value: 'occupational_therapy', label: 'Occupational Therapy'},
+                {value: 'speech_language_pathology', label: 'Speech-Language Pathology'},
+                {value: 'cardiac_rehabilitation', label: 'Cardiac Rehabilitation'},
+                {value: 'pulmonary_rehabilitation', label: 'Pulmonary Rehabilitation'},
+                {value: 'sleep_studies', label: 'Sleep Studies'},
+                {value: 'wound_care', label: 'Wound Care'},
+                {value: 'visiting_specialist_clinics', label: 'Visiting Specialist Clinics'},
+                {value: 'telehealth_services', label: 'Telehealth Services'},
+                {value: 'ambulance_ems', label: 'Ambulance and EMS'},
+                {value: 'occupational_health_services', label: 'Occupational Health Services'},
+                {value: 'diabetes_education', label: 'Diabetes Education'},
+                {value: 'nutrition_counseling', label: 'Nutrition Counseling'},
+                {value: 'mammography', label: 'Mammography'},
+                {value: 'bone_density_dexa', label: 'Bone Density Screening (DEXA)'},
+                {value: 'echocardiography_cardiac_diagnostics', label: 'Echocardiography / Cardiac Diagnostics'}
+            ],
+            service_lines_growth_expansion: [
+                {value: 'behavioral_health_integration', label: 'Behavioral Health Integration'},
+                {value: 'senior_behavioral_health_unit', label: 'Senior Behavioral Health Unit'},
+                {value: 'skilled_nursing_long_term_care', label: 'Skilled Nursing / Long-Term Care'},
+                {value: 'retail_340b_contract_pharmacy', label: 'Retail or 340B Contract Pharmacy'},
+                {value: 'oncology_chemotherapy', label: 'Oncology / Chemotherapy'},
+                {value: 'dialysis', label: 'Dialysis'},
+                {value: 'pain_management', label: 'Pain Management'},
+                {value: 'specialty_clinic_expansion', label: 'Specialty Clinic Expansion'},
+                {value: 'home_health_hospice_partnerships', label: 'Home Health / Hospice Partnerships'},
+                {value: 'other_growth_service', label: 'Other Growth Service'}
+            ],
             surgery_procedure_types: [
                 {value: 'endoscopy', label: 'Endoscopy'},
                 {value: 'general_surgery', label: 'General surgery'},
@@ -5814,6 +7477,13 @@
                 {value: 'other', label: 'Other'}
             ]
         };
+        if (key.indexOf('service_lines_') === 0 && optionMap[key]) {
+            return optionMap[key];
+        }
+        var apiOptions = questionOptionsForKey(key);
+        if (apiOptions.length) {
+            return apiOptions;
+        }
         return optionMap[key] || [];
     }
 
@@ -5822,28 +7492,32 @@
         var required = question.is_required ? ' <span class="qn-required">*</span>' : '';
         var helpText = stepThreeHelpText(question);
         var help = helpText ? '<small>' + escapeHtml(helpText) + '</small>' : '';
-        var tag = ['surgery_procedure_types', 'radiology_model', 'anesthesia_moderate_sedation_model'].indexOf(question.question_key) !== -1 ? 'div' : 'label';
+        var info = question.question_key === 'laboratory_model_other'
+            ? fieldInfoIcon('Use this only for additional laboratory models or arrangements not listed above. Enter one per line.')
+            : (question.question_key === 'service_lines_other'
+                ? fieldInfoIcon('Use this only for additional services not listed above. Enter one service per line.')
+                : '');
+        var tag = question.question_key.indexOf('service_lines_') === 0 || ['laboratory_model', 'radiology_model', 'pharmacy_model', 'anesthesia_moderate_sedation_model', 'blood_bank_model', 'surgery_procedure_types'].indexOf(question.question_key) !== -1 ? 'div' : 'label';
         return '<' + tag + ' class="qn-question ' + questionLayoutClass(question) + '" data-question="' + escapeHtml(question.question_key) + '">' +
-            '<span>' + escapeHtml(question.label) + required + '</span>' + renderStepThreeField(question, value) + help + renderStepThreeConditionalNote(question.question_key) + '</' + tag + '>';
+            '<span class="qn-question-label">' + escapeHtml(question.label) + required + info + '</span>' + renderStepThreeField(question, value) + help + renderStepThreeConditionalNote(question.question_key) + '</' + tag + '>';
     }
 
     function renderStepThreeField(question, value) {
         var key = question.question_key;
-        if (['surgery_procedure_types', 'radiology_model', 'anesthesia_moderate_sedation_model'].indexOf(key) !== -1) {
-            var placeholders = {
-                surgery_procedure_types: 'Select procedure types',
-                radiology_model: 'Select radiology services',
-                anesthesia_moderate_sedation_model: 'Select anesthesia/sedation model'
-            };
-            return renderMultiselectField(key, value, stepThreeOptions(key), placeholders[key]);
+        if (key.indexOf('service_lines_') === 0 && question.field_type === 'multiselect') {
+            return renderInlineChecklistField(key, value, stepThreeOptions(key));
+        }
+        if (key === 'radiology_model' || key === 'anesthesia_moderate_sedation_model') {
+            return renderClinicalModelChecklist(key, value, stepThreeOptions(key));
         }
         if (['laboratory_model', 'pharmacy_model', 'blood_bank_model'].indexOf(key) !== -1) {
-            var selectPlaceholders = {
-                laboratory_model: 'Select laboratory model',
-                pharmacy_model: 'Select pharmacy model',
-                blood_bank_model: 'Select blood bank model'
-            };
-            return renderStepOneSelect(key, value, stepThreeOptions(key), selectPlaceholders[key]);
+            return renderClinicalModelChoices(key, value, stepThreeOptions(key));
+        }
+        if (key === 'service_lines_other') {
+            return '<textarea data-onboarding-field="' + escapeHtml(key) + '" placeholder="Enter one additional service per line.">' + escapeFieldValue(value) + '</textarea>';
+        }
+        if (/_model_other$/.test(key)) {
+            return '<textarea data-onboarding-field="' + escapeHtml(key) + '" placeholder="Enter one additional model or arrangement per line.">' + escapeFieldValue(value) + '</textarea>';
         }
         if (key === 'contracted_quality_monitoring_agreements') {
             return '<textarea data-onboarding-field="' + escapeHtml(key) + '" placeholder="Example: Radiology peer review agreement, contracted lab quality reports, telehealth specialist quality reporting.">' + escapeFieldValue(value) + '</textarea>';
@@ -5851,8 +7525,32 @@
         return renderField(question, value);
     }
 
+    function renderClinicalModelChoices(key, value, options) {
+        value = fieldValue(value);
+        return '<div class="qn-clinical-choice-grid qn-clinical-radio-grid">' + options.map(function (option) {
+            var optionValueText = optionValue(option);
+            var checked = value === optionValueText;
+            return '<label class="qn-clinical-choice-option"><input type="radio" name="' + escapeHtml(key) + '" data-onboarding-field="' + escapeHtml(key) + '" value="' + escapeFieldValue(optionValueText) + '"' + (checked ? ' checked' : '') + '><span>' + escapeHtml(optionLabel(option)) + '</span></label>';
+        }).join('') + '</div>';
+    }
+
+    function renderClinicalModelChecklist(key, value, options) {
+        var values = normalizeChecklistValues(value, options);
+        return '<div class="qn-clinical-choice-grid qn-clinical-checkbox-grid" data-checklist="' + escapeHtml(key) + '">' + options.map(function (option) {
+            var optionValueText = optionValue(option);
+            var checked = values.indexOf(optionValueText) !== -1;
+            return '<label class="qn-clinical-choice-option"><input type="checkbox" data-checklist-field="' + escapeHtml(key) + '" value="' + escapeFieldValue(optionValueText) + '"' + (checked ? ' checked' : '') + '><span>' + escapeHtml(optionLabel(option)) + '</span></label>';
+        }).join('') + '</div>';
+    }
+
     function stepThreeHelpText(question) {
         var help = {
+            service_lines_other: 'Enter each additional service on a separate line.',
+            laboratory_model_other: 'Enter each additional model or arrangement on a separate line.',
+            radiology_model_other: 'Enter each additional model or arrangement on a separate line.',
+            pharmacy_model_other: 'Enter each additional model or arrangement on a separate line.',
+            anesthesia_moderate_sedation_model_other: 'Enter each additional model or arrangement on a separate line.',
+            blood_bank_model_other: 'Enter each additional model or arrangement on a separate line.',
             contracted_quality_monitoring_agreements: 'List service-level monitoring agreements only. Do not include patient, provider case, or peer-review details.'
         };
         return help[question.question_key] || question.help_text || '';
@@ -5872,6 +7570,10 @@
     }
 
     function stepFourOptions(key) {
+        var apiOptions = questionOptionsForKey(key);
+        if (apiOptions.length) {
+            return apiOptions;
+        }
         var optionMap = {
             committee_name: [
                 {value: 'qapi_committee', label: 'QAPI Committee'},
@@ -5887,23 +7589,52 @@
                 {value: 'patient_experience_workgroup', label: 'Patient Experience Workgroup'},
                 {value: 'other', label: 'Other'}
             ],
-            user_role: [
-                {value: 'chair_facilitator', label: 'Chair / facilitator'},
-                {value: 'primary_presenter', label: 'Primary presenter'},
-                {value: 'staff_support', label: 'Staff support'},
-                {value: 'member', label: 'Member'},
-                {value: 'contributor', label: 'Contributor'},
-                {value: 'not_involved', label: 'Not involved'},
-                {value: 'other', label: 'Other'}
-            ],
             reports_to: [
                 {value: 'qapi_committee', label: 'QAPI Committee'},
                 {value: 'medical_executive_committee', label: 'Medical Executive Committee'},
+                {value: 'medical_executive_and_governing_board', label: 'Medical Executive Committee and Governing Board'},
                 {value: 'board_quality_committee', label: 'Board Quality Committee'},
                 {value: 'full_governing_board', label: 'Full Governing Board'},
                 {value: 'governing_board', label: 'Governing Board'},
                 {value: 'quality_safety_committee', label: 'Quality and Safety Committee'},
                 {value: 'other', label: 'Other'}
+            ],
+            committee_frequency: [
+                {value: 'monthly', label: 'Monthly'},
+                {value: 'quarterly', label: 'Quarterly'},
+                {value: 'annually', label: 'Annually'},
+                {value: 'as_needed', label: 'Ad hoc / as needed'},
+                {value: 'not_sure', label: 'Not sure'}
+            ],
+            committee_week_of_month: [
+                {value: 'first', label: '1st'},
+                {value: 'second', label: '2nd'},
+                {value: 'third', label: '3rd'},
+                {value: 'fourth', label: '4th'},
+                {value: 'last', label: 'Last'},
+                {value: 'before_full_board', label: 'Before full Board'},
+                {value: 'not_sure', label: 'Not sure'}
+            ],
+            committee_weekday: [
+                {value: 'monday', label: 'Monday'},
+                {value: 'tuesday', label: 'Tuesday'},
+                {value: 'wednesday', label: 'Wednesday'},
+                {value: 'thursday', label: 'Thursday'},
+                {value: 'friday', label: 'Friday'},
+                {value: 'not_sure', label: 'Not sure'}
+            ],
+            committee_time: [
+                {value: '8am', label: '8:00 AM'},
+                {value: '9am', label: '9:00 AM'},
+                {value: '10am', label: '10:00 AM'},
+                {value: '11am', label: '11:00 AM'},
+                {value: '12pm', label: '12:00 PM'},
+                {value: '1pm', label: '1:00 PM'},
+                {value: '2pm', label: '2:00 PM'},
+                {value: '3pm', label: '3:00 PM'},
+                {value: '4pm', label: '4:00 PM'},
+                {value: '5pm', label: '5:00 PM'},
+                {value: 'not_sure', label: 'Not sure'}
             ],
             required_optional: [
                 {value: 'required', label: 'Required by regulation/accreditation/bylaws'},
@@ -5921,6 +7652,7 @@
             ],
             report_frequency: [
                 {value: 'monthly', label: 'Monthly'},
+                {value: 'weekly', label: 'Weekly'},
                 {value: 'quarterly', label: 'Quarterly'},
                 {value: 'annual', label: 'Annual'},
                 {value: 'event_triggered', label: 'Event-triggered'},
@@ -5936,22 +7668,21 @@
                 {value: 'event_triggered_timeline', label: 'After a triggering event'},
                 {value: 'not_sure', label: 'Not sure yet'}
             ],
-            approval_required: [
-                {value: 'none', label: 'None'},
-                {value: 'ceo', label: 'CEO'},
-                {value: 'cmo', label: 'CMO'},
-                {value: 'cno', label: 'CNO'},
-                {value: 'medical_staff', label: 'Medical Staff'},
-                {value: 'board', label: 'Board'},
-                {value: 'other', label: 'Other'}
-            ],
             report_lead_time: [
                 {value: 'one_week', label: '1 week'},
                 {value: 'two_weeks', label: '2 weeks'},
                 {value: 'three_weeks', label: '3 weeks'},
                 {value: 'four_weeks', label: '4 weeks'},
                 {value: 'six_weeks', label: '6 weeks'},
-                {value: 'other', label: 'Other'},
+                {value: 'custom', label: 'Custom'},
+                {value: 'not_sure', label: 'Not sure'}
+            ],
+            committee_report_lead_time: [
+                {value: 'no_lead_time', label: 'No lead time'},
+                {value: 'one_week_prior', label: '1 week prior'},
+                {value: 'two_weeks_prior', label: '2 weeks prior'},
+                {value: 'one_month_prior', label: '1 month prior'},
+                {value: 'custom', label: 'Custom'},
                 {value: 'not_sure', label: 'Not sure'}
             ],
             yes_no_not_sure: [
@@ -5973,15 +7704,6 @@
                 {value: 'readmissions_reduction_monitoring', label: 'Readmissions Reduction monitoring'},
                 {value: 'hac_reduction_monitoring', label: 'HAC Reduction monitoring'},
                 {value: 'not_applicable', label: 'Not applicable'},
-                {value: 'not_sure', label: 'Not sure'}
-            ],
-            approval_requirements: [
-                {value: 'ceo_approval', label: 'CEO approval'},
-                {value: 'cmo_approval', label: 'CMO approval'},
-                {value: 'cno_approval', label: 'CNO approval'},
-                {value: 'medical_staff_approval', label: 'Medical Staff approval'},
-                {value: 'board_approval', label: 'Board approval'},
-                {value: 'no_approval_required', label: 'No approval required'},
                 {value: 'not_sure', label: 'Not sure'}
             ],
             committee_required_status: [
@@ -6041,10 +7763,135 @@
         return optionMap[key] || [];
     }
 
+    function renderDataReportingIntro() {
+        return '<section class="qn-cadence-intro" aria-label="Data reporting cadence guidance">' +
+            '<div><span class="dashicons dashicons-calendar-alt"></span><div><strong>Data Reporting Cadence</strong><p>Only monitoring and reporting items selected in Step 4 appear here. Confirm where each report is submitted, then add owner, lead time, and backup coverage.</p></div></div>' +
+            '<small>Known cadence text is a setup aid only. Current-year due dates should be verified against the linked source when live deadline automation is added.</small>' +
+        '</section>';
+    }
+
+    function buildReportingRowsFromStepFourSelections() {
+        var answers = state.onboarding && state.onboarding.answers ? state.onboarding.answers : {};
+        var canonicalRows = Array.isArray(answers.data_hub_reporting_rows) ? answers.data_hub_reporting_rows : [];
+        var canonicalRoutes = {};
+        var selected = canonicalRows.map(function (row) {
+            (Array.isArray(row.setup_routes) ? row.setup_routes : []).forEach(function (route) {
+                canonicalRoutes[String(route.question_key || '') + '|' + normalizeReportingValue(route.setup_value)] = true;
+            });
+            return Object.assign({
+                is_reported: '1',
+                due_date_rule: '',
+                due_dates: '',
+                due_date_details: {},
+                who_prepares: '',
+                backup_preparer: '',
+                owner_user_id: 0,
+                backup_user_id: 0,
+                submit_to_method: '',
+                approval_required: '',
+                prep_lead_time: '',
+                payment_linked: '',
+                event_triggered: '',
+                source_link: '',
+                canonical_source: 'data_hub',
+                from_step4: true
+            }, row || {});
+        });
+        var questionLookup = {};
+        (state.onboarding && state.onboarding.questions ? state.onboarding.questions : []).forEach(function (question) {
+            questionLookup[question.question_key] = question;
+        });
+        var externalKeys = ['external_reporting_flex_mbqip', 'external_reporting_cms_iqr', 'external_reporting_cms_oqr', 'external_reporting_cms_payment_programs', 'external_reporting_nhsn', 'external_reporting_medicare_pi', 'external_reporting_state_other', 'external_reporting_voluntary', 'external_reporting_other'];
+        var internalKeys = ['internal_monitoring_patient_safety_events', 'internal_monitoring_infection_prevention', 'internal_monitoring_medication_safety', 'internal_monitoring_clinical_case_review', 'internal_monitoring_ed_care_transitions', 'internal_monitoring_patient_experience', 'internal_monitoring_other'];
+        externalKeys.concat(internalKeys).forEach(function (key) {
+            var question = questionLookup[key] || {question_key: key, label: key, options: []};
+            var values = normalizeChecklistValues(answers[key], questionOptionsForKey(key));
+            values.forEach(function (value) {
+                if (canonicalRoutes[key + '|' + normalizeReportingValue(value)]) {
+                    return;
+                }
+                selected.push(buildReportingRowFromSelection(question, value));
+            });
+        });
+        return selected.filter(Boolean);
+    }
+
+    function buildReportingRowFromSelection(question, value) {
+        var displayLabel = optionLabelByValue(questionOptionsForKey(question.question_key), value);
+        var label = canonicalReportingMeasureName(value || displayLabel);
+        var key = String(question.question_key || '');
+        return {
+            report_name: label,
+            measure_key: '',
+            category: reportCategoryForStepFourKey(key),
+            frequency: '',
+            due_date_rule: '',
+            due_dates: '',
+            who_prepares: '',
+            backup_preparer: '',
+            owner_user_id: 0,
+            backup_user_id: 0,
+            submit_to_method: '',
+            approval_required: '',
+            prep_lead_time: '',
+            payment_linked: '',
+            event_triggered: '',
+            source_link: '',
+            program_tags: reportingProgramTags(displayLabel),
+            canonical_source: '',
+            from_step4: true
+        };
+    }
+
+    function normalizeReportingValue(value) {
+        return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    }
+
+    function canonicalReportingMeasureName(value) {
+        return String(value || '')
+            .replace(/\s+\((MBQIP|IQR|OQR|NHSN|Internal|CDC|CMS|Flex|\/|\s)+\)$/i, '')
+            .trim();
+    }
+
+    function reportingProgramTags(label) {
+        var match = String(label || '').match(/\(([^)]+)\)\s*$/);
+        if (!match) {
+            return '';
+        }
+        return match[1].split('/').map(function (item) {
+            return item.trim();
+        }).filter(Boolean).join(', ');
+    }
+
+    function reportCategoryForStepFourKey(key) {
+        if (key.indexOf('internal_monitoring_') === 0) {
+            return 'internal';
+        }
+        if (key === 'external_reporting_state_other') {
+            return 'state';
+        }
+        if (key === 'external_reporting_voluntary') {
+            return 'voluntary';
+        }
+        if (key === 'external_reporting_cms_payment_programs') {
+            return 'payer';
+        }
+        if (key === 'external_reporting_nhsn') {
+            return 'federal';
+        }
+        if (key === 'external_reporting_medicare_pi') {
+            return 'federal';
+        }
+        return 'federal';
+    }
+
     function renderStepFourQuestion(question) {
         var value = onboardingQuestionValue(question);
+        if (question.question_key === 'reporting_obligations') {
+            return '<div class="qn-question qn-question-wide" data-question="' + escapeHtml(question.question_key) + '">' + renderStepFourField(question, value) + '</div>';
+        }
         var required = question.is_required ? ' <span class="qn-required">*</span>' : '';
-        var tag = ['committee_list', 'reporting_obligations', 'mbqip_measure_set', 'approval_requirements'].indexOf(question.question_key) !== -1 ? 'div' : 'label';
+        var tag = ['committee_list', 'reporting_obligations', 'mbqip_measure_set'].indexOf(question.question_key) !== -1 ? 'div' : 'label';
         var help = stepFourHelpText(question);
         var label = stepFourDisplayLabel(question);
         return '<' + tag + ' class="qn-question ' + questionLayoutClass(question) + '" data-question="' + escapeHtml(question.question_key) + '">' +
@@ -6056,7 +7903,6 @@
             mbqip_measure_set: 'MBQIP / CMS reporting programs',
             backup_preparer: 'Default backup preparer',
             report_lead_time: 'Default report lead time',
-            approval_requirements: 'Default approval requirements',
             board_agenda_timing: 'When are board materials due?'
         };
         return labels[question.question_key] || question.label;
@@ -6076,14 +7922,11 @@
         if (key === 'mbqip_measure_set') {
             return renderMultiselectField(key, value, stepFourOptions(key), 'Select reporting programs');
         }
-        if (key === 'approval_requirements') {
-            return renderMultiselectField(key, value, stepFourOptions(key), 'Select approval requirements');
-        }
         if (key === 'report_lead_time') {
             return renderStepOneSelect(key, value, stepFourOptions(key), 'Select default lead time');
         }
         if (key === 'backup_preparer') {
-            return '<input type="text" data-onboarding-field="' + escapeHtml(key) + '" value="' + escapeFieldValue(value) + '" placeholder="Example: HIM Director, CNO, Infection Preventionist">';
+            return renderOrganizationUserField(key, value, 'Select default backup user');
         }
         if (key === 'minutes_owner_location') {
             return renderMinutesOwnerLocationField(key, value);
@@ -6135,7 +7978,8 @@
     function renderStructuredSelect(key, dataKey, value, options, placeholder) {
         value = fieldValue(value);
         return '<select data-structured-field="' + escapeHtml(key) + '" data-structured-key="' + escapeHtml(dataKey) + '"><option value="">' + escapeHtml(placeholder || 'Select') + '</option>' + options.map(function (option) {
-            return '<option value="' + escapeFieldValue(option.value) + '"' + (value === option.value ? ' selected' : '') + '>' + escapeHtml(option.label) + '</option>';
+            var optionValueText = optionValue(option);
+            return '<option value="' + escapeFieldValue(optionValueText) + '"' + (value === optionValueText ? ' selected' : '') + '>' + escapeHtml(optionLabel(option)) + '</option>';
         }).join('') + '</select>';
     }
 
@@ -6144,58 +7988,397 @@
     }
 
     function renderCommitteeRepeater(key, value) {
-        value = Array.isArray(value) ? value : [];
-        var columns = ['committee_name', 'frequency_timing', 'user_role', 'reports_to', 'required_optional', 'minutes_owner', 'minutes_location', 'standing_agenda_items'];
+        value = buildCommitteeRows(Array.isArray(value) ? value : []);
+        var columns = ['committee_name', 'local_name', 'committee_frequency', 'committee_week_of_month', 'committee_weekday', 'committee_time', 'frequency_timing', 'user_role', 'reports_to', 'prep_lead_time'];
         return '<div class="qn-repeater qn-card-repeater" data-repeater="' + escapeHtml(key) + '" data-repeater-style="committee-card" data-columns="' + escapeHtml(JSON.stringify(columns)) + '">' +
-            (value.length ? '' : '<div class="qn-survey-empty"><strong>No committees added yet.</strong><span>Add the meetings where quality data is reviewed.</span></div>') +
+            '<div class="qn-committee-seed-note"><span class="dashicons dashicons-info"></span><p>QualiNav starts with common quality-data committees from the setup guide. Confirm each meeting cadence, report flow, and lead time for this hospital.</p></div>' +
             value.map(function (row, index) {
                 return renderCommitteeRow(key, columns, row, index);
             }).join('') + '<button class="qn-button qn-button-small qn-add-survey-row" type="button" data-add-repeater="' + escapeHtml(key) + '"><span class="dashicons dashicons-plus-alt2"></span>Add committee</button></div>';
     }
 
-    function renderCommitteeRow(key, columns, row, index) {
+    function buildCommitteeRows(savedRows) {
+        var rows = savedRows.filter(function (row) {
+            return row && (row.committee_name || row.local_name || row.frequency_timing || row.committee_frequency || row.committee_week_of_month || row.committee_weekday || row.committee_time || row.user_role || row.reports_to || row.prep_lead_time);
+        });
+        if (rows.length) {
+            return rows.map(normalizeCommitteeTimingRow);
+        }
+        return [
+            {committee_name: 'qapi_committee', committee_frequency: 'monthly', committee_week_of_month: 'second', committee_weekday: 'tuesday', reports_to: 'medical_executive_and_governing_board', prep_lead_time: 'not_sure'},
+            {committee_name: 'infection_control_committee', committee_frequency: 'monthly', committee_week_of_month: 'last', committee_weekday: 'tuesday', reports_to: 'qapi_committee', prep_lead_time: 'not_sure'},
+            {committee_name: 'medical_executive_committee', committee_frequency: 'monthly', committee_week_of_month: 'third', committee_weekday: 'thursday', reports_to: 'full_governing_board', prep_lead_time: 'not_sure'},
+            {committee_name: 'pharmacy_therapeutics', committee_frequency: 'quarterly', reports_to: 'medical_executive_committee', prep_lead_time: 'not_sure'},
+            {committee_name: 'board_quality_committee', committee_frequency: 'quarterly', committee_week_of_month: 'before_full_board', reports_to: 'full_governing_board', prep_lead_time: 'not_sure'}
+        ];
+    }
+
+    function normalizeCommitteeTimingRow(row) {
+        row = Object.assign({}, row || {});
+        if (row.committee_frequency || row.committee_week_of_month || row.committee_weekday || row.committee_time) {
+            return row;
+        }
+        return Object.assign(row, parseCommitteeTimingText(row.frequency_timing || ''));
+    }
+
+    function parseCommitteeTimingText(text) {
+        var value = String(text || '').toLowerCase();
+        var parsed = {};
+        if (value.indexOf('monthly') !== -1) {
+            parsed.committee_frequency = 'monthly';
+        } else if (value.indexOf('quarterly') !== -1) {
+            parsed.committee_frequency = 'quarterly';
+        } else if (value.indexOf('annual') !== -1) {
+            parsed.committee_frequency = 'annually';
+        }
+        [
+            ['first', 'first'], ['1st', 'first'],
+            ['second', 'second'], ['2nd', 'second'],
+            ['third', 'third'], ['3rd', 'third'],
+            ['fourth', 'fourth'], ['4th', 'fourth'],
+            ['last', 'last']
+        ].some(function (match) {
+            if (value.indexOf(match[0]) !== -1) {
+                parsed.committee_week_of_month = match[1];
+                return true;
+            }
+            return false;
+        });
+        if (value.indexOf('before full board') !== -1) {
+            parsed.committee_week_of_month = 'before_full_board';
+        }
+        ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].some(function (day) {
+            if (value.indexOf(day) !== -1) {
+                parsed.committee_weekday = day;
+                return true;
+            }
+            return false;
+        });
+        ['8am', '9am', '10am', '11am', '12pm', '1pm', '2pm', '3pm', '4pm', '5pm'].some(function (time) {
+            if (value.replace(/\s+/g, '').indexOf(time) !== -1 || value.indexOf(time.replace('am', ':00 am').replace('pm', ':00 pm')) !== -1) {
+                parsed.committee_time = time;
+                return true;
+            }
+            return false;
+        });
+        return parsed;
+    }
+
+    function committeeTimingSummary(row) {
         row = row || {};
+        var frequency = optionLabelByValue(stepFourOptions('committee_frequency'), row.committee_frequency || '');
+        var week = optionLabelByValue(stepFourOptions('committee_week_of_month'), row.committee_week_of_month || '');
+        var weekday = optionLabelByValue(stepFourOptions('committee_weekday'), row.committee_weekday || '');
+        if (!frequency) {
+            return row.frequency_timing || '';
+        }
+        if (row.committee_week_of_month === 'before_full_board') {
+            return frequency + ' before full Board';
+        }
+        var detail = [week, weekday].filter(function (part) {
+            return part && part !== 'Not sure';
+        }).join(' ');
+        return detail ? frequency + ' - ' + detail : frequency;
+    }
+
+    function renderCommitteeRow(key, columns, row, index) {
+        row = normalizeCommitteeTimingRow(row || {});
+        var header = row.local_name || optionLabelByValue(stepFourOptions('committee_name'), row.committee_name || '') || ('Meeting ' + (index + 1));
+        var preservedHidden = '';
+        if (row.committee_time) {
+            preservedHidden += '<input type="hidden" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="committee_time" value="' + escapeFieldValue(row.committee_time) + '">';
+        }
+        if (row.user_role) {
+            preservedHidden += '<input type="hidden" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="user_role" value="' + escapeFieldValue(row.user_role) + '">';
+        }
         return '<div class="qn-repeater-row qn-survey-history-row qn-flow-card">' +
-            '<div class="qn-survey-card-header"><strong>Committee ' + (index + 1) + '</strong><button class="qn-icon-button qn-delete-survey-row" type="button" data-delete-repeater-row aria-label="Delete committee row"><span class="dashicons dashicons-trash"></span></button></div>' +
+            '<div class="qn-survey-card-header"><strong>' + escapeHtml(header) + '</strong><button class="qn-icon-button qn-delete-survey-row" type="button" data-delete-repeater-row aria-label="Delete committee row"><span class="dashicons dashicons-trash"></span></button></div>' +
             '<div class="qn-survey-card-grid qn-flow-card-grid qn-committee-card-grid">' +
-                '<label><span>Committee / meeting name</span>' + renderRepeaterSelect(key, index, 'committee_name', row.committee_name || '', stepFourOptions('committee_name'), 'Select committee') + '</label>' +
-                '<label><span>Frequency and timing</span><input type="text" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="frequency_timing" value="' + escapeFieldValue(row.frequency_timing || '') + '" placeholder="Example: Monthly, 2nd Tuesday, 1:00 PM"></label>' +
-                '<label><span>Your role</span>' + renderRepeaterSelect(key, index, 'user_role', row.user_role || '', stepFourOptions('user_role'), 'Select role') + '</label>' +
-                '<label><span>Reports to</span>' + renderRepeaterSelect(key, index, 'reports_to', row.reports_to || '', stepFourOptions('reports_to'), 'Select destination') + '</label>' +
-                '<label><span>Required or optional</span>' + renderRepeaterSelect(key, index, 'required_optional', row.required_optional || '', stepFourOptions('required_optional'), 'Select status') + '</label>' +
-                '<label><span>Minutes owner</span><input type="text" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="minutes_owner" value="' + escapeFieldValue(row.minutes_owner || '') + '"></label>' +
-                '<label class="qn-structured-wide"><span>Minutes location</span><input type="text" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="minutes_location" value="' + escapeFieldValue(row.minutes_location || '') + '" placeholder="Example: SharePoint, policy system, board packet archive"></label>' +
-                '<label class="qn-structured-wide"><span>Standing agenda items</span><textarea data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="standing_agenda_items">' + escapeFieldValue(row.standing_agenda_items || '') + '</textarea></label>' +
+                '<label><span>Meeting function</span>' + renderRepeaterSelect(key, index, 'committee_name', row.committee_name || '', stepFourOptions('committee_name'), 'Select function') + '</label>' +
+                '<label><span>Local meeting name</span><input type="text" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="local_name" value="' + escapeFieldValue(row.local_name || '') + '" placeholder="Example: Quality Council"></label>' +
+                '<div class="qn-committee-timing-field"><span>Frequency and timing</span><div class="qn-committee-timing-grid">' +
+                    renderRepeaterSelect(key, index, 'committee_frequency', row.committee_frequency || '', stepFourOptions('committee_frequency'), 'Frequency') +
+                    renderRepeaterSelect(key, index, 'committee_week_of_month', row.committee_week_of_month || '', stepFourOptions('committee_week_of_month'), 'Week') +
+                    renderRepeaterSelect(key, index, 'committee_weekday', row.committee_weekday || '', stepFourOptions('committee_weekday'), 'Day') +
+                    '<input type="hidden" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="frequency_timing" value="' + escapeFieldValue(committeeTimingSummary(row)) + '">' +
+                    preservedHidden +
+                '</div></div>' +
+                '<label><span>Reports flow to</span>' + renderRepeaterSelect(key, index, 'reports_to', row.reports_to || '', stepFourOptions('reports_to'), 'Select destination') + '</label>' +
+                '<label><span>Report lead time</span>' + renderRepeaterSelect(key, index, 'prep_lead_time', row.prep_lead_time || '', stepFourOptions('committee_report_lead_time'), 'Select lead time') + '</label>' +
             '</div>' +
             '</div>';
     }
 
     function renderReportingRepeater(key, value) {
-        value = Array.isArray(value) ? value : [];
-        var columns = ['report_name', 'category', 'frequency', 'due_date_rule', 'due_date_details', 'due_dates', 'who_prepares', 'backup_preparer', 'submit_to_method', 'approval_required', 'prep_lead_time', 'payment_linked', 'event_triggered'];
-        return '<div class="qn-repeater qn-card-repeater" data-repeater="' + escapeHtml(key) + '" data-repeater-style="report-card" data-columns="' + escapeHtml(JSON.stringify(columns)) + '">' +
-            (value.length ? '' : '<div class="qn-survey-empty"><strong>No reporting obligations added yet.</strong><span>Add recurring or event-triggered reports.</span></div>') +
-            value.map(function (row, index) {
-                return renderReportingRow(key, columns, row, index);
-            }).join('') + '<button class="qn-button qn-button-small qn-add-survey-row" type="button" data-add-repeater="' + escapeHtml(key) + '"><span class="dashicons dashicons-plus-alt2"></span>Add report</button></div>';
+        var rows = mergeReportingCalendarRows(Array.isArray(value) ? value : []);
+        var columns = ['is_reported', 'measure_key', 'report_name', 'category', 'program_tags', 'frequency', 'due_date_rule', 'due_date_details', 'due_dates', 'source_link', 'who_prepares', 'backup_preparer', 'owner_user_id', 'backup_user_id', 'submit_to_method', 'approval_required', 'prep_lead_time', 'payment_linked', 'event_triggered', 'measure_version_id', 'measure_version_label', 'effective_start_date', 'effective_end_date', 'canonical_source', 'from_step4'];
+        var rowIndex = 0;
+        var groupsHtml = rows.map(function (group) {
+            var visibleRows = group.rows || [];
+            if (!visibleRows.length) {
+                return '';
+            }
+            var groupHtml = '<section class="qn-cadence-group"><div class="qn-cadence-group-title">' + escapeHtml(reportingCalendarGroupTitle(group.title)) + '</div>';
+            visibleRows.forEach(function (row) {
+                groupHtml += renderReportingCalendarRow(key, row, rowIndex);
+                rowIndex++;
+            });
+            return groupHtml + '</section>';
+        }).join('');
+        if (!groupsHtml) {
+            groupsHtml = '<div class="qn-calendar-empty-state"><span class="dashicons dashicons-info"></span><div><strong>No reporting items selected</strong><p>Select measures in Step 4 to populate this cadence list automatically.</p></div></div>';
+        }
+        return '<div class="qn-repeater qn-reporting-calendar-repeater" data-repeater="' + escapeHtml(key) + '" data-repeater-style="reporting-calendar" data-columns="' + escapeHtml(JSON.stringify(columns)) + '">' +
+            '<div class="qn-reporting-calendar-head" aria-hidden="true"><span></span><span>Measure / Submission</span><span>Reported To / Through</span><span>Reporting Cadence and Due Dates</span></div>' +
+            groupsHtml +
+            renderReportingOtherRow(key, rowIndex) +
+        '</div>';
+    }
+
+    function normalizeReportingIdentity(row) {
+        return String((row && row.category ? row.category : '') + '|' + (row && row.report_name ? row.report_name : '')).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    }
+
+    function normalizeReportingName(row) {
+        return String(row && row.report_name ? row.report_name : '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    }
+
+    function mergeReportingCalendarRows(savedRows) {
+        var selectedRows = buildReportingRowsFromStepFourSelections();
+        var savedByIdentity = {};
+        var savedByName = {};
+        var savedByMeasureKey = {};
+        savedRows.forEach(function (row) {
+            if (!row || !row.report_name) {
+                return;
+            }
+            savedByIdentity[normalizeReportingIdentity(row)] = row;
+            savedByName[normalizeReportingName(row)] = row;
+            if (row.measure_key) {
+                savedByMeasureKey[String(row.measure_key)] = row;
+            }
+        });
+        var grouped = {};
+        var seenSelected = {};
+        selectedRows.forEach(function (selected) {
+            if (!selected || !selected.report_name) {
+                return;
+            }
+            var selectedKey = normalizeReportingName(selected);
+            if (seenSelected[selectedKey]) {
+                return;
+            }
+            seenSelected[selectedKey] = true;
+            var saved = (selected.measure_key ? savedByMeasureKey[String(selected.measure_key)] : null) || savedByIdentity[normalizeReportingIdentity(selected)] || savedByName[normalizeReportingName(selected)] || {};
+            var merged = Object.assign({}, selected, saved, {from_step4: true});
+            if (selected.canonical_source === 'data_hub') {
+                ['measure_key', 'report_name', 'category', 'program_tags', 'frequency', 'due_dates', 'source_link', 'measure_version_id', 'measure_version_label', 'effective_start_date', 'effective_end_date', 'canonical_source'].forEach(function (field) {
+                    merged[field] = selected[field] || '';
+                });
+                merged.owner_user_id = selected.owner_user_id || 0;
+            }
+            merged.program_tags = merged.program_tags || selected.program_tags || '';
+            merged.is_reported = truthyReportingValue(saved.is_reported) || !saved.report_name ? '1' : (truthyReportingValue(merged.is_reported) ? '1' : '');
+            var title = merged.category || reportCategoryForStepFourKey('');
+            grouped[title] = grouped[title] || [];
+            grouped[title].push(merged);
+        });
+        var extraRows = savedRows.filter(function (row) {
+            return row && row.report_name && truthyReportingValue(row.is_reported) && !row.from_step4 && !savedByName[normalizeReportingName(row)].from_step4;
+        });
+        if (extraRows.length) {
+            grouped['Other / added reporting'] = (grouped['Other / added reporting'] || []).concat(extraRows);
+        }
+        return Object.keys(grouped).map(function (title) {
+            return {title: title, rows: grouped[title]};
+        });
+    }
+
+    function reportingCalendarGroupTitle(title) {
+        var labels = {
+            federal: 'External / federal reporting',
+            internal: 'Internal monitoring and reporting',
+            state: 'State and other mandatory reporting',
+            voluntary: 'Voluntary registries and programs',
+            payer: 'Payer quality programs'
+        };
+        return labels[title] || title;
+    }
+
+    function truthyReportingValue(value) {
+        return value === true || value === 1 || value === '1' || value === 'yes' || value === 'true' || value === 'on';
+    }
+
+    function organizationUserOptions() {
+        var answers = state.onboarding && state.onboarding.answers ? state.onboarding.answers : {};
+        return Array.isArray(answers.organization_user_options) ? answers.organization_user_options : [];
+    }
+
+    function renderOrganizationUserSelect(key, index, column, value, placeholder) {
+        value = String(value || '0');
+        return '<select data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="' + escapeHtml(column) + '">' +
+            '<option value="0">' + escapeHtml(placeholder || 'Select hospital user') + '</option>' +
+            organizationUserOptions().map(function (user) {
+                var userId = String(user.user_id || 0);
+                var role = user.role ? ' — ' + String(user.role).replace(/_/g, ' ') : '';
+                return '<option value="' + escapeFieldValue(userId) + '"' + (userId === value ? ' selected' : '') + '>' + escapeHtml((user.display_name || ('User #' + userId)) + role) + '</option>';
+            }).join('') + '</select>';
+    }
+
+    function renderOrganizationUserField(key, value, placeholder) {
+        value = String(value || '0');
+        if (!/^\d+$/.test(value)) {
+            var legacyMatch = organizationUserOptions().find(function (user) {
+                return String(user.display_name || '').toLowerCase().trim() === value.toLowerCase().trim();
+            });
+            value = legacyMatch ? String(legacyMatch.user_id) : '0';
+        }
+        return '<select data-onboarding-field="' + escapeHtml(key) + '"><option value="0">' + escapeHtml(placeholder || 'Select hospital user') + '</option>' + organizationUserOptions().map(function (user) {
+            var userId = String(user.user_id || 0);
+            return '<option value="' + escapeFieldValue(userId) + '"' + (userId === value ? ' selected' : '') + '>' + escapeHtml(user.display_name || ('User #' + userId)) + '</option>';
+        }).join('') + '</select>';
+    }
+
+    function renderReportingCalendarRow(key, row, index) {
+        row = row || {};
+        var checked = truthyReportingValue(row.is_reported);
+        var sourceHtml = row.source_link ? '<span class="qn-cadence-source"><span>Source</span>' + escapeHtml(row.source_link) + '</span>' : '';
+        var badge = row.from_step4 ? '<span class="qn-step4-source-badge">Selected in Step 4</span>' : '';
+        var programTags = row.program_tags ? '<span class="qn-cadence-program-tags">' + escapeHtml(row.program_tags) + '</span>' : '';
+        return '<div class="qn-repeater-row qn-reporting-calendar-row' + (checked ? ' is-selected' : '') + '">' +
+            '<label class="qn-cadence-check"><input type="checkbox" data-cadence-report-toggle ' + (checked ? 'checked' : '') + '><span aria-hidden="true"></span></label>' +
+            '<div class="qn-cadence-measure"><strong>' + escapeHtml(row.report_name || 'Reporting item') + '</strong>' + programTags + badge + '</div>' +
+            '<div class="qn-cadence-through">' + escapeHtml(row.submit_to_method || 'Confirm submission pathway') + '</div>' +
+            '<div class="qn-cadence-due">' + renderCadenceControls(key, row, index) + sourceHtml + '</div>' +
+            '<div class="qn-cadence-ownership"><label><span>Data owner</span>' + renderOrganizationUserSelect(key, index, 'owner_user_id', row.owner_user_id, 'Select owner') + '</label><label><span>Backup</span>' + renderOrganizationUserSelect(key, index, 'backup_user_id', row.backup_user_id, 'Select backup') + '</label></div>' +
+            renderReportingHiddenFields(key, row, index, checked) +
+        '</div>';
+    }
+
+    function renderCadenceControls(key, row, index) {
+        var details = row.due_date_details && typeof row.due_date_details === 'object' && !Array.isArray(row.due_date_details) ? row.due_date_details : {};
+        var nextDueDate = details.next_due_date || '';
+        var internalOnly = isInternalReportingRow(row);
+        return '<div class="qn-cadence-control-grid">' +
+            renderCadenceSelect(key, row, index) +
+            (internalOnly ? '<small class="qn-muted-note">Internal reporting uses cadence only; no single due date is required.</small>' : '<label class="qn-cadence-date"><span>Due date</span>' + renderUsDateInput('data-repeater-detail="' + escapeHtml(key) + '" data-index="' + index + '" data-detail-path="due_date_details.next_due_date"', nextDueDate) + '</label>' + renderKnownCadenceText(key, row, index)) +
+        '</div>';
+    }
+
+    function isInternalReportingRow(row) {
+        row = row || {};
+        var routes = Array.isArray(row.setup_routes) ? row.setup_routes : [];
+        var routeKeys = routes.map(function (route) {
+            return route && route.question_key ? String(route.question_key) : '';
+        }).filter(Boolean);
+        if (routeKeys.length) {
+            var hasExternalRoute = routeKeys.some(function (key) { return key.indexOf('external_reporting_') === 0; });
+            var hasInternalRoute = routeKeys.some(function (key) { return key.indexOf('internal_monitoring_') === 0; });
+            return hasInternalRoute && !hasExternalRoute;
+        }
+        var category = String(row.category || row.program_tags || '').toLowerCase();
+        var destination = String(row.submit_to_method || '').toLowerCase();
+        return category.indexOf('internal') !== -1 || (!row.measure_key && /committee|board|leadership|internal/.test(destination));
+    }
+
+    function renderCadenceSelect(key, row, index) {
+        var value = row.frequency || frequencyFromCadenceText(row.due_dates || '');
+        var options = cadenceSelectOptions(value);
+        return '<label class="qn-cadence-select"><span>Cadence</span><select data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="frequency">' +
+            '<option value="">Select cadence</option>' +
+            options.map(function (option) {
+                return '<option value="' + escapeFieldValue(option.value) + '"' + (option.value === value ? ' selected' : '') + '>' + escapeHtml(optionLabel(option)) + '</option>';
+            }).join('') +
+        '</select></label>';
+    }
+
+    function cadenceSelectOptions(currentValue) {
+        var options = stepFourOptions('report_frequency');
+        if (currentValue && !options.some(function (option) { return option.value === currentValue; })) {
+            options.push({value: currentValue, label: currentValue});
+        }
+        return options;
+    }
+
+    function frequencyFromCadenceText(text) {
+        text = String(text || '').toLowerCase();
+        if (text.indexOf('weekly') !== -1) {
+            return 'weekly';
+        }
+        if (text.indexOf('monthly') !== -1) {
+            return 'monthly';
+        }
+        if (text.indexOf('quarter') !== -1) {
+            return 'quarterly';
+        }
+        if (text.indexOf('annual') !== -1 || text.indexOf('year') !== -1) {
+            return 'annual';
+        }
+        if (text.indexOf('event') !== -1) {
+            return 'event_triggered';
+        }
+        if (text.indexOf('claims') !== -1 || text.indexOf('notice') !== -1 || text.indexOf('contract') !== -1) {
+            return 'per_notice_contract';
+        }
+        return '';
+    }
+
+    function renderKnownCadenceText(key, row, index) {
+        if (!fieldValue(row.due_dates || '')) {
+            return '';
+        }
+        return '<small class="qn-known-cadence">Known guidance: ' + escapeHtml(row.due_dates) + '</small>' +
+            '<input type="hidden" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="due_dates" value="' + escapeFieldValue(row.due_dates) + '">';
+    }
+
+    function renderReportingOtherRow(key, index) {
+        return '<div class="qn-repeater-row qn-reporting-calendar-row qn-reporting-other-row">' +
+            '<div></div><label class="qn-reporting-other-field"><span>Other reporting</span><input type="text" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="report_name" placeholder="Add an item not listed in Step 4"></label>' +
+            '<label class="qn-reporting-other-field qn-reporting-other-through"><span>Reported to / through</span><input type="text" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="submit_to_method" placeholder="Portal, agency, vendor, or committee"></label>' +
+            '<div class="qn-reporting-other-cadence">' + renderCadenceControls(key, {frequency: '', due_date_details: {}}, index) + '</div>' +
+            '<div class="qn-cadence-ownership"><label><span>Owner</span>' + renderOrganizationUserSelect(key, index, 'owner_user_id', 0, 'Select owner') + '</label><label><span>Backup</span>' + renderOrganizationUserSelect(key, index, 'backup_user_id', 0, 'Select backup') + '</label></div>' +
+            '<input type="hidden" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="category" value="Other reporting not listed above">' +
+            '<input type="hidden" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="is_reported" value="1">' +
+            '<input type="hidden" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="from_step4" value="">' +
+            '</div>';
+    }
+
+    function renderReportingHiddenFields(key, row, index, checked) {
+        var columns = ['is_reported', 'measure_key', 'report_name', 'category', 'program_tags', 'due_date_rule', 'source_link', 'who_prepares', 'backup_preparer', 'submit_to_method', 'approval_required', 'prep_lead_time', 'payment_linked', 'event_triggered', 'measure_version_id', 'measure_version_label', 'effective_start_date', 'effective_end_date', 'canonical_source', 'from_step4'];
+        return columns.map(function (column) {
+            var value = row[column] || '';
+            if (column === 'is_reported') {
+                value = checked ? '1' : '';
+            }
+            if (column === 'from_step4') {
+                value = row.from_step4 ? 'yes' : '';
+            }
+            if (column === 'due_date_rule' && isInternalReportingRow(row)) {
+                value = '';
+            }
+            return '<input type="hidden" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="' + escapeHtml(column) + '" value="' + escapeFieldValue(value) + '">';
+        }).join('');
     }
 
     function renderReportingRow(key, columns, row, index) {
         row = row || {};
+        var sourceHtml = row.source_link ? '<span class="qn-report-source-chip"><span class="dashicons dashicons-admin-links"></span>' + escapeHtml(row.source_link) + '</span>' : '';
         return '<div class="qn-repeater-row qn-survey-history-row qn-flow-card">' +
-            '<div class="qn-survey-card-header"><strong>Report ' + (index + 1) + '</strong><button class="qn-icon-button qn-delete-survey-row" type="button" data-delete-repeater-row aria-label="Delete report row"><span class="dashicons dashicons-trash"></span></button></div>' +
+            '<div class="qn-survey-card-header"><strong>' + escapeHtml(row.report_name || 'Report ' + (index + 1)) + '</strong><div class="qn-report-card-header-actions">' + (row.from_step4 ? '<span class="qn-step4-source-badge">From Step 4</span>' : '') + '<button class="qn-icon-button qn-delete-survey-row" type="button" data-delete-repeater-row aria-label="Delete report row"><span class="dashicons dashicons-trash"></span></button></div></div>' +
+            (row.due_dates || sourceHtml ? '<div class="qn-report-cadence-summary">' + (row.due_dates ? '<span>' + escapeHtml(row.due_dates) + '</span>' : '') + sourceHtml + '</div>' : '') +
             '<div class="qn-survey-card-grid qn-flow-card-grid">' +
                 '<label><span>Report name</span><input type="text" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="report_name" value="' + escapeFieldValue(row.report_name || '') + '"></label>' +
                 '<label><span>Category</span>' + renderRepeaterSelect(key, index, 'category', row.category || '', stepFourOptions('report_category'), 'Select category') + '</label>' +
                 '<label><span>Frequency</span>' + renderRepeaterSelect(key, index, 'frequency', row.frequency || '', stepFourOptions('report_frequency'), 'Select frequency') + '</label>' +
                 renderDueDateRuleFields(key, row, index) +
+                '<label><span>Source link or reference</span><input type="text" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="source_link" value="' + escapeFieldValue(row.source_link || '') + '" placeholder="Example: HQR submission deadlines"></label>' +
                 '<label><span>Owner / preparer</span><input type="text" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="who_prepares" value="' + escapeFieldValue(row.who_prepares || '') + '"></label>' +
                 '<label><span>Backup preparer</span><input type="text" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="backup_preparer" value="' + escapeFieldValue(row.backup_preparer || '') + '"></label>' +
                 '<label><span>Submit to / method</span><input type="text" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="submit_to_method" value="' + escapeFieldValue(row.submit_to_method || '') + '" placeholder="Example: QualityNet, NHSN, state portal, board packet"></label>' +
-                '<label><span>Approval required</span>' + renderRepeaterSelect(key, index, 'approval_required', row.approval_required || '', stepFourOptions('approval_required'), 'Select approval') + '</label>' +
                 '<label><span>Prep lead time</span>' + renderRepeaterSelect(key, index, 'prep_lead_time', row.prep_lead_time || '', stepFourOptions('report_lead_time'), 'Select lead time') + '</label>' +
                 '<label><span>Payment-linked?</span>' + renderRepeaterSelect(key, index, 'payment_linked', row.payment_linked || '', stepFourOptions('yes_no_not_sure'), 'Select') + '</label>' +
                 '<label><span>Event-triggered?</span>' + renderRepeaterSelect(key, index, 'event_triggered', row.event_triggered || '', stepFourOptions('yes_no_not_sure'), 'Select') + '</label>' +
+                '<input type="hidden" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="from_step4" value="' + escapeFieldValue(row.from_step4 ? 'yes' : '') + '">' +
             '</div>' +
             '</div>';
     }
@@ -6248,12 +8431,18 @@
     function renderRepeaterDetailSelect(key, index, path, value, options, placeholder) {
         value = fieldValue(value);
         return '<select data-repeater-detail="' + escapeHtml(key) + '" data-index="' + index + '" data-detail-path="' + escapeHtml(path) + '"><option value="">' + escapeHtml(placeholder || 'Select') + '</option>' + options.map(function (option) {
-            return '<option value="' + escapeFieldValue(option.value) + '"' + (value === option.value ? ' selected' : '') + '>' + escapeHtml(option.label) + '</option>';
+            var optionValueText = optionValue(option);
+            return '<option value="' + escapeFieldValue(optionValueText) + '"' + (value === optionValueText ? ' selected' : '') + '>' + escapeHtml(optionLabel(option)) + '</option>';
         }).join('') + '</select>';
     }
 
     function stepFiveOptions(key) {
+        var apiOptions = questionOptionsForKey(key);
+        if (apiOptions.length) {
+            return apiOptions;
+        }
         var optionMap = {
+            plan_policy_status: [{value: 'in_place', label: 'In place'}, {value: 'not_currently_in_place', label: 'Not currently in place'}, {value: 'folded_into_another', label: 'Folded into another plan / policy'}, {value: 'not_sure', label: 'Not sure'}],
             yes_no_not_sure: [{value: 'yes', label: 'Yes'}, {value: 'no', label: 'No'}, {value: 'not_sure', label: 'Not sure'}],
             board_approved: [{value: 'yes', label: 'Yes'}, {value: 'no', label: 'No'}, {value: 'not_required', label: 'Not required'}, {value: 'not_sure', label: 'Not sure'}],
             action_needed: [{value: 'none', label: 'None'}, {value: 'create', label: 'Create'}, {value: 'review_update', label: 'Review/update'}, {value: 'route_for_approval', label: 'Route for approval'}, {value: 'verify_owner_date', label: 'Verify owner/date'}, {value: 'not_sure', label: 'Not sure'}],
@@ -6271,9 +8460,131 @@
         return optionMap[key] || [];
     }
 
+    function planPolicyInventorySections() {
+        return [
+            {
+                key: 'core_plans',
+                title: 'Core Required Plans',
+                description: 'Confirm the plans that define your quality, safety, infection prevention, emergency preparedness, and risk program structure.',
+                rows: [
+                    {key: 'qapi_plan', name: 'QAPI Plan', category: 'Core Plan', guidance: 'Program goals; committee structure and meeting schedule; how data is collected and used; current performance improvement projects; how findings are communicated to leadership and the board.'},
+                    {key: 'patient_safety_plan', name: 'Patient Safety Plan', category: 'Core Plan', guidance: 'Safety goals and priorities; event reporting system; RCA/investigation processes; safety rounds; high-risk medication management; fall prevention; infection prevention integration.'},
+                    {key: 'infection_prevention_control_plan', name: 'Infection Prevention and Control Plan', category: 'Core Plan', guidance: 'IP program goals; surveillance methods and target infections; prevention policies; outbreak response; antibiotic stewardship; employee health elements.'},
+                    {key: 'emergency_preparedness_plan', name: 'Emergency Preparedness Plan', category: 'Core Plan', guidance: 'Hazard vulnerability analysis; emergency operations plan; communication plan; resource management; staff training and drills; community coordination.'},
+                    {key: 'risk_management_plan', name: 'Risk Management Plan', category: 'Core Plan', guidance: 'Risk identification, mitigation, reporting, claims coordination, grievance linkage, patient safety event escalation, and leadership review process.'}
+                ]
+            },
+            {
+                key: 'safety_event_response',
+                title: 'Safety & Event Response',
+                description: 'Confirm how safety concerns, serious events, peer review, and protected review information are governed.',
+                rows: [
+                    {key: 'patient_rights_responsibilities', name: 'Patient Rights and Responsibilities', category: 'Patient Rights', guidance: 'How staff report near misses, adverse events, and safety concerns. Your event reporting system depends on staff knowing and following this policy.'},
+                    {key: 'patient_safety_event_reporting', name: 'Patient Safety Event Reporting', category: 'Event Response', guidance: 'What triggers a root cause analysis, who leads it, and what the timeline is. Essential for consistent adverse event response.'},
+                    {key: 'sentinel_serious_event_response', name: 'Sentinel Event and Serious Event Response', category: 'Event Response', guidance: 'How serious events are identified, escalated, investigated, documented, and communicated through leadership channels.'},
+                    {key: 'peer_review_confidentiality', name: 'Peer Review and Confidentiality', category: 'Medical Staff', guidance: 'How medical staff peer review is conducted and how peer review information is protected. Protects the integrity of the process and physician relationships.'},
+                    {key: 'restraint_seclusion', name: 'Restraint and Seclusion', category: 'Patient Safety', guidance: 'Required by CoPs with specific documentation requirements. Surveyed consistently; restraint events require monitoring and quality review.'}
+                ]
+            },
+            {
+                key: 'clinical_operational_policies',
+                title: 'Clinical & Operational Policies',
+                description: 'Confirm policies that support recurring clinical monitoring and department-level quality review.',
+                rows: [
+                    {key: 'medication_management', name: 'Medication Management', category: 'Clinical Policy', guidance: 'High-alert medications, medication reconciliation, error reporting. Medication safety is one of the highest-risk quality areas in any hospital.'},
+                    {key: 'infection_control_policies', name: 'Infection Control Policies', category: 'Clinical Policy', guidance: 'Hand hygiene, standard precautions, isolation protocols, environmental cleaning. Foundation of the HAI prevention program.'},
+                    {key: 'blood_blood_products', name: 'Blood and Blood Products', category: 'Clinical Policy', guidance: 'Informed consent, administration, adverse reaction management. Blood use is a required clinical monitoring area under QAPI.'},
+                    {key: 'organ_donation', name: 'Organ Donation', category: 'Clinical Policy', guidance: 'Required agreements and staff education. Surveyed under CoPs; failure to address results can result in deficiency findings.'}
+                ]
+            },
+            {
+                key: 'records_transitions',
+                title: 'Records & Care Transitions',
+                description: 'Confirm policies connected to documentation quality, discharge planning, medical records, and transfer communication.',
+                rows: [
+                    {key: 'discharge_planning', name: 'Discharge Planning', category: 'Care Transitions', guidance: 'Process, documentation, coordination with community resources. Connects to care transitions, readmission prevention, and MBQIP metrics.'},
+                    {key: 'medical_records', name: 'Medical Records', category: 'Records', guidance: 'Content requirements, retention periods, access, confidentiality. Documentation quality underlies virtually all quality measurement.'},
+                    {key: 'transfer_policy', name: 'Transfer Policy', category: 'Care Transitions', guidance: 'Documentation requirements and transfer agreements with receiving facilities. Directly tied to the MBQIP ED transfer communication measure for CAHs.'}
+                ]
+            }
+        ];
+    }
+
+    function planPolicyInventoryRows() {
+        return planPolicyInventorySections().reduce(function (rows, section) {
+            return rows.concat(section.rows.map(function (row) {
+                return Object.assign({section_key: section.key, section_title: section.title}, row);
+            }));
+        }, []);
+    }
+
+    function normalizePlanPolicyInventory(value) {
+        var byKey = {};
+        if (Array.isArray(value)) {
+            value.forEach(function (item) {
+                if (item && item.policy_key) {
+                    byKey[item.policy_key] = item;
+                }
+            });
+        }
+        return planPolicyInventoryRows().map(function (row) {
+            var item = Object.assign({}, row, byKey[row.key] || {});
+            item.policy_key = row.key;
+            item.policy_name = row.name;
+            item.category = row.category;
+            item.guidance = row.guidance;
+            item.status = item.status || legacyPlanStatusForInventory(row.key);
+            item.date_last_approved = item.date_last_approved || legacyPlanDateForInventory(row.key);
+            item.upload_status = item.upload_status || 'not_configured';
+            item.scout_status = item.scout_status || 'structured_ready';
+            return item;
+        });
+    }
+
+    function legacyPlanStatusForInventory(policyKey) {
+        var legacyMap = {
+            qapi_plan: 'qapi_plan_status',
+            patient_safety_plan: 'patient_safety_plan_status',
+            infection_prevention_control_plan: 'infection_prevention_plan_status',
+            emergency_preparedness_plan: 'emergency_preparedness_plan_status',
+            risk_management_plan: 'risk_management_plan_status'
+        };
+        var legacyKey = legacyMap[policyKey];
+        var legacy = legacyKey && state.onboarding && state.onboarding.answers ? state.onboarding.answers[legacyKey] : null;
+        if (!legacy || typeof legacy !== 'object') {
+            return '';
+        }
+        if (legacy.exists === 'yes') {
+            return 'in_place';
+        }
+        if (legacy.exists === 'no') {
+            return 'not_currently_in_place';
+        }
+        if (legacy.exists === 'not_sure') {
+            return 'not_sure';
+        }
+        return '';
+    }
+
+    function legacyPlanDateForInventory(policyKey) {
+        var legacyMap = {
+            qapi_plan: 'qapi_plan_status',
+            patient_safety_plan: 'patient_safety_plan_status',
+            infection_prevention_control_plan: 'infection_prevention_plan_status',
+            emergency_preparedness_plan: 'emergency_preparedness_plan_status',
+            risk_management_plan: 'risk_management_plan_status'
+        };
+        var legacyKey = legacyMap[policyKey];
+        var legacy = legacyKey && state.onboarding && state.onboarding.answers ? state.onboarding.answers[legacyKey] : null;
+        return legacy && typeof legacy === 'object' ? fieldValue(legacy.last_approved || '') : '';
+    }
+
     function renderStepFiveQuestion(question) {
         var value = onboardingQuestionValue(question);
         var key = question.question_key;
+        if (key === 'plan_policy_inventory') {
+            return renderPlanPolicyInventory(question, value);
+        }
         if (isStepFivePlanKey(key)) {
             return renderStepFivePlanCard(question, value);
         }
@@ -6284,6 +8595,262 @@
         var help = stepFiveHelpText(question);
         return '<' + tag + ' class="qn-question ' + questionLayoutClass(question) + '" data-question="' + escapeHtml(key) + '">' +
             '<span>' + escapeHtml(stepFiveDisplayLabel(question)) + '</span>' + renderStepFiveField(question, value) + (help ? '<small>' + escapeHtml(help) + '</small>' : '') + '</' + tag + '>';
+    }
+
+    function renderPlanPolicyInventory(question, value) {
+        var rows = normalizePlanPolicyInventory(value);
+        var counts = rows.reduce(function (summary, row) {
+            summary.total++;
+            if (row.status === 'in_place') {
+                summary.confirmed++;
+            }
+            if (row.status === 'not_currently_in_place' || row.status === 'folded_into_another' || row.status === 'not_sure') {
+                summary.followUp++;
+            }
+            if (row.upload_status && row.upload_status !== 'not_configured') {
+                summary.documents++;
+            }
+            return summary;
+        }, {total: 0, confirmed: 0, followUp: 0, documents: 0});
+        return '<div class="qn-question qn-plan-policy-inventory" data-question="' + escapeHtml(question.question_key) + '" data-plan-policy-inventory="' + escapeHtml(question.question_key) + '">' +
+            '<div class="qn-plan-policy-summary" aria-label="Plan and policy inventory progress">' +
+                renderPlanPolicySummaryPill(String(counts.total), 'Required items') +
+                renderPlanPolicySummaryPill(String(counts.documents), 'Documents ready') +
+            '</div>' +
+            planPolicyInventorySections().map(function (section) {
+                var sectionRows = rows.filter(function (row) {
+                    return row.section_key === section.key;
+                });
+                return renderPlanPolicyInventorySection(section, sectionRows);
+            }).join('') +
+        '</div>';
+    }
+
+    function renderPlanPolicySummaryPill(value, label) {
+        return '<span><strong>' + escapeHtml(value) + '</strong>' + escapeHtml(label) + '</span>';
+    }
+
+    function renderPlanPolicyInventorySection(section, rows) {
+        return '<section class="qn-plan-policy-section" data-plan-policy-section="' + escapeHtml(section.key) + '">' +
+            '<header><div><h5>' + escapeHtml(section.title) + '</h5><p>' + escapeHtml(section.description) + '</p></div><span>' + rows.length + ' items</span></header>' +
+            '<div class="qn-plan-policy-table" role="table" aria-label="' + escapeHtml(section.title) + '">' +
+                '<div class="qn-plan-policy-head" role="row"><span>Plan / policy</span><span>Date last approved</span><span>Status</span><span>Current version</span><span>Guidance</span></div>' +
+                rows.map(renderPlanPolicyInventoryRow).join('') +
+            '</div>' +
+        '</section>';
+    }
+
+    function renderPlanPolicyInventoryRow(row) {
+        var statusLabel = row.status ? optionLabelByValue(stepFiveOptions('plan_policy_status'), row.status) : 'Select status';
+        var foldedOpen = row.status === 'folded_into_another';
+        var rowId = 'qn-policy-row-' + row.policy_key;
+        var hasDocument = !!row.document_id && ['ready', 'ocr_required', 'queued', 'processing'].indexOf(row.upload_status) !== -1;
+        var documentStatus = row.upload_status === 'ready' ? 'Indexed for Scout' :
+            (row.upload_status === 'ocr_required' ? 'OCR needed' :
+            (['queued', 'processing'].indexOf(row.upload_status) !== -1 ? 'Indexing for Scout' :
+            (row.upload_status === 'failed' ? 'Indexing failed' : 'No document')));
+        var documentAction = hasDocument ? 'Replace' : 'Upload';
+        var reusableDocuments = planPolicyReusableDocuments(row.policy_key, row.document_id);
+        var reuseControls = reusableDocuments.length && canEditOnboarding() ? '<span class="qn-plan-policy-reuse">' +
+            '<select data-plan-policy-link-source="' + escapeHtml(row.policy_key) + '" aria-label="Use an existing indexed document">' +
+                '<option value="">Use existing document...</option>' +
+                reusableDocuments.map(function (document) {
+                    return '<option value="' + escapeFieldValue(document.policy_key) + '">' + escapeHtml(document.document_name + ' (' + document.policy_name + ')') + '</option>';
+                }).join('') +
+            '</select>' +
+            '<button type="button" class="qn-button qn-button-secondary" data-plan-policy-link="' + escapeHtml(row.policy_key) + '">Use</button>' +
+        '</span>' : '';
+        var documentControls = '<span class="qn-plan-policy-document-controls">' +
+            '<button type="button" class="qn-button qn-button-secondary qn-plan-policy-upload" data-plan-policy-upload="' + escapeHtml(row.policy_key) + '"' + (canEditOnboarding() ? '' : ' disabled') + '><span class="dashicons dashicons-upload"></span>' + escapeHtml(documentAction) + '</button>' +
+            '<input type="file" hidden data-plan-policy-file="' + escapeHtml(row.policy_key) + '" accept=".pdf,.docx,.txt,.md,.html,.json,.jsonl">' +
+            (hasDocument && canEditOnboarding() ? '<button type="button" class="qn-button qn-button-link qn-plan-policy-remove" data-plan-policy-remove="' + escapeHtml(row.policy_key) + '">Remove</button>' : '') +
+            '<small class="qn-plan-policy-document-status">' + escapeHtml(documentStatus) + (row.document_name ? ': ' + escapeHtml(row.document_name) : '') + '</small>' +
+            '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="upload_status" value="' + escapeFieldValue(row.upload_status || 'not_configured') + '">' +
+            '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="document_id" value="' + escapeFieldValue(row.document_id || '') + '">' +
+            '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="document_name" value="' + escapeFieldValue(row.document_name || '') + '">' +
+            '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="document_version_id" value="' + escapeFieldValue(row.document_version_id || '') + '">' +
+            '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="ingestion_job_id" value="' + escapeFieldValue(row.ingestion_job_id || '') + '">' +
+            '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="storage_path" value="' + escapeFieldValue(row.storage_path || '') + '">' +
+            reuseControls +
+        '</span>';
+        return '<details class="qn-plan-policy-row" data-plan-policy-row="' + escapeHtml(row.policy_key) + '"' + (foldedOpen ? ' open' : '') + '>' +
+            '<summary role="row">' +
+                '<span class="qn-plan-policy-name"><strong>' + escapeHtml(row.policy_name) + '</strong><small>' + escapeHtml(row.category) + '</small></span>' +
+                '<span>' + renderUsDateInput('data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="date_last_approved"', row.date_last_approved || '') + '</span>' +
+                '<span>' + renderPlanPolicyStatusSelect(row.policy_key, row.status || '') + '</span>' +
+                documentControls +
+                '<span class="qn-plan-policy-guidance-preview">' + escapeHtml(row.guidance) + '<em>Details</em></span>' +
+            '</summary>' +
+            '<div class="qn-plan-policy-detail" id="' + escapeHtml(rowId) + '">' +
+                '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="policy_key" value="' + escapeFieldValue(row.policy_key) + '">' +
+                '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="policy_name" value="' + escapeFieldValue(row.policy_name) + '">' +
+                '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="category" value="' + escapeFieldValue(row.category) + '">' +
+                '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="scout_status" value="' + escapeFieldValue(row.scout_status || 'structured_ready') + '">' +
+                '<div class="qn-plan-policy-guidance"><span class="dashicons dashicons-lightbulb"></span><p>' + escapeHtml(row.guidance) + '</p></div>' +
+                '<div class="qn-plan-policy-detail-grid">' +
+                    '<label data-folded-field="' + escapeHtml(row.policy_key) + '"><span>Folded into / housed within</span><input type="text" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="folded_into" value="' + escapeFieldValue(row.folded_into || '') + '" placeholder="Example: QAPI Plan, Patient Safety Plan, policy manual"></label>' +
+                    '<label><span>Internal notes</span><textarea data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="notes" placeholder="Process notes only. Do not include patient, provider, peer-review, or case-level details.">' + escapeFieldValue(row.notes || '') + '</textarea></label>' +
+                '</div>' +
+            '</div>' +
+        '</details>';
+    }
+
+    function planPolicyReusableDocuments(policyKey, currentDocumentId) {
+        var seen = {};
+        return normalizePlanPolicyInventory(state.onboarding && state.onboarding.answers ? state.onboarding.answers.plan_policy_inventory : []).filter(function (row) {
+            if (!row.document_id || row.policy_key === policyKey || row.document_id === currentDocumentId || row.upload_status !== 'ready' || seen[row.document_id]) {
+                return false;
+            }
+            seen[row.document_id] = true;
+            return true;
+        });
+    }
+
+    function linkPlanPolicyDocument(policyKey) {
+        var select = document.querySelector('[data-plan-policy-link-source="' + policyKey + '"]');
+        var sourceKey = select ? select.value : '';
+        if (!sourceKey || !state.onboarding || !canEditOnboarding()) {
+            showToast('Choose an indexed document to use.', 'warning');
+            return;
+        }
+        var rows = normalizePlanPolicyInventory(state.onboarding.answers.plan_policy_inventory);
+        var target = rows.find(function (row) { return row.policy_key === policyKey; });
+        var source = rows.find(function (row) { return row.policy_key === sourceKey; });
+        if (!target || !source || !source.document_id || source.upload_status !== 'ready') {
+            showToast('That document is no longer available. Refresh and try again.', 'warning');
+            return;
+        }
+        ['upload_status', 'document_id', 'document_name', 'document_version_id', 'ingestion_job_id', 'storage_path', 'scout_status'].forEach(function (key) {
+            target[key] = source[key] || '';
+        });
+        state.onboarding.answers.plan_policy_inventory = rows;
+        renderOnboardingFields(state.onboarding.steps[state.onboardingIndex]);
+        setOnboardingSaveStatus('unsaved', 'Document linked - saving...');
+        window.clearTimeout(state.autosaveTimer);
+        state.autosaveTimer = window.setTimeout(autosaveOnboardingStep, 100);
+        showToast('Existing indexed document linked to this requirement.', 'success');
+    }
+
+    function uploadPlanPolicyDocument(input) {
+        var file = input && input.files ? input.files[0] : null;
+        var policyKey = input ? input.getAttribute('data-plan-policy-file') : '';
+        if (!file || !policyKey || !state.onboarding || !canEditOnboarding()) {
+            return;
+        }
+        if (file.size > 26214400) {
+            showToast('The document must be 25 MB or smaller.', 'warning');
+            input.value = '';
+            return;
+        }
+        var controls = input.closest('.qn-plan-policy-document-controls');
+        var button = controls ? controls.querySelector('[data-plan-policy-upload]') : null;
+        var restoreButton = setButtonLoading(button, 'Processing...');
+        var step = state.onboarding.steps[state.onboardingIndex];
+        var currentAnswers = collectOnboardingAnswers();
+        window.clearTimeout(state.autosaveTimer);
+        setOnboardingSaveStatus('saving', 'Processing document...');
+        api('/onboarding/save', {
+            method: 'POST',
+            timeout: 60000,
+            body: {
+                organization_id: state.onboardingOrganizationId,
+                step_key: step.section_key,
+                answers: currentAnswers
+            }
+        }).then(function () {
+            var form = new FormData();
+            form.append('organization_id', state.onboardingOrganizationId);
+            form.append('policy_key', policyKey);
+            form.append('file', file, file.name);
+            return apiForm('/onboarding/plan-policy-document', form, {timeout: 360000});
+        }).then(function (result) {
+            var status = result && result.document ? result.document.status : 'ready';
+            if (['queued', 'processing'].indexOf(status) !== -1) {
+                showToast('Document uploaded. Scout is indexing it securely in the background.', 'success');
+                setOnboardingSaveStatus('saving', 'Indexing document...');
+                return loadOnboarding(state.onboardingOrganizationId, {showLoading: false}).then(function () {
+                    return pollPlanPolicyDocumentStatus(policyKey, 0);
+                });
+            }
+            showToast(status === 'ocr_required' ? 'Document saved, but readable text could not be extracted.' : 'Document indexed and ready for Scout.', status === 'ocr_required' ? 'warning' : 'success');
+            setOnboardingSaveStatus('saved', status === 'ocr_required' ? 'Text extraction needs review' : 'Document ready');
+            return loadOnboarding(state.onboardingOrganizationId, {showLoading: false});
+        }).catch(function (error) {
+            showToast(error.message || 'The document could not be processed.', 'warning');
+            setOnboardingSaveStatus('error', 'Document failed');
+        }).finally(function () {
+            input.value = '';
+            restoreButton();
+        });
+    }
+
+    function pollPlanPolicyDocumentStatus(policyKey, attempt) {
+        if (!policyKey || attempt >= 90) {
+            setOnboardingSaveStatus('error', 'Indexing is taking longer than expected');
+            showToast('The document is still indexing. Its status will be available when you return to this step.', 'warning');
+            return Promise.resolve();
+        }
+        return new Promise(function (resolve) {
+            window.setTimeout(resolve, 2000);
+        }).then(function () {
+            return api('/onboarding/plan-policy-document/status', {
+                method: 'POST',
+                timeout: 30000,
+                body: {organization_id: state.onboardingOrganizationId, policy_key: policyKey}
+            });
+        }).then(function (result) {
+            var status = result && result.document ? result.document.status : 'failed';
+            if (!result.terminal && ['queued', 'processing'].indexOf(status) !== -1) {
+                setOnboardingSaveStatus('saving', status === 'processing' ? 'Reading and indexing document...' : 'Document queued for indexing...');
+                return pollPlanPolicyDocumentStatus(policyKey, attempt + 1);
+            }
+            if (status === 'ready') {
+                showToast('Document indexed and ready for Scout.', 'success');
+                setOnboardingSaveStatus('saved', 'Document ready');
+            } else if (status === 'ocr_required') {
+                showToast('Document saved, but readable text could not be extracted. Try a text-based PDF or DOCX.', 'warning');
+                setOnboardingSaveStatus('error', 'Text extraction needs review');
+            } else {
+                showToast('Scout could not index this document. The file remains listed so you can replace it.', 'warning');
+                setOnboardingSaveStatus('error', 'Document indexing failed');
+            }
+            return loadOnboarding(state.onboardingOrganizationId, {showLoading: false});
+        }).catch(function (error) {
+            showToast(error.message || 'Document indexing status could not be checked.', 'warning');
+            setOnboardingSaveStatus('error', 'Indexing status unavailable');
+        });
+    }
+
+    function deletePlanPolicyDocument(policyKey, trigger) {
+        if (!policyKey || !canEditOnboarding()) {
+            return;
+        }
+        if (!window.confirm('Remove this document from Scout? The plan or policy inventory row will remain.')) {
+            return;
+        }
+        var restoreButton = setButtonLoading(trigger, 'Removing...');
+        api('/onboarding/plan-policy-document/delete', {
+            method: 'POST',
+            timeout: 120000,
+            body: {organization_id: state.onboardingOrganizationId, policy_key: policyKey}
+        }).then(function () {
+            showToast('Document removed from Scout.', 'success');
+            setOnboardingSaveStatus('saved', 'Document removed');
+            return loadOnboarding(state.onboardingOrganizationId, {showLoading: false});
+        }).catch(function (error) {
+            showToast(error.message || 'The document could not be removed.', 'warning');
+            setOnboardingSaveStatus('error', 'Remove failed');
+        }).finally(function () {
+            restoreButton();
+        });
+    }
+
+    function renderPlanPolicyStatusSelect(policyKey, value) {
+        value = fieldValue(value);
+        return '<select data-plan-policy-field="' + escapeHtml(policyKey) + '" data-plan-policy-key="status"><option value="">Select status</option>' + stepFiveOptions('plan_policy_status').map(function (option) {
+            var optionValueText = optionValue(option);
+            return '<option value="' + escapeFieldValue(optionValueText) + '"' + (value === optionValueText ? ' selected' : '') + '>' + escapeHtml(optionLabel(option)) + '</option>';
+        }).join('') + '</select>';
     }
 
     function isStepFivePlanKey(key) {
@@ -6323,7 +8890,7 @@
             return renderMultiselectField(key, value, stepFiveOptions(key), 'Select templates');
         }
         if (key === 'weakest_monitoring_areas') {
-            return renderMultiselectField(key, value, stepFiveOptions(key), 'Select weakest monitoring areas');
+            return '<div class="qn-step5-priority-checklist">' + renderInlineChecklistField(key, value, stepFiveOptions(key)) + '</div>';
         }
         if (key === 'plan_location_authority') {
             return '<textarea data-onboarding-field="' + escapeHtml(key) + '" placeholder="Describe where plans live and who can route them for approval.">' + escapeFieldValue(value) + '</textarea>';
@@ -6348,7 +8915,7 @@
             '<header><strong>' + escapeHtml(stepFiveDisplayLabel(question)) + '</strong><span class="qn-step5-status-badge">' + escapeHtml(stepFivePlanStatusLabel(data)) + '</span></header>' +
             '<div class="qn-step5-card-grid">' +
             '<label><span>Exists?</span>' + renderPlanSelect(key, 'exists', data.exists || '', stepFiveOptions('yes_no_not_sure'), 'Select') + '</label>' +
-            '<label><span>Last approved</span><input type="date" data-plan-field="' + escapeHtml(key) + '" data-plan-key="last_approved" value="' + escapeFieldValue(data.last_approved || '') + '"></label>' +
+            '<label><span>Last approved</span>' + renderUsDateInput('data-plan-field="' + escapeHtml(key) + '" data-plan-key="last_approved"', data.last_approved || '') + '</label>' +
             '<label><span>Board approved?</span>' + renderPlanSelect(key, 'board_approved', data.board_approved || '', stepFiveOptions('board_approved'), 'Select') + '</label>' +
             '<label><span>Owner</span><input type="text" data-plan-field="' + escapeHtml(key) + '" data-plan-key="owner" value="' + escapeFieldValue(data.owner || '') + '" placeholder="Owner"></label>' +
             '<label><span>Location</span><input type="text" data-plan-field="' + escapeHtml(key) + '" data-plan-key="location" value="' + escapeFieldValue(data.location || '') + '" placeholder="Example: policy system, SharePoint, board packet archive"></label>' +
@@ -6381,7 +8948,8 @@
     function renderPlanSelect(key, dataKey, value, options, placeholder) {
         value = fieldValue(value);
         return '<select data-plan-field="' + escapeHtml(key) + '" data-plan-key="' + escapeHtml(dataKey) + '"><option value="">' + escapeHtml(placeholder || 'Select') + '</option>' + options.map(function (option) {
-            return '<option value="' + escapeFieldValue(option.value) + '"' + (value === option.value ? ' selected' : '') + '>' + escapeHtml(option.label) + '</option>';
+            var optionValueText = optionValue(option);
+            return '<option value="' + escapeFieldValue(optionValueText) + '"' + (value === optionValueText ? ' selected' : '') + '>' + escapeHtml(optionLabel(option)) + '</option>';
         }).join('') + '</select>';
     }
 
@@ -6453,6 +9021,10 @@
     }
 
     function stepSixOptions(key) {
+        var apiOptions = questionOptionsForKey(key);
+        if (apiOptions.length) {
+            return apiOptions;
+        }
         var optionMap = {
             upload_status: [
                 {value: 'yes', label: 'Yes'},
@@ -6534,8 +9106,8 @@
     function renderStepSixQuestion(question) {
         var value = onboardingQuestionValue(question);
         var key = question.question_key;
-        if (isStepSixMeasureKey(key)) {
-            return renderStepSixMeasureCard(question, value);
+        if ((key.indexOf('internal_monitoring_') === 0 || key.indexOf('external_reporting_') === 0) && question.field_type === 'multiselect') {
+            return '<div class="qn-question qn-question-wide qn-step4-inline-question" data-question="' + escapeHtml(key) + '"><span>' + escapeHtml(question.label) + '</span>' + renderInlineChecklistField(key, value, stepSixOptions(key)) + '</div>';
         }
         if (key === 'active_qi_projects') {
             return '<div class="qn-question qn-question-wide" data-question="' + escapeHtml(key) + '"><span>Active QI Projects</span>' + renderQiProjectsRepeater(key, value) + '</div>';
@@ -6546,19 +9118,19 @@
     }
 
     function isStepSixMeasureKey(key) {
-        return ['mbqip_upload', 'nhsn_hai_rates_upload', 'patient_experience_scores_upload', 'fall_rates_upload', 'pressure_injury_rates_upload', 'hand_hygiene_upload', 'other_dashboard_metrics'].indexOf(key) !== -1;
+        return false;
     }
 
     function stepSixDisplayLabel(question) {
         var labels = {
-            mbqip_upload: 'MBQIP measures',
+            mbqip_upload: 'MBQIP data status',
             nhsn_hai_rates_upload: 'NHSN HAI rates',
-            patient_experience_scores_upload: 'Patient experience scores',
-            fall_rates_upload: 'Fall rates',
-            pressure_injury_rates_upload: 'Pressure injury rates',
-            hand_hygiene_upload: 'Hand hygiene',
-            other_dashboard_metrics: 'Other dashboard metrics',
-            current_quality_dashboard: 'Current dashboard includes',
+            patient_experience_scores_upload: 'Patient experience data',
+            fall_rates_upload: 'Fall rates data',
+            pressure_injury_rates_upload: 'Pressure injury data',
+            hand_hygiene_upload: 'Hand hygiene data',
+            other_dashboard_metrics: 'Other dashboard metric data',
+            current_quality_dashboard: 'Current quality dashboard',
             data_source_currency: 'Data source currency',
             qi_framework: 'QI framework',
             project_charters_status: 'Project charters status',
@@ -6569,8 +9141,14 @@
 
     function renderStepSixField(question, value) {
         var key = question.question_key;
+        if ((key.indexOf('internal_monitoring_') === 0 || key.indexOf('external_reporting_') === 0) && question.field_type === 'multiselect') {
+            return renderInlineChecklistField(key, value, stepSixOptions(key));
+        }
         if (key === 'current_quality_dashboard') {
             return '<textarea class="qn-compact-textarea" data-onboarding-field="' + escapeHtml(key) + '" placeholder="Example: MBQIP, infection surveillance, falls, pressure injuries, patient experience, hand hygiene.">' + escapeFieldValue(value) + '</textarea>';
+        }
+        if (isStepSixMetricStatusKey(key)) {
+            return renderStepOneSelect(key, normalizeStepSixMetricStatus(value), stepSixOptions('upload_status'), 'Select status');
         }
         if (key === 'data_source_currency') {
             return renderStepOneSelect(key, value, stepSixOptions(key), 'Select currency');
@@ -6579,6 +9157,17 @@
             return renderStepOneSelect(key, value, stepSixOptions(key), 'Select status');
         }
         return renderField(question, value);
+    }
+
+    function isStepSixMetricStatusKey(key) {
+        return ['mbqip_upload', 'nhsn_hai_rates_upload', 'patient_experience_scores_upload', 'fall_rates_upload', 'pressure_injury_rates_upload', 'hand_hygiene_upload', 'other_dashboard_metrics'].indexOf(key) !== -1;
+    }
+
+    function normalizeStepSixMetricStatus(value) {
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+            return fieldValue(value.will_upload || value.status || value.applies || '');
+        }
+        return fieldValue(value);
     }
 
     function stepSixHelpText(question) {
@@ -6646,6 +9235,10 @@
     }
 
     function stepSevenOptions(key) {
+        var apiOptions = questionOptionsForKey(key);
+        if (apiOptions.length) {
+            return apiOptions;
+        }
         var optionMap = {
             yes_no_not_sure: [
                 {value: 'yes', label: 'Yes'},
@@ -6653,12 +9246,10 @@
                 {value: 'not_sure', label: 'Not sure'}
             ],
             time_in_current_role: [
-                {value: 'zero_to_6_months', label: '0-6 months'},
-                {value: 'six_to_12_months', label: '6-12 months'},
-                {value: 'one_to_3_years', label: '1-3 years'},
-                {value: 'three_to_10_years', label: '3-10 years'},
-                {value: 'ten_plus_years', label: '10+ years'},
-                {value: 'not_sure', label: 'Not sure'}
+                {value: 'less_than_one_year', label: 'Less than one year'},
+                {value: 'one_to_5_years', label: '1 - 5 years'},
+                {value: 'six_to_10_years', label: '6 - 10 years'},
+                {value: 'more_than_10_years', label: 'More than 10 years'}
             ],
             quality_certifications: [
                 {value: 'cphq', label: 'CPHQ'},
@@ -6684,6 +9275,24 @@
                 {value: 'templates_examples', label: 'Templates and examples'},
                 {value: 'certification_prep', label: 'Certification prep'},
                 {value: 'not_sure', label: 'Not sure'}
+            ],
+            organization_quality_goals: [
+                {value: 'Establish or mature the QAPI program', label: 'Establish or mature the QAPI program'},
+                {value: 'Achieve continuous survey readiness', label: 'Achieve continuous survey readiness'},
+                {value: 'Drive MBQIP & publicly reported measures', label: 'Drive MBQIP & publicly reported measures'},
+                {value: 'Strengthen culture of safety & high reliability', label: 'Strengthen culture of safety & high reliability'},
+                {value: 'Reduce infections & advance antibiotic stewardship', label: 'Reduce infections & advance antibiotic stewardship'},
+                {value: 'Improve care transitions & reduce readmissions', label: 'Improve care transitions & reduce readmissions'},
+                {value: 'Elevate board & executive quality oversight', label: 'Elevate board & executive quality oversight'},
+                {value: 'Integrate medical staff engagement with quality', label: 'Integrate medical staff engagement with quality'},
+                {value: 'Advance patient & family engagement', label: 'Advance patient & family engagement'},
+                {value: 'Other', label: 'Other'}
+            ],
+            personal_professional_goals: [
+                {value: 'Build Quality Director Capability and Professional Sustainability', label: 'Build Quality Director Capability and Professional Sustainability'},
+                {value: 'Pursue National Certification and Specialty Membership', label: 'Pursue National Certification and Specialty Membership'},
+                {value: 'Build a Personal Peer Network and Mentorship System', label: 'Build a Personal Peer Network and Mentorship System'},
+                {value: 'Other', label: 'Other'}
             ]
         };
         return optionMap[key] || [];
@@ -6695,7 +9304,7 @@
         if (isStepSevenContactKey(key)) {
             return renderStepSevenContactCard(question, value);
         }
-        var tag = ['quality_certifications', 'learning_format_preference'].indexOf(key) !== -1 ? 'div' : 'label';
+        var tag = isStepSevenGoalKey(key) || ['quality_certifications', 'learning_format_preference'].indexOf(key) !== -1 ? 'div' : 'label';
         return '<' + tag + ' class="qn-question ' + questionLayoutClass(question) + '" data-question="' + escapeHtml(key) + '">' +
             '<span>' + escapeHtml(stepSevenDisplayLabel(question)) + '</span>' + renderStepSevenField(question, value) + stepSevenHelpText(question) + '</' + tag + '>';
     }
@@ -6703,6 +9312,12 @@
     function renderStepSevenField(question, value) {
         var key = question.question_key;
         if (isStepSevenGoalKey(key)) {
+            if (key === 'department_goals_this_year') {
+                return renderStepSevenGoalTiles(key, value, stepSevenOptions('organization_quality_goals'), 3);
+            }
+            if (key === 'department_goals_two_three_years') {
+                return renderStepSevenGoalTiles(key, value, stepSevenOptions('personal_professional_goals'), 0);
+            }
             return '<textarea class="qn-compact-textarea" data-onboarding-field="' + escapeHtml(key) + '" placeholder="' + escapeHtml(stepSevenGoalPlaceholder(key)) + '">' + escapeFieldValue(value) + '</textarea>';
         }
         if (key === 'new_to_quality_director_role' || key === 'activate_first_30_days_track') {
@@ -6725,6 +9340,12 @@
 
     function stepSevenDisplayLabel(question) {
         var labels = {
+            department_goals_this_year: 'Hospital quality goals this year',
+            department_goals_two_three_years: 'Personal professional goals',
+            quality_director_role_start_date: 'Quality Leader experience',
+            time_in_current_role: 'Time in current role',
+            quality_director_background: 'Quality Leader background',
+            new_to_quality_director_role: 'New to Quality Leader role?',
             confidence_foundational: 'Foundational knowledge',
             confidence_qi_patient_safety: 'QI and patient safety science',
             confidence_specialized_areas: 'Specialized areas',
@@ -6781,10 +9402,10 @@
 
     function stepSevenFirst30HelpForValue(value) {
         if (value === 'yes') {
-            return 'New directors often benefit from the First 30 Days track, which helps locate key documents, map committees, and build the initial operating system.';
+            return 'New Quality Leaders often benefit from the First 30 Days track, which helps locate key documents, map committees, and build the initial operating system.';
         }
         if (value === 'no') {
-            return 'Experienced directors usually receive lighter refresher guidance.';
+            return 'Experienced Quality Leaders usually receive lighter refresher guidance.';
         }
         return 'Scout can tailor the First 30 Days track based on your role experience.';
     }
@@ -6845,7 +9466,7 @@
         var value = onboardingQuestionValue(question);
         var key = question.question_key;
         if (key === 'backup_visibility_users') {
-            return '<div class="qn-question qn-question-wide" data-question="' + escapeHtml(key) + '"><span>Backup visibility users</span>' + renderBackupUsersRepeater(key, value) + '</div>';
+            return '<div class="qn-question qn-question-wide qn-step8-backup-question" data-question="' + escapeHtml(key) + '"><span>Backup visibility users</span><small>Optional. Add people who should see reminders or coverage context when the Quality Leader is unavailable.</small>' + renderBackupUsersRepeater(key, value) + '</div>';
         }
         if (key === 'final_review_confirmation') {
             return renderFinalReviewConfirmation(key, value);
@@ -6878,24 +9499,24 @@
     function stepEightDisplayLabel(question) {
         var labels = {
             monitored_sources: 'Monitored sources',
-            update_preference: 'Update preference',
-            auto_propose_task_adjustments: 'Auto-propose task adjustments',
+            update_preference: 'How should QualiNav notify you?',
+            auto_propose_task_adjustments: 'When Scout identifies a regulatory change',
             current_tools: 'Current tools',
-            calendar_system: 'Calendar system',
+            calendar_system: 'Email / calendar system',
             ehr_system: 'EHR system',
             incident_reporting_system: 'Incident reporting system',
             nhsn_qualitynet_access: 'NHSN / QualityNet access',
-            reminder_lead_time: 'Reminder lead time',
-            reminder_buffer_time: 'Reminder buffer time'
+            reminder_lead_time: 'Default reminder lead time',
+            reminder_buffer_time: 'Reminder buffer'
         };
         return labels[question.question_key] || question.label;
     }
 
     function stepEightPlaceholder(key) {
         var placeholders = {
-            update_preference: 'Select update preference',
-            auto_propose_task_adjustments: 'Select adjustment preference',
-            calendar_system: 'Select calendar system',
+            update_preference: 'Select notification preference',
+            auto_propose_task_adjustments: 'Select Scout behavior',
+            calendar_system: 'Select system',
             nhsn_qualitynet_access: 'Select access status',
             reminder_lead_time: 'Select lead time',
             reminder_buffer_time: 'Select buffer time'
@@ -6905,12 +9526,16 @@
 
     function stepEightHelpText(key) {
         if (key === 'auto_propose_task_adjustments') {
-            return '<small>Scout will not automatically change your tasks without review unless your organization later enables that behavior.</small>';
+            return '<small>Scout will suggest changes for review; it will not silently change tasks.</small>';
         }
         return '';
     }
 
     function stepEightOptions(key) {
+        var apiOptions = questionOptionsForKey(key);
+        if (apiOptions.length) {
+            return apiOptions;
+        }
         var options = {
             monitored_sources: [
                 {value: 'cms_conditions_of_participation', label: 'CMS Conditions of Participation'},
@@ -6995,9 +9620,9 @@
 
     function renderBackupUsersRepeater(key, value) {
         value = normalizeBackupUsersValue(value);
-        var columns = ['name', 'role', 'email', 'access_level', 'notes'];
+        var columns = ['user_id', 'notes'];
         return '<div class="qn-repeater qn-card-repeater qn-step8-backup-repeater" data-repeater="' + escapeHtml(key) + '" data-repeater-style="backup-user-card" data-columns="' + escapeHtml(JSON.stringify(columns)) + '">' +
-            (value.length ? '' : '<div class="qn-survey-empty"><strong>No backup users added yet.</strong><span>Add backup visibility users such as the CNO, backup quality coordinator, or executive sponsor.</span></div>') +
+            (value.length ? '' : '<div class="qn-survey-empty qn-step8-backup-empty"><strong>No backup users added.</strong><span>This can be completed later if backup coverage is not decided yet.</span></div>') +
             value.map(function (row, index) {
                 return renderBackupUserRow(key, columns, row, index);
             }).join('') + '<button class="qn-button qn-button-small qn-add-survey-row" type="button" data-add-repeater="' + escapeHtml(key) + '"><span class="dashicons dashicons-plus-alt2"></span>Add backup user</button></div>';
@@ -7005,13 +9630,27 @@
 
     function normalizeBackupUsersValue(value) {
         if (Array.isArray(value)) {
-            return value;
+            return value.map(linkLegacyBackupUser).filter(Boolean);
         }
         if (value && typeof value === 'object') {
-            return [value];
+            return [linkLegacyBackupUser(value)].filter(Boolean);
         }
         value = fieldValue(value);
         return value ? [{notes: value, legacy: value}] : [];
+    }
+
+    function linkLegacyBackupUser(row) {
+        row = row && typeof row === 'object' ? Object.assign({}, row) : {};
+        if (row.user_id) {
+            row.user_id = Number(row.user_id) || 0;
+            return row;
+        }
+        var name = String(row.name || row.name_organization || '').toLowerCase().trim();
+        var match = organizationUserOptions().find(function (user) {
+            return name && String(user.display_name || '').toLowerCase().trim() === name;
+        });
+        row.user_id = match ? Number(match.user_id) : 0;
+        return row;
     }
 
     function renderBackupUserRow(key, columns, row, index) {
@@ -7019,18 +9658,16 @@
         return '<div class="qn-repeater-row qn-survey-history-row qn-step8-backup-row">' +
             '<div class="qn-survey-card-header"><strong>Backup user ' + (index + 1) + '</strong><button class="qn-icon-button qn-delete-survey-row" type="button" data-delete-repeater-row aria-label="Delete backup user"><span class="dashicons dashicons-trash"></span></button></div>' +
             '<div class="qn-survey-card-grid qn-step8-backup-grid">' +
-                '<label><span>Name</span><input type="text" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="name" value="' + escapeFieldValue(row.name || '') + '" placeholder="Name"></label>' +
-                '<label><span>Role</span><input type="text" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="role" value="' + escapeFieldValue(row.role || '') + '" placeholder="Example: CNO"></label>' +
-                '<label><span>Email</span><input type="email" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="email" value="' + escapeFieldValue(row.email || '') + '" placeholder="email@example.org"></label>' +
-                '<label><span>Access level</span>' + renderRepeaterSelect(key, index, 'access_level', row.access_level || '', stepEightOptions('backup_access_level'), 'Select access level') + '</label>' +
+                '<label><span>Existing hospital user</span>' + renderOrganizationUserSelect(key, index, 'user_id', row.user_id, 'Select user') + '</label>' +
                 '<label class="qn-structured-wide"><span>Notes</span><textarea data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="notes" placeholder="Professional backup coverage notes only.">' + escapeFieldValue(row.notes || row.legacy || '') + '</textarea></label>' +
+                (!row.user_id && (row.name || row.email) ? '<small class="qn-legacy-note">Previous free-text user could not be matched. Select an existing hospital user before saving.</small>' : '') +
             '</div></div>';
     }
 
     function renderFinalReviewConfirmation(key, value) {
         return '<div class="qn-question qn-question-wide qn-step8-confirm-card" data-question="' + escapeHtml(key) + '">' +
-            '<label class="qn-step8-confirm-label"><input type="checkbox" data-onboarding-field="' + escapeHtml(key) + '"' + (value ? ' checked' : '') + '><span>I confirm this setup is ready to submit and does not contain PHI, patient names, MRNs, incident narratives, peer-review details, or case-level details.</span></label>' +
-            '<p>After submission, you can generate a Scout setup preview from this information. You can review and refine it before using it as your operating system.</p>' +
+            '<label class="qn-step8-confirm-label"><input type="checkbox" data-onboarding-field="' + escapeHtml(key) + '"' + (value ? ' checked' : '') + '><span class="qn-step8-confirm-box" aria-hidden="true"></span><span class="qn-step8-confirm-text">I confirm this setup is ready to submit and contains no PHI or case-level details.</span></label>' +
+            '<p>Scout will use this setup to prepare the workspace preview.</p>' +
             '<small id="qn-final-review-message" class="qn-step8-confirm-message" hidden>Please confirm the final review statement before submitting.</small>' +
             '</div>';
     }
@@ -7070,8 +9707,11 @@
         if (question.question_key === 'is_critical_access_hospital') {
             return renderStepOneSelect(question.question_key, value, stepOneOptions(question.question_key), 'Select CAH status');
         }
+        if (question.question_key === 'licensed_for_swing_beds') {
+            return renderStepOneSelect(question.question_key, value, stepOneOptions(question.question_key), 'Select swing-bed license status');
+        }
         if (question.question_key === 'independent_or_system') {
-            return renderStepOneSelect(question.question_key, value, stepOneOptions(question.question_key), 'Select service model');
+            return renderStepOneSelect(question.question_key, value, stepOneOptions(question.question_key), 'Select ownership model');
         }
         if (question.field_type === 'textarea') {
             return '<textarea data-onboarding-field="' + key + '"' + (placeholder ? ' placeholder="' + escapeHtml(placeholder) + '"' : '') + '>' + escapeFieldValue(value) + '</textarea>';
@@ -7080,20 +9720,25 @@
             return '<input type="number" min="0" step="1" inputmode="numeric" data-onboarding-field="' + key + '" value="' + escapeFieldValue(value) + '"' + (placeholder ? ' placeholder="' + escapeHtml(placeholder) + '"' : '') + '>';
         }
         if (question.field_type === 'date') {
-            return '<input type="date" data-onboarding-field="' + key + '" value="' + escapeFieldValue(value) + '">';
+            return renderUsDateInput('data-onboarding-field="' + key + '"', value);
+        }
+        if (question.field_type === 'url') {
+            return '<input type="url" inputmode="url" data-onboarding-field="' + key + '" value="' + escapeFieldValue(value) + '"' + (placeholder ? ' placeholder="' + escapeHtml(placeholder) + '"' : '') + '>';
         }
         if (question.field_type === 'select' || question.field_type === 'radio' || question.field_type === 'yes_no') {
             if (question.field_type === 'yes_no' && !options.length) {
                 options = ['yes', 'no', 'not_sure'];
             }
             return '<select data-onboarding-field="' + key + '"><option value="">Select</option>' + options.map(function (option) {
-                return '<option value="' + escapeFieldValue(option) + '"' + (fieldValue(value) === String(option) ? ' selected' : '') + '>' + escapeHtml(optionLabel(option)) + '</option>';
+                var optionValueText = optionValue(option);
+                return '<option value="' + escapeFieldValue(optionValueText) + '"' + (fieldValue(value) === optionValueText ? ' selected' : '') + '>' + escapeHtml(optionLabel(option)) + '</option>';
             }).join('') + '</select>';
         }
         if (question.field_type === 'multiselect') {
             value = Array.isArray(value) ? value : [];
             return '<select multiple data-onboarding-field="' + key + '">' + options.map(function (option) {
-                return '<option value="' + escapeFieldValue(option) + '"' + (value.indexOf(option) !== -1 ? ' selected' : '') + '>' + escapeHtml(optionLabel(option)) + '</option>';
+                var optionValueText = optionValue(option);
+                return '<option value="' + escapeFieldValue(optionValueText) + '"' + (value.indexOf(optionValueText) !== -1 ? ' selected' : '') + '>' + escapeHtml(optionLabel(option)) + '</option>';
             }).join('') + '</select>';
         }
         if (question.field_type === 'checkbox') {
@@ -7101,7 +9746,7 @@
         }
         if (question.field_type === 'plan_status') {
             value = value && typeof value === 'object' ? value : {};
-            return '<div class="qn-plan-status"><select data-plan-field="' + key + '" data-plan-key="exists"><option value="">Exists?</option><option value="yes"' + (value.exists === 'yes' ? ' selected' : '') + '>Exists</option><option value="no"' + (value.exists === 'no' ? ' selected' : '') + '>Does not exist</option></select><input type="date" data-plan-field="' + key + '" data-plan-key="last_approved" value="' + escapeFieldValue(value.last_approved || '') + '"><select data-plan-field="' + key + '" data-plan-key="board_approved"><option value="">Board approved?</option><option value="yes"' + (value.board_approved === 'yes' ? ' selected' : '') + '>Yes</option><option value="no"' + (value.board_approved === 'no' ? ' selected' : '') + '>No</option></select><input type="text" placeholder="Owner" data-plan-field="' + key + '" data-plan-key="owner" value="' + escapeFieldValue(value.owner || '') + '"></div>';
+            return '<div class="qn-plan-status"><select data-plan-field="' + key + '" data-plan-key="exists"><option value="">Exists?</option><option value="yes"' + (value.exists === 'yes' ? ' selected' : '') + '>Exists</option><option value="no"' + (value.exists === 'no' ? ' selected' : '') + '>Does not exist</option></select>' + renderUsDateInput('data-plan-field="' + key + '" data-plan-key="last_approved"', value.last_approved || '') + '<select data-plan-field="' + key + '" data-plan-key="board_approved"><option value="">Board approved?</option><option value="yes"' + (value.board_approved === 'yes' ? ' selected' : '') + '>Yes</option><option value="no"' + (value.board_approved === 'no' ? ' selected' : '') + '>No</option></select><input type="text" placeholder="Owner" data-plan-field="' + key + '" data-plan-key="owner" value="' + escapeFieldValue(value.owner || '') + '"></div>';
         }
         if (question.field_type === 'repeater') {
             value = Array.isArray(value) && value.length ? value : [{}];
@@ -7122,37 +9767,188 @@
         }).join('') + '</div>';
     }
 
+    function isCriticalAccessHospitalValue(value) {
+        return ['yes', 'true', '1', 'critical_access_hospital', 'cah'].indexOf(String(value || '').toLowerCase()) !== -1;
+    }
+
+    function isCriticalAccessHospitalSelected() {
+        var field = document.querySelector('[data-onboarding-field="is_critical_access_hospital"]');
+        var value = field ? field.value : onboardingQuestionValue({question_key: 'is_critical_access_hospital'});
+        return isCriticalAccessHospitalValue(value);
+    }
+
+    function updateStepOneCahBedFields() {
+        var isCah = isCriticalAccessHospitalSelected();
+        var acuteQuestion = document.querySelector('[data-question="acute_beds"]');
+        var swingLicenseQuestion = document.querySelector('[data-question="licensed_for_swing_beds"]');
+        var swingQuestion = document.querySelector('[data-question="swing_beds"]');
+        if (acuteQuestion) {
+            acuteQuestion.hidden = isCah;
+        }
+        if (swingLicenseQuestion) {
+            swingLicenseQuestion.hidden = true;
+        }
+        if (swingQuestion) {
+            swingQuestion.hidden = false;
+        }
+    }
+
     function updateStepOneBedWarning() {
         var warning = document.getElementById('qn-step1-bed-warning');
         if (!warning) {
             return;
         }
+        updateStepOneCahBedFields();
+        if (isCriticalAccessHospitalSelected()) {
+            warning.hidden = true;
+            return;
+        }
         var licensed = Number(fieldValue((document.querySelector('[data-onboarding-field="licensed_beds"]') || {}).value));
-        var acute = Number(fieldValue((document.querySelector('[data-onboarding-field="acute_beds"]') || {}).value));
         var swing = Number(fieldValue((document.querySelector('[data-onboarding-field="swing_beds"]') || {}).value));
-        warning.hidden = !(licensed > 0 && acute + swing > licensed);
+        warning.hidden = !(licensed > 0 && swing > licensed);
+    }
+
+    function updateStepOneAffiliationUI() {
+        var status = document.querySelector('[data-onboarding-field="independent_or_system"]');
+        var question = document.querySelector('[data-question="system_network_name"]');
+        var field = document.querySelector('[data-onboarding-field="system_network_name"]');
+        if (!status || !question || !field) {
+            return;
+        }
+        var settings = affiliationSettingsForStatus(status.value);
+        question.hidden = !settings;
+        question.style.display = settings ? '' : 'none';
+        question.classList.toggle('qn-affiliation-visible', !!settings);
+        if (!settings) {
+            field.value = '';
+            return;
+        }
+        var label = question.querySelector('span');
+        if (label) {
+            label.textContent = settings.label;
+        }
+        field.placeholder = settings.placeholder;
+    }
+
+    function updateStepOneQualityLeaderTitleUI() {
+        var title = document.querySelector('[data-onboarding-field="quality_leader_title"]');
+        var otherQuestion = document.querySelector('[data-question="quality_leader_title_other"]');
+        var otherField = document.querySelector('[data-onboarding-field="quality_leader_title_other"]');
+        if (!title || !otherQuestion || !otherField) {
+            return;
+        }
+        var showOther = fieldValue(title.value).trim().toLowerCase() === 'other';
+        otherQuestion.hidden = !showOther;
+        otherQuestion.style.display = showOther ? '' : 'none';
+        otherQuestion.classList.toggle('qn-quality-title-other-visible', showOther);
+        if (!showOther) {
+            otherField.value = '';
+        }
+        otherField.placeholder = 'Enter Quality Leader title';
+    }
+
+    function affiliationSettingsForStatus(value) {
+        var selected = normalizeAffiliationStatus(value);
+        var copy = {
+            system_owned: {
+                label: 'System name',
+                placeholder: 'Enter health system name'
+            },
+            network_affiliated: {
+                label: 'Network name',
+                placeholder: 'Enter network name'
+            },
+            other: {
+                label: 'Describe affiliation',
+                placeholder: 'Enter affiliation or ownership description'
+            }
+        };
+        return copy[selected] || null;
+    }
+
+    function normalizeAffiliationStatus(value) {
+        value = fieldValue(value).trim().toLowerCase().replace(/[\s-]+/g, '_');
+        if (value === 'system_owned' || value === 'system') {
+            return 'system_owned';
+        }
+        if (value === 'network_affiliated' || value === 'network') {
+            return 'network_affiliated';
+        }
+        if (value === 'other' || value === 'managed_services') {
+            return 'other';
+        }
+        return 'independent';
     }
 
     function updateStepTwoConditionalUI() {
-        var status = document.querySelector('[data-onboarding-field="accreditation_status"]');
+        var accreditorQuestion = document.querySelector('[data-question="accrediting_body"]');
         var accreditor = document.querySelector('[data-onboarding-field="accrediting_body"]');
-        var accreditorNote = document.getElementById('qn-accreditor-not-applicable-note');
-        var jointNote = document.getElementById('qn-joint-commission-note');
-        var poc = document.querySelector('[data-onboarding-field="open_plans_of_correction"]');
-        var pocWarning = document.getElementById('qn-poc-process-warning');
-        var statusValue = status ? status.value : '';
-        var accreditorIsNotApplicable = statusValue === 'cms_state_survey_only' || statusValue === 'not_accredited';
-        if (accreditorIsNotApplicable && accreditor && !accreditor.value) {
-            accreditor.value = 'not_applicable';
+        var accreditorOtherQuestion = document.querySelector('[data-question="accrediting_body_other"]');
+        var accreditorOther = document.querySelector('[data-onboarding-field="accrediting_body_other"]');
+        var lifeStatus = document.querySelector('[data-onboarding-field="life_safety_survey_agency_status"]');
+        var lifeNameQuestion = document.querySelector('[data-question="life_safety_survey_agency"]');
+        var lifeUrlQuestion = document.querySelector('[data-question="life_safety_survey_agency_url"]');
+        var lifeName = document.querySelector('[data-onboarding-field="life_safety_survey_agency"]');
+        var lifeUrl = document.querySelector('[data-onboarding-field="life_safety_survey_agency_url"]');
+        var lifeSafetyBranch = document.querySelector('[data-life-safety-branch]');
+        var otherSurveyStatus = document.querySelector('[data-onboarding-field="other_certification_licensing_surveys_status"]');
+        var otherSurveyQuestion = document.querySelector('[data-question="other_certification_licensing_surveys"]');
+        var otherSurveyDetails = document.querySelector('[data-onboarding-field="other_certification_licensing_surveys"]');
+        var processValue = currentOnboardingFieldValue('survey_compliance_process');
+        var showAccreditor = legacyStepTwoValue('survey_compliance_process', processValue) === 'deemed_accreditation_body_survey';
+        var showOtherAccreditor = showAccreditor && accreditor && legacyStepTwoValue('accrediting_body', accreditor.value) === 'other';
+        var showDifferentLifeSafetyAgency = lifeStatus && lifeStatus.value === 'different_agency';
+        var showOtherSurveyDetails = otherSurveyStatus && otherSurveyStatus.value === 'yes';
+        var branchRow = document.querySelector('.qn-survey-branch-row');
+
+        updateSurveyPathwayCardState();
+        if (branchRow) {
+            branchRow.hidden = !showAccreditor;
+            branchRow.style.display = showAccreditor ? '' : 'none';
         }
-        if (accreditorNote) {
-            accreditorNote.hidden = !accreditorIsNotApplicable;
+        toggleConditionalQuestion(accreditorQuestion, showAccreditor, accreditor);
+        toggleConditionalQuestion(accreditorOtherQuestion, showOtherAccreditor, accreditorOther);
+        if (lifeSafetyBranch) {
+            lifeSafetyBranch.hidden = !showDifferentLifeSafetyAgency;
+            lifeSafetyBranch.style.display = showDifferentLifeSafetyAgency ? '' : 'none';
         }
-        if (jointNote) {
-            jointNote.hidden = !(accreditor && accreditor.value === 'joint_commission');
+        toggleConditionalQuestion(lifeNameQuestion, showDifferentLifeSafetyAgency, lifeName);
+        toggleConditionalQuestion(lifeUrlQuestion, showDifferentLifeSafetyAgency, lifeUrl);
+        toggleConditionalQuestion(otherSurveyQuestion, showOtherSurveyDetails, otherSurveyDetails);
+    }
+
+    function currentOnboardingFieldValue(key) {
+        var fields = Array.prototype.slice.call(document.querySelectorAll('[data-onboarding-field="' + key + '"]'));
+        if (!fields.length) {
+            return '';
         }
-        if (pocWarning) {
-            pocWarning.hidden = !(poc && poc.value === 'yes');
+        if (fields[0].type === 'radio') {
+            var checked = fields.find(function (field) {
+                return field.checked;
+            });
+            return checked ? checked.value : '';
+        }
+        if (fields[0].type === 'checkbox') {
+            return fields[0].checked ? 'yes' : '';
+        }
+        return fields[0].value || '';
+    }
+
+    function updateSurveyPathwayCardState() {
+        document.querySelectorAll('.qn-survey-pathway-card').forEach(function (card) {
+            var input = card.querySelector('input[type="radio"]');
+            card.classList.toggle('qn-survey-pathway-selected', !!(input && input.checked));
+        });
+    }
+
+    function toggleConditionalQuestion(question, shouldShow, field) {
+        if (!question) {
+            return;
+        }
+        question.hidden = !shouldShow;
+        question.style.display = shouldShow ? '' : 'none';
+        if (!shouldShow && field && field.value) {
+            field.value = '';
         }
     }
 
@@ -7167,10 +9963,10 @@
             }
         });
 
-        var bloodBank = document.querySelector('[data-onboarding-field="blood_bank_model"]');
+        var bloodBankValue = currentOnboardingFieldValue('blood_bank_model');
         var transfusions = document.querySelector('[data-onboarding-field="transfusions_per_year"]');
         var bloodNote = document.getElementById('qn-blood-not-applicable-note');
-        var noBlood = bloodBank && bloodBank.value === 'no_blood_products_on_site';
+        var noBlood = bloodBankValue === 'no_blood_products_on_site';
         var zeroTransfusions = !transfusions || transfusions.value === '' || Number(transfusions.value) === 0;
         if (bloodNote) {
             bloodNote.hidden = !(noBlood && zeroTransfusions);
@@ -7181,6 +9977,26 @@
         if (contractedNote) {
             contractedNote.hidden = !(visiting && visiting.value === 'yes');
         }
+
+        var otherModelParents = {
+            laboratory_model_other: 'laboratory_model',
+            radiology_model_other: 'radiology_model',
+            pharmacy_model_other: 'pharmacy_model',
+            anesthesia_moderate_sedation_model_other: 'anesthesia_moderate_sedation_model',
+            blood_bank_model_other: 'blood_bank_model'
+        };
+        Object.keys(otherModelParents).forEach(function (detailKey) {
+            var parentKey = otherModelParents[detailKey];
+            var selected = Array.prototype.slice.call(document.querySelectorAll('[data-onboarding-field="' + parentKey + '"]:checked, [data-checklist-field="' + parentKey + '"]:checked')).map(function (field) {
+                return field.value;
+            });
+            var detailQuestion = document.querySelector('[data-question="' + detailKey + '"]');
+            var showDetail = selected.indexOf('other') !== -1;
+            if (detailQuestion) {
+                detailQuestion.hidden = !showDetail;
+                detailQuestion.style.display = showDetail ? '' : 'none';
+            }
+        });
     }
 
     function updateStepFourConditionalUI() {
@@ -7231,6 +10047,25 @@
         }
     }
 
+    function updateStepSevenGoalTiles(tileGroup) {
+        if (!tileGroup) {
+            return;
+        }
+        var limit = parseInt(tileGroup.getAttribute('data-goal-limit') || '0', 10);
+        var fields = Array.prototype.slice.call(tileGroup.querySelectorAll('[data-checklist-field]'));
+        var checked = fields.filter(function (field) { return field.checked; });
+        var count = tileGroup.querySelector('[data-goal-count]');
+        if (count) {
+            count.textContent = limit > 0 ? checked.length + ' of ' + limit + ' selected' : checked.length + ' selected';
+        }
+        if (limit > 0) {
+            fields.forEach(function (field) {
+                field.disabled = !field.checked && checked.length >= limit;
+            });
+            tileGroup.classList.toggle('qn-step7-goal-limit-reached', checked.length >= limit);
+        }
+    }
+
     function closeMultiselects(except) {
         document.querySelectorAll('.qn-multiselect.qn-multiselect-open').forEach(function (multiselect) {
             if (except && multiselect === except) {
@@ -7249,6 +10084,9 @@
             return;
         }
         var prefix = 'Survey';
+        if (repeater.getAttribute('data-repeater-style') === 'survey-history') {
+            prefix = 'Survey / review';
+        }
         if (repeater.getAttribute('data-repeater-style') === 'committee-card') {
             prefix = 'Committee';
         }
@@ -7261,7 +10099,12 @@
         repeater.querySelectorAll('.qn-survey-history-row').forEach(function (row, index) {
             var title = row.querySelector('.qn-survey-card-header strong');
             if (title) {
-                title.textContent = prefix + ' ' + (index + 1);
+                if (repeater.getAttribute('data-repeater-style') === 'committee-card') {
+                    var committeeField = row.querySelector('[data-column="committee_name"]');
+                    title.textContent = optionLabelByValue(stepFourOptions('committee_name'), committeeField ? committeeField.value : '') || (prefix + ' ' + (index + 1));
+                } else {
+                    title.textContent = prefix + ' ' + (index + 1);
+                }
             }
             row.querySelectorAll('[data-repeater-row]').forEach(function (field) {
                 field.setAttribute('data-index', index);
@@ -7275,11 +10118,15 @@
             return item;
         }
         row.querySelectorAll('[data-repeater-row]').forEach(function (field) {
-            item[field.getAttribute('data-column') || 'note'] = field.value;
+            item[field.getAttribute('data-column') || 'note'] = dateFieldValue(field);
         });
         row.querySelectorAll('[data-repeater-detail]').forEach(function (field) {
-            setNestedValue(item, field.getAttribute('data-detail-path'), field.value);
+            setNestedValue(item, field.getAttribute('data-detail-path'), dateFieldValue(field));
         });
+        var repeater = row.closest('[data-repeater]');
+        if (repeater && repeater.getAttribute('data-repeater-style') === 'committee-card') {
+            item.frequency_timing = committeeTimingSummary(item);
+        }
         return item;
     }
 
@@ -7306,6 +10153,10 @@
     function collectOnboardingAnswers() {
         var answers = {};
         document.querySelectorAll('[data-onboarding-field]').forEach(function (field) {
+            var owner = field.closest('[data-question]');
+            if (owner && owner.hidden) {
+                return;
+            }
             var key = field.getAttribute('data-onboarding-field');
             if (field.type === 'checkbox') {
                 answers[key] = field.checked;
@@ -7321,20 +10172,46 @@
                 var numeric = field.value === '' ? '' : Math.max(0, Math.floor(Number(field.value) || 0));
                 answers[key] = numeric === '' ? '' : String(numeric);
             } else {
-                answers[key] = field.value;
+                answers[key] = dateFieldValue(field);
             }
         });
+        if (answers.independent_or_system !== undefined) {
+            answers.independent_or_system = normalizeAffiliationStatus(answers.independent_or_system);
+        }
+        if (answers.independent_or_system === 'independent' || !answers.independent_or_system) {
+            answers.system_network_name = '';
+        }
         document.querySelectorAll('[data-plan-field]').forEach(function (field) {
             var key = field.getAttribute('data-plan-field');
             var planKey = field.getAttribute('data-plan-key');
             answers[key] = answers[key] || {};
-            answers[key][planKey] = field.value;
+            answers[key][planKey] = dateFieldValue(field);
         });
         document.querySelectorAll('[data-structured-field]').forEach(function (field) {
             var key = field.getAttribute('data-structured-field');
             var dataKey = field.getAttribute('data-structured-key');
             answers[key] = answers[key] || {};
-            answers[key][dataKey] = field.value;
+            answers[key][dataKey] = dateFieldValue(field);
+        });
+        document.querySelectorAll('[data-plan-policy-inventory]').forEach(function (inventory) {
+            var key = inventory.getAttribute('data-plan-policy-inventory');
+            var rows = {};
+            inventory.querySelectorAll('[data-plan-policy-field]').forEach(function (field) {
+                var policyKey = field.getAttribute('data-plan-policy-field');
+                var dataKey = field.getAttribute('data-plan-policy-key');
+                rows[policyKey] = rows[policyKey] || {};
+                rows[policyKey][dataKey] = dateFieldValue(field);
+            });
+            answers[key] = planPolicyInventoryRows().map(function (template) {
+                var item = rows[template.key] || {};
+                item.policy_key = template.key;
+                item.policy_name = template.name;
+                item.category = template.category;
+                item.guidance = template.guidance;
+                item.upload_status = item.upload_status || 'not_configured';
+                item.scout_status = item.scout_status || 'structured_ready';
+                return item;
+            });
         });
         document.querySelectorAll('[data-checklist]').forEach(function (checklist) {
             var key = checklist.getAttribute('data-checklist');
@@ -7349,15 +10226,32 @@
             repeater.querySelectorAll('.qn-repeater-row').forEach(function (row) {
                 var item = {};
                 row.querySelectorAll('[data-repeater-row]').forEach(function (field) {
-                    item[field.getAttribute('data-column') || 'note'] = field.value;
+                    item[field.getAttribute('data-column') || 'note'] = dateFieldValue(field);
                 });
                 row.querySelectorAll('[data-repeater-detail]').forEach(function (field) {
-                    setNestedValue(item, field.getAttribute('data-detail-path'), field.value);
+                    setNestedValue(item, field.getAttribute('data-detail-path'), dateFieldValue(field));
                 });
+                if (repeater.getAttribute('data-repeater-style') === 'committee-card') {
+                    item.frequency_timing = committeeTimingSummary(item);
+                }
+                if (row.classList.contains('qn-reporting-other-row') && !reportingOtherRowHasValue(item)) {
+                    return;
+                }
                 answers[key].push(item);
             });
         });
         return answers;
+    }
+
+    function reportingOtherRowHasValue(item) {
+        if (!item) {
+            return false;
+        }
+        return !!(fieldValue(item.report_name || '') ||
+            fieldValue(item.submit_to_method || '') ||
+            fieldValue(item.frequency || '') ||
+            fieldValue(item.due_dates || '') ||
+            (item.due_date_details && fieldValue(item.due_date_details.next_due_date || '')));
     }
 
     function setNestedValue(target, path, value) {
@@ -7411,7 +10305,12 @@
             if (advance && state.onboardingIndex < state.onboarding.steps.length - 1) {
                 state.onboardingIndex++;
             }
-            return loadOnboarding(state.onboardingOrganizationId, {showLoading: false});
+            return loadOnboarding(state.onboardingOrganizationId, {showLoading: false}).then(function (result) {
+                if (advance) {
+                    scrollOnboardingStepToTop();
+                }
+                return result;
+            });
         }).catch(function (error) {
             setText('#qn-onboarding-message', error.message);
             setOnboardingSaveStatus('error', 'Could not save');
@@ -7448,6 +10347,37 @@
         });
     }
 
+    function scrollOnboardingStepToTop() {
+        window.setTimeout(function () {
+            var form = document.getElementById('qn-onboarding-form');
+            if (!form) {
+                return;
+            }
+            form.scrollIntoView({behavior: 'smooth', block: 'start'});
+            var heading = document.getElementById('qn-onboarding-step-title');
+            if (heading) {
+                heading.setAttribute('tabindex', '-1');
+                try {
+                    heading.focus({preventScroll: true});
+                } catch (error) {
+                    heading.focus();
+                }
+            }
+        }, 60);
+    }
+
+    function autosaveOnboardingStep() {
+        if (!state.onboarding || !Array.isArray(state.onboarding.steps)) {
+            return Promise.resolve();
+        }
+        var step = state.onboarding.steps[state.onboardingIndex];
+        var answers = collectOnboardingAnswers();
+        if (canEditOnboardingStep(step)) {
+            state.onboarding.answers = Object.assign({}, state.onboarding.answers || {}, answers);
+        }
+        return saveOnboardingStepInBackground(step, answers);
+    }
+
     function switchOnboardingStepInstant(targetIndex) {
         if (!state.onboarding || !state.onboarding.steps) {
             return;
@@ -7467,10 +10397,95 @@
         window.clearTimeout(state.onboardingSwitchTimer);
         state.onboardingSwitchTimer = window.setTimeout(function () {
             renderOnboarding();
+            scrollOnboardingStepToTop();
             if (canEditOnboardingStep(previousStep)) {
                 saveOnboardingStepInBackground(previousStep, answers);
             }
         }, 0);
+    }
+
+    function switchOnboardingStepBySection(sectionKey) {
+        if (!sectionKey || !state.onboarding || !Array.isArray(state.onboarding.steps)) {
+            return;
+        }
+        var targetIndex = state.onboarding.steps.findIndex(function (step) {
+            return step && step.section_key === sectionKey;
+        });
+        if (targetIndex >= 0) {
+            switchOnboardingStepInstant(targetIndex);
+        }
+    }
+
+    function applyOnboardingUrlSection() {
+        if (state.onboardingUrlSectionApplied || !state.onboarding || !Array.isArray(state.onboarding.steps)) {
+            return false;
+        }
+        var sectionKey = getUrlOnboardingSection();
+        if (!sectionKey) {
+            state.onboardingUrlSectionApplied = true;
+            return false;
+        }
+        if (normalizeSectionTarget(window.location.hash ? window.location.hash.replace('#', '') : '') !== 'day-0-setup') {
+            return false;
+        }
+        var targetIndex = state.onboarding.steps.findIndex(function (step) {
+            return step && step.section_key === sectionKey;
+        });
+        if (targetIndex < 0) {
+            state.onboardingUrlSectionApplied = true;
+            return false;
+        }
+        if (targetIndex === state.onboardingIndex) {
+            state.onboardingUrlSectionApplied = true;
+            return false;
+        }
+        state.onboardingUrlSectionApplied = true;
+        switchOnboardingStepInstant(targetIndex);
+        return true;
+    }
+
+    function applyOnboardingUrlQuestionFocus() {
+        if (state.onboardingUrlQuestionApplied || !state.onboarding) {
+            return;
+        }
+        var questionKey = getUrlOnboardingQuestion();
+        if (!questionKey) {
+            state.onboardingUrlQuestionApplied = true;
+            return;
+        }
+        if (normalizeSectionTarget(window.location.hash ? window.location.hash.replace('#', '') : '') !== 'day-0-setup') {
+            return;
+        }
+        state.onboardingUrlQuestionApplied = true;
+        window.setTimeout(function () {
+            var target = findOnboardingQuestionElement(questionKey);
+            if (!target) {
+                return;
+            }
+            target.classList.add('qn-question-url-focus');
+            target.scrollIntoView({behavior: 'smooth', block: 'center'});
+            var field = target.querySelector('input:not([type="hidden"]), select, textarea, button');
+            if (field && typeof field.focus === 'function') {
+                try {
+                    field.focus({preventScroll: true});
+                } catch (error) {
+                    field.focus();
+                }
+            }
+            window.setTimeout(function () {
+                target.classList.remove('qn-question-url-focus');
+            }, 4200);
+        }, 120);
+    }
+
+    function findOnboardingQuestionElement(questionKey) {
+        var questions = document.querySelectorAll('[data-question]');
+        for (var index = 0; index < questions.length; index += 1) {
+            if (questions[index].getAttribute('data-question') === questionKey) {
+                return questions[index];
+            }
+        }
+        return null;
     }
 
     function submitOnboarding(trigger) {
@@ -7510,6 +10525,7 @@
             setText('#qn-onboarding-message', message);
             setOnboardingSaveStatus('error', 'Submit failed');
             showToast(message, 'warning');
+            focusOnboardingValidationError(error);
         }).finally(function () {
             state.onboardingSubmitting = false;
             restoreButton();
@@ -7517,19 +10533,61 @@
         });
     }
 
+    function focusOnboardingValidationError(error) {
+        var questionKey = error && error.questionKey ? error.questionKey : '';
+        if (!questionKey || !state.onboarding) {
+            return;
+        }
+        var question = (state.onboarding.questions || []).find(function (item) {
+            return item.question_key === questionKey;
+        });
+        var section = question ? (state.onboarding.sections || []).find(function (item) {
+            return Number(item.id) === Number(question.section_id);
+        }) : null;
+        var targetIndex = section ? (state.onboarding.steps || []).findIndex(function (step) {
+            return step.section_key === section.section_key;
+        }) : -1;
+        if (targetIndex >= 0 && targetIndex !== state.onboardingIndex) {
+            state.onboardingIndex = targetIndex;
+            renderOnboarding();
+        }
+        window.setTimeout(function () {
+            var target = findOnboardingQuestionElement(questionKey);
+            if (!target) {
+                return;
+            }
+            target.classList.add('qn-question-url-focus');
+            target.scrollIntoView({behavior: 'smooth', block: 'center'});
+            var field = target.querySelector('input:not([type="hidden"]), select, textarea, button');
+            if (field) {
+                field.focus();
+            }
+        }, 120);
+    }
+
     function closeInviteModal() {
         var modal = document.getElementById('qn-invite-modal');
+        var inviteState = document.getElementById('qn-invite-state');
         var org = document.getElementById('qn-invite-organization');
         var role = document.getElementById('qn-invite-role');
+        var stateField = document.getElementById('qn-invite-state-field');
         var orgField = document.getElementById('qn-invite-organization-field');
         var roleField = document.getElementById('qn-invite-role-field');
         var fixedContext = document.getElementById('qn-invite-fixed-context');
+        if (inviteState) {
+            inviteState.value = '';
+            inviteState.disabled = false;
+            syncSearchableSelect(inviteState);
+        }
         if (org) {
             org.disabled = false;
             syncSearchableSelect(org);
         }
         if (role) {
             role.disabled = false;
+        }
+        if (stateField) {
+            stateField.hidden = false;
         }
         if (orgField) {
             orgField.hidden = false;
@@ -7587,6 +10645,49 @@
     function getUrlOrganizationId() {
         var params = new URLSearchParams(window.location.search);
         return params.get('organization_id');
+    }
+
+    function getUrlOnboardingSection() {
+        var params = new URLSearchParams(window.location.search);
+        var raw = params.get('setup_section') || params.get('onboarding_section') || '';
+        var section = String(raw).toLowerCase().replace(/[^a-z0-9_ -]/g, '').replace(/[-\s]+/g, '_');
+        var aliases = {
+            day_0_setup: 'hospital_director_info',
+            hospital_setup: 'hospital_director_info',
+            hospital_director: 'hospital_director_info',
+            hospital_director_info: 'hospital_director_info',
+            accreditation: 'accreditation_survey_readiness',
+            survey: 'accreditation_survey_readiness',
+            survey_readiness: 'accreditation_survey_readiness',
+            accreditation_survey_readiness: 'accreditation_survey_readiness',
+            services: 'services_clinical_model',
+            clinical_model: 'services_clinical_model',
+            services_clinical_model: 'services_clinical_model',
+            committees: 'committees_reporting',
+            reporting_setup: 'committees_reporting',
+            committees_reporting: 'committees_reporting',
+            plans: 'plans_policies_monitoring',
+            policies: 'plans_policies_monitoring',
+            monitoring_setup: 'plans_policies_monitoring',
+            plans_policies_monitoring: 'plans_policies_monitoring',
+            measures: 'measures_qi_projects',
+            qi_projects: 'measures_qi_projects',
+            measures_qi_projects: 'measures_qi_projects',
+            goals: 'goals_learning_contacts',
+            learning: 'goals_learning_contacts',
+            contacts: 'goals_learning_contacts',
+            goals_learning_contacts: 'goals_learning_contacts',
+            regulatory: 'regulatory_tools_preferences',
+            preferences: 'regulatory_tools_preferences',
+            regulatory_tools_preferences: 'regulatory_tools_preferences'
+        };
+        return aliases[section] || '';
+    }
+
+    function getUrlOnboardingQuestion() {
+        var params = new URLSearchParams(window.location.search);
+        var raw = params.get('setup_question') || params.get('onboarding_question') || '';
+        return String(raw).toLowerCase().replace(/[^a-z0-9_ -]/g, '').replace(/[-\s]+/g, '_');
     }
 
     function updateUserRole(userId, role, context, field) {
@@ -7742,6 +10843,13 @@
         if (onboardingGuideButton) {
             onboardingGuideButton.addEventListener('click', function () { openOnboardingGuide(false); });
         }
+        var onboardingScoutContextButton = document.getElementById('qn-onboarding-scout-context-button');
+        if (onboardingScoutContextButton) {
+            onboardingScoutContextButton.addEventListener('click', openScoutContextModal);
+        }
+        document.querySelectorAll('[data-close-scout-context]').forEach(function (node) {
+            node.addEventListener('click', closeScoutContextModal);
+        });
         var onboardingWorkspaceGuideButton = document.getElementById('qn-onboarding-workspace-guide-button');
         if (onboardingWorkspaceGuideButton) {
             onboardingWorkspaceGuideButton.addEventListener('click', function () { openWorkspaceWelcome(false); });
@@ -7765,6 +10873,14 @@
         var workspaceWelcomePrint = document.getElementById('qn-workspace-welcome-print');
         if (workspaceWelcomePrint) {
             workspaceWelcomePrint.addEventListener('click', printQuestionsFromWelcome);
+        }
+        var workspaceWelcomeDismiss = document.getElementById('qn-workspace-welcome-dismiss-check');
+        if (workspaceWelcomeDismiss) {
+            workspaceWelcomeDismiss.addEventListener('change', function () {
+                if (!workspaceWelcomeDismiss.checked) {
+                    clearWorkspaceWelcomeDismissal();
+                }
+            });
         }
         document.querySelectorAll('[data-close-workspace-welcome]').forEach(function (node) {
             node.addEventListener('click', function () { closeWorkspaceWelcome(true); });
@@ -7888,8 +11004,49 @@
             renderInvitations('hospital');
         });
         document.addEventListener('click', function (event) {
+            if (event.target.closest('.qn-plan-policy-row > summary input, .qn-plan-policy-row > summary select, .qn-plan-policy-row > summary button')) {
+                event.stopPropagation();
+            }
             if (!event.target.closest('.qn-searchable-select')) {
                 closeSearchableSelects();
+            }
+            var privacyAck = event.target.closest('[data-document-privacy-ack]');
+            if (privacyAck) {
+                event.preventDefault();
+                try {
+                    if (window.localStorage) {
+                        window.localStorage.setItem('qn_hospital_setup_document_privacy_ack', '1');
+                    }
+                } catch (error) {
+                    // The notice can still be dismissed for the current render.
+                }
+                var privacyNotice = privacyAck.closest('[data-document-privacy-notice]');
+                if (privacyNotice) {
+                    privacyNotice.remove();
+                }
+                return;
+            }
+            var planPolicyLink = event.target.closest('[data-plan-policy-link]');
+            if (planPolicyLink) {
+                event.preventDefault();
+                linkPlanPolicyDocument(planPolicyLink.getAttribute('data-plan-policy-link'));
+                return;
+            }
+            var planPolicyUpload = event.target.closest('[data-plan-policy-upload]');
+            if (planPolicyUpload) {
+                event.preventDefault();
+                var uploadControls = planPolicyUpload.closest('.qn-plan-policy-document-controls');
+                var fileInput = uploadControls ? uploadControls.querySelector('[data-plan-policy-file]') : null;
+                if (fileInput) {
+                    fileInput.click();
+                }
+                return;
+            }
+            var planPolicyRemove = event.target.closest('[data-plan-policy-remove]');
+            if (planPolicyRemove) {
+                event.preventDefault();
+                deletePlanPolicyDocument(planPolicyRemove.getAttribute('data-plan-policy-remove'), planPolicyRemove);
+                return;
             }
             var reportingGenerate = event.target.closest('[data-reporting-generate-scout]');
             if (reportingGenerate) {
@@ -7919,6 +11076,7 @@
             if (sectionTarget) {
                 event.preventDefault();
                 activateSection(sectionTarget.getAttribute('data-section-target'), true);
+                switchOnboardingStepBySection(sectionTarget.getAttribute('data-onboarding-section'));
                 return;
             }
             var menuToggle = event.target.closest('[data-action-menu-toggle]');
@@ -7928,8 +11086,20 @@
                 var willOpen = menu ? menu.hidden : false;
                 closeActionMenus(menu);
                 if (menu) {
+                    menu.classList.remove('qn-action-menu-list-left', 'qn-action-menu-list-up');
                     menu.hidden = !willOpen;
                     menuToggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+                    if (willOpen) {
+                        window.requestAnimationFrame(function () {
+                            var rect = menu.getBoundingClientRect();
+                            if (rect.left < 8) {
+                                menu.classList.add('qn-action-menu-list-left');
+                            }
+                            if (rect.bottom > window.innerHeight - 8) {
+                                menu.classList.add('qn-action-menu-list-up');
+                            }
+                        });
+                    }
                 }
                 return;
             }
@@ -8017,6 +11187,10 @@
             }
         });
         document.addEventListener('change', function (event) {
+            if (event.target.matches('[data-plan-policy-file]')) {
+                uploadPlanPolicyDocument(event.target);
+                return;
+            }
             if (event.target.id === 'qn-hospital-switcher') {
                 setControlLoading(event.target, true);
                 setWorkspaceLoading(true, 'Switching hospital workspace...');
@@ -8029,6 +11203,21 @@
                     setControlLoading(event.target, false);
                     setWorkspaceLoading(false);
                 });
+                return;
+            }
+            if (event.target.matches('[data-cadence-report-toggle]')) {
+                var cadenceRow = event.target.closest('.qn-reporting-calendar-row');
+                var reportHidden = cadenceRow ? cadenceRow.querySelector('[data-column="is_reported"]') : null;
+                if (cadenceRow) {
+                    cadenceRow.classList.toggle('is-selected', event.target.checked);
+                }
+                if (reportHidden) {
+                    reportHidden.value = event.target.checked ? '1' : '';
+                    reportHidden.dispatchEvent(new Event('input', {bubbles: true}));
+                }
+                setOnboardingSaveStatus('unsaved', 'Unsaved changes');
+                window.clearTimeout(state.autosaveTimer);
+                state.autosaveTimer = window.setTimeout(autosaveOnboardingStep, 900);
                 return;
             }
             var role = event.target.closest('[data-user-role]');
@@ -8060,44 +11249,115 @@
             if (event.target.matches('#qn-invite-role')) {
                 updateInviteRoleDescription();
             }
-            if (event.target.matches('[data-onboarding-field], [data-plan-field], [data-repeater-row], [data-repeater-detail], [data-structured-field], [data-checklist-field]')) {
+            if (event.target.matches('#qn-invite-state')) {
+                renderInviteHospitalOptions('');
+            }
+            if (event.target.matches('[data-onboarding-field], [data-plan-field], [data-plan-policy-field], [data-repeater-row], [data-repeater-detail], [data-structured-field], [data-checklist-field]')) {
                 if (event.target.type === 'number' && event.target.value !== '') {
                     event.target.value = String(Math.max(0, Math.floor(Number(event.target.value) || 0)));
                 }
+                if (event.target.getAttribute('data-date-format') === 'us') {
+                    event.target.value = formatDateForDisplay(event.target.value);
+                    if (isIncompleteUsDate(event.target.value)) {
+                        event.target.setCustomValidity('Use mm/dd/yyyy.');
+                        setOnboardingSaveStatus('unsaved', 'Unsaved changes');
+                        return;
+                    }
+                    event.target.setCustomValidity('');
+                }
                 updateStepOneBedWarning();
+                updateStepOneAffiliationUI();
+                updateStepOneQualityLeaderTitleUI();
+                if (event.target.matches('[data-onboarding-field="independent_or_system"]')) {
+                    window.setTimeout(updateStepOneAffiliationUI, 0);
+                }
+                if (event.target.matches('[data-onboarding-field="quality_leader_title"]')) {
+                    window.setTimeout(updateStepOneQualityLeaderTitleUI, 0);
+                }
                 updateStepTwoConditionalUI();
                 updateStepThreeConditionalUI();
                 updateStepFourConditionalUI();
                 updateStepSevenConditionalUI();
                 if (event.target.matches('[data-checklist-field]')) {
                     updateMultiselectUI(event.target.closest('.qn-multiselect'));
+                    updateStepSevenGoalTiles(event.target.closest('.qn-step7-goal-tiles'));
                 }
                 if (event.target.matches('[data-repeater-row]')) {
                     refreshDueDatePanel(event.target);
                 }
+                if (event.target.matches('[data-plan-policy-key="status"]') && event.target.value === 'folded_into_another') {
+                    var policyRow = event.target.closest('.qn-plan-policy-row');
+                    if (policyRow) {
+                        policyRow.open = true;
+                    }
+                }
                 setOnboardingSaveStatus('unsaved', 'Unsaved changes');
                 window.clearTimeout(state.autosaveTimer);
-                state.autosaveTimer = window.setTimeout(function () { saveOnboardingStep(false); }, 900);
+                state.autosaveTimer = window.setTimeout(autosaveOnboardingStep, 900);
             }
         });
         document.addEventListener('input', function (event) {
             if (event.target.matches('[data-onboarding-field], [data-plan-field], [data-repeater-row], [data-repeater-detail], [data-structured-field], [data-checklist-field]')) {
+                if (event.target.getAttribute('data-date-format') === 'us' && isIncompleteUsDate(event.target.value)) {
+                    event.target.setCustomValidity('Use mm/dd/yyyy.');
+                    setOnboardingSaveStatus('unsaved', 'Unsaved changes');
+                    window.clearTimeout(state.autosaveTimer);
+                    return;
+                }
+                if (event.target.getAttribute('data-date-format') === 'us') {
+                    event.target.setCustomValidity('');
+                }
                 updateStepOneBedWarning();
+                updateStepOneAffiliationUI();
+                updateStepOneQualityLeaderTitleUI();
+                if (event.target.matches('[data-onboarding-field="independent_or_system"]')) {
+                    window.setTimeout(updateStepOneAffiliationUI, 0);
+                }
+                if (event.target.matches('[data-onboarding-field="quality_leader_title"]')) {
+                    window.setTimeout(updateStepOneQualityLeaderTitleUI, 0);
+                }
                 updateStepTwoConditionalUI();
                 updateStepThreeConditionalUI();
                 updateStepFourConditionalUI();
                 updateStepSevenConditionalUI();
                 setOnboardingSaveStatus('unsaved', 'Unsaved changes');
                 window.clearTimeout(state.autosaveTimer);
-                state.autosaveTimer = window.setTimeout(function () { saveOnboardingStep(false); }, 900);
+                state.autosaveTimer = window.setTimeout(autosaveOnboardingStep, 900);
+            }
+            if (event.target.matches('[data-us-date-picker]')) {
+                var dateWrap = event.target.closest('.qn-us-date-wrap');
+                var visibleDate = dateWrap ? dateWrap.querySelector('[data-date-format="us"]') : null;
+                if (visibleDate) {
+                    visibleDate.value = formatDateForDisplay(event.target.value);
+                    visibleDate.setCustomValidity('');
+                    visibleDate.dispatchEvent(new Event('input', {bubbles: true}));
+                    visibleDate.dispatchEvent(new Event('change', {bubbles: true}));
+                }
             }
         });
         document.addEventListener('click', function (event) {
+            var dateTrigger = event.target.closest('[data-us-date-trigger]');
             var stepButton = event.target.closest('[data-onboarding-step]');
             var addRepeater = event.target.closest('[data-add-repeater]');
             var multiselectTrigger = event.target.closest('[data-multiselect-trigger]');
             var multiselectRemove = event.target.closest('[data-multiselect-remove]');
             var passwordToggle = event.target.closest('[data-toggle-password]');
+            if (dateTrigger) {
+                var dateWrapper = dateTrigger.closest('.qn-us-date-wrap');
+                var nativeDate = dateWrapper ? dateWrapper.querySelector('[data-us-date-picker]') : null;
+                var visibleDateInput = dateWrapper ? dateWrapper.querySelector('[data-date-format="us"]') : null;
+                if (nativeDate) {
+                    var normalizedDate = normalizeDateForStorage(visibleDateInput ? visibleDateInput.value : '');
+                    nativeDate.value = /^\d{4}-\d{2}-\d{2}$/.test(normalizedDate) ? normalizedDate : '';
+                    if (typeof nativeDate.showPicker === 'function') {
+                        nativeDate.showPicker();
+                    } else {
+                        nativeDate.focus();
+                        nativeDate.click();
+                    }
+                }
+                return;
+            }
             if (!event.target.closest('.qn-multiselect')) {
                 closeMultiselects();
             }
@@ -8122,7 +11382,7 @@
                 updateMultiselectUI(owner);
                 setOnboardingSaveStatus('unsaved', 'Unsaved changes');
                 window.clearTimeout(state.autosaveTimer);
-                state.autosaveTimer = window.setTimeout(function () { saveOnboardingStep(false); }, 900);
+                state.autosaveTimer = window.setTimeout(autosaveOnboardingStep, 900);
                 return;
             }
             if (passwordToggle) {
@@ -8179,14 +11439,14 @@
                             emptyText = '<div class="qn-survey-empty"><strong>No reporting obligations added yet.</strong><span>Add recurring or event-triggered reports.</span></div>';
                         }
                         if (style === 'backup-user-card') {
-                            emptyText = '<div class="qn-survey-empty"><strong>No backup users added yet.</strong><span>Add backup visibility users such as the CNO, backup quality coordinator, or executive sponsor.</span></div>';
+                            emptyText = '<div class="qn-survey-empty qn-step8-backup-empty"><strong>No backup users added.</strong><span>This can be completed later if backup coverage is not decided yet.</span></div>';
                         }
                         repeaterOwner.insertAdjacentHTML('afterbegin', emptyText);
                     }
                     refreshRepeaterCardLabels(repeaterOwner);
                     setOnboardingSaveStatus('unsaved', 'Unsaved changes');
                     window.clearTimeout(state.autosaveTimer);
-                    state.autosaveTimer = window.setTimeout(function () { saveOnboardingStep(false); }, 900);
+                    state.autosaveTimer = window.setTimeout(autosaveOnboardingStep, 900);
                 }
                 return;
             }
@@ -8461,6 +11721,10 @@
             return;
         }
         try {
+            if (config.isHomeWelcomePage) {
+                loadHomeWelcome();
+                return;
+            }
             if (document.body.classList.contains('qn-admin-console-page')) {
                 loadAdminConsole();
             }

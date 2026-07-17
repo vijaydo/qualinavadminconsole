@@ -2,7 +2,7 @@
 /**
  * Plugin Name: QualiNav Admin Console
  * Description: Frontend console foundation, user model, routing, and access control for QualiNav.
- * Version: 0.1.151
+ * Version: 0.1.289
  * Author: QualiNav
  * Text Domain: qualinav-admin-console
  */
@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('QN_ADMIN_CONSOLE_VERSION', '0.1.151');
+define('QN_ADMIN_CONSOLE_VERSION', '0.1.289');
 define('QN_ADMIN_CONSOLE_FILE', __FILE__);
 define('QN_ADMIN_CONSOLE_DIR', plugin_dir_path(__FILE__));
 define('QN_ADMIN_CONSOLE_URL', plugin_dir_url(__FILE__));
@@ -27,6 +27,7 @@ require_once QN_ADMIN_CONSOLE_DIR . 'includes/class-qn-branding.php';
 require_once QN_ADMIN_CONSOLE_DIR . 'includes/class-qn-email.php';
 require_once QN_ADMIN_CONSOLE_DIR . 'includes/class-qn-invitations.php';
 require_once QN_ADMIN_CONSOLE_DIR . 'includes/class-qn-questionnaire.php';
+require_once QN_ADMIN_CONSOLE_DIR . 'includes/class-qn-data-hub-integration.php';
 require_once QN_ADMIN_CONSOLE_DIR . 'includes/class-qn-onboarding.php';
 require_once QN_ADMIN_CONSOLE_DIR . 'includes/class-qn-scout.php';
 require_once QN_ADMIN_CONSOLE_DIR . 'includes/class-qn-auth.php';

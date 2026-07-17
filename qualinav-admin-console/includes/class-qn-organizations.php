@@ -205,20 +205,41 @@ class QN_Organizations
             return null;
         }
 
-        $row = $wpdb->get_row(
+        $mapping_table = QN_DB::user_organizations_table();
+        $row = null;
+        if (QN_DB::table_exists($mapping_table)) {
+            $row = $wpdb->get_row(
+                $wpdb->prepare(
+                    "SELECT u.ID, u.display_name, u.user_email
+                     FROM {$mapping_table} uo
+                     INNER JOIN {$wpdb->users} u ON u.ID = uo.user_id
+                     WHERE uo.organization_id = %d AND uo.qualinav_role = %s AND uo.status = %s AND u.qualinav_status = %s
+                     ORDER BY uo.is_default DESC, uo.accepted_at DESC, uo.id ASC LIMIT 1",
+                    $organization_id,
+                    'quality_director',
+                    'active',
+                    'active'
+                )
+            );
+        }
+
+        if (!$row) {
+            $row = $wpdb->get_row(
             $wpdb->prepare(
                 "SELECT ID, display_name, user_email FROM {$wpdb->users} WHERE organization_id = %d AND qualinav_role = %s AND qualinav_status = %s ORDER BY ID ASC LIMIT 1",
                 $organization_id,
                 'quality_director',
                 'active'
             )
-        );
+            );
+        }
 
         if (!$row) {
             return null;
         }
 
         return array(
+            'ID' => absint($row->ID),
             'user_id' => absint($row->ID),
             'display_name' => $row->display_name,
             'user_email' => $row->user_email,
@@ -227,12 +248,7 @@ class QN_Organizations
 
     public static function calculate_onboarding_percent($organization_id)
     {
-        $hospital = self::get_raw_hospital($organization_id);
-        if ($hospital && property_exists($hospital, 'onboarding_percent')) {
-            return max(0, min(100, absint($hospital->onboarding_percent)));
-        }
-
-        return 0;
+        return class_exists('QN_Questionnaire') ? QN_Questionnaire::calculate_total_progress($organization_id) : 0;
     }
 
     public static function dashboard_metrics()
@@ -270,7 +286,7 @@ class QN_Organizations
             $wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->users} WHERE qualinav_role = %s AND qualinav_status = %s", 'quality_director', 'active')
         );
 
-        $hospital_roles = array('quality_director', 'hospital_admin', 'backup_quality_user', 'reporting_user', 'policy_owner', 'committee_user', 'viewer');
+        $hospital_roles = array('quality_director', 'executive_leader', 'clinical_ancillary_services_leader', 'hospital_admin', 'backup_quality_user', 'reporting_user', 'policy_owner', 'committee_user', 'viewer');
         $placeholders = implode(',', array_fill(0, count($hospital_roles), '%s'));
         $hospital_users = (int) $wpdb->get_var(
             $wpdb->prepare(
@@ -439,6 +455,7 @@ class QN_Organizations
             'systems' => self::get_system_map(array_unique($system_ids)),
             'primary_quality_directors' => self::get_primary_quality_director_map(array_unique($organization_ids)),
             'onboarding_section_progress' => self::get_onboarding_progress_summary_map(array_unique($organization_ids)),
+            'submitted_onboarding' => self::get_submitted_onboarding_map(array_unique($organization_ids)),
         );
 
         return array_map(function ($row) use ($context) {
@@ -495,7 +512,7 @@ class QN_Organizations
                        AND uo.qualinav_role = %s
                        AND uo.status = %s
                        AND u.qualinav_status = %s
-                     ORDER BY uo.is_default DESC, uo.id ASC",
+                     ORDER BY uo.is_default DESC, uo.accepted_at DESC, uo.id ASC",
                     array_merge($organization_ids, array('quality_director', 'active', 'active'))
                 )
             );
@@ -505,6 +522,7 @@ class QN_Organizations
                 if (!isset($map[$organization_id])) {
                     $map[$organization_id] = array(
                         'ID' => absint($row->ID),
+                        'user_id' => absint($row->ID),
                         'display_name' => $row->display_name,
                         'user_email' => $row->user_email,
                     );
@@ -532,6 +550,7 @@ class QN_Organizations
                 if (!isset($map[$organization_id])) {
                     $map[$organization_id] = array(
                         'ID' => absint($row->ID),
+                        'user_id' => absint($row->ID),
                         'display_name' => $row->display_name,
                         'user_email' => $row->user_email,
                     );
@@ -544,17 +563,10 @@ class QN_Organizations
 
     private static function get_onboarding_progress_summary_map($organization_ids)
     {
-        global $wpdb;
-
         $map = array();
         $organization_ids = array_values(array_filter(array_map('absint', $organization_ids)));
         $steps = class_exists('QN_Onboarding') ? QN_Onboarding::get_step_definitions() : array();
         if (empty($organization_ids) || empty($steps)) {
-            return $map;
-        }
-
-        $progress_table = QN_DB::onboarding_progress_table();
-        if (!QN_DB::table_exists($progress_table)) {
             return $map;
         }
 
@@ -563,15 +575,7 @@ class QN_Organizations
             $step_titles[$step['section_key']] = $step['title'];
         }
 
-        $placeholders = implode(',', array_fill(0, count($organization_ids), '%d'));
-        $rows = $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT organization_id, section_key, status, percent_complete
-                 FROM {$progress_table}
-                 WHERE organization_id IN ({$placeholders})",
-                $organization_ids
-            )
-        );
+        $snapshots = QN_Questionnaire::calculate_progress_snapshots($organization_ids);
 
         foreach ($organization_ids as $organization_id) {
             $map[$organization_id] = array(
@@ -589,22 +593,16 @@ class QN_Organizations
                     'percent_complete' => 0,
                 );
             }
-        }
-
-        foreach ($rows as $row) {
-            $organization_id = absint($row->organization_id);
-            $section_key = sanitize_key($row->section_key);
-            if (!isset($map[$organization_id]) || !isset($step_titles[$section_key])) {
-                continue;
+            $snapshot = isset($snapshots[$organization_id]) ? $snapshots[$organization_id] : array('step_progress' => array());
+            foreach ($snapshot['step_progress'] as $progress) {
+                $section_key = sanitize_key($progress['section_key']);
+                if (!isset($map[$organization_id]['sections'][$section_key])) {
+                    continue;
+                }
+                $percent = max(0, min(100, absint($progress['percent_complete'])));
+                $map[$organization_id]['sections'][$section_key]['status'] = $percent >= 100 ? 'complete' : ($percent > 0 ? 'in_progress' : 'not_started');
+                $map[$organization_id]['sections'][$section_key]['percent_complete'] = $percent;
             }
-            $percent = max(0, min(100, absint($row->percent_complete)));
-            $status = $percent >= 100 ? 'complete' : ($percent > 0 ? 'in_progress' : 'not_started');
-            $map[$organization_id]['sections'][$section_key] = array(
-                'section_key' => $section_key,
-                'title' => $step_titles[$section_key],
-                'status' => $status,
-                'percent_complete' => $percent,
-            );
         }
 
         foreach ($map as $organization_id => $summary) {
@@ -624,6 +622,43 @@ class QN_Organizations
         }
 
         return $map;
+    }
+
+    private static function get_submitted_onboarding_map($organization_ids)
+    {
+        global $wpdb;
+
+        $map = array();
+        $organization_ids = array_values(array_filter(array_map('absint', (array) $organization_ids)));
+        $table = QN_DB::audit_logs_table();
+        if (!$organization_ids || !QN_DB::table_exists($table)) {
+            return $map;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($organization_ids), '%d'));
+        $rows = $wpdb->get_col(
+            $wpdb->prepare(
+                "SELECT DISTINCT organization_id FROM {$table} WHERE action = %s AND organization_id IN ({$placeholders})",
+                array_merge(array('onboarding_submitted'), $organization_ids)
+            )
+        );
+        foreach ($rows as $organization_id) {
+            $map[absint($organization_id)] = true;
+        }
+        return $map;
+    }
+
+    private static function effective_onboarding_status($organization_id, $stored_status, $context)
+    {
+        $stored_status = sanitize_key((string) $stored_status);
+        if ($stored_status === 'submitted') {
+            return $stored_status;
+        }
+        if (!empty($context['submitted_onboarding'][$organization_id])) {
+            return 'submitted';
+        }
+        $submitted = self::get_submitted_onboarding_map(array($organization_id));
+        return !empty($submitted[$organization_id]) ? 'submitted' : $stored_status;
     }
 
     private static function normalize_hospital_row($row, $context = array())
@@ -653,11 +688,17 @@ class QN_Organizations
         } elseif (isset($row->is_active)) {
             $status = absint($row->is_active) ? 'active' : 'inactive';
         }
+        $onboarding_status = self::effective_onboarding_status(
+            $organization_id,
+            isset($row->onboarding_status) ? $row->onboarding_status : '',
+            $context
+        );
 
         return array(
             'id' => $organization_id,
             'name' => $name,
             'organization_name' => $name,
+            'slug' => isset($row->slug) ? $row->slug : '',
             'city' => isset($row->city) ? $row->city : '',
             'zip' => isset($row->zip) ? $row->zip : '',
             'state_id' => isset($row->state_id) ? absint($row->state_id) : null,
@@ -680,13 +721,27 @@ class QN_Organizations
             'timezone' => isset($row->timezone) ? $row->timezone : '',
             'ccn' => isset($row->ccn) ? $row->ccn : '',
             'brandsetting_id' => isset($row->brandsetting_id) ? absint($row->brandsetting_id) : null,
-            'onboarding_status' => isset($row->onboarding_status) ? $row->onboarding_status : '',
-            'onboarding_percent' => isset($row->onboarding_percent) ? max(0, min(100, absint($row->onboarding_percent))) : 0,
+            'onboarding_status' => $onboarding_status,
+            'onboarding_percent' => isset($context['onboarding_section_progress'][$organization_id])
+                ? self::progress_summary_percent($context['onboarding_section_progress'][$organization_id])
+                : ($organization_id && class_exists('QN_Questionnaire') ? QN_Questionnaire::calculate_total_progress($organization_id) : 0),
             'onboarding_section_progress' => isset($context['onboarding_section_progress'][$organization_id]) ? $context['onboarding_section_progress'][$organization_id] : null,
             'primary_quality_director' => $primary_quality_director,
             'created_at' => isset($row->created_at) ? $row->created_at : null,
             'updated_at' => isset($row->updated_at) ? $row->updated_at : null,
         );
+    }
+
+    private static function progress_summary_percent($summary)
+    {
+        if (empty($summary['sections'])) {
+            return 0;
+        }
+        $total = 0;
+        foreach ($summary['sections'] as $section) {
+            $total += isset($section['percent_complete']) ? absint($section['percent_complete']) : 0;
+        }
+        return (int) round($total / count($summary['sections']));
     }
 
     private static function normalize_state_row($row)

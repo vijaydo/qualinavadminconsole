@@ -75,7 +75,7 @@ $initial_admin_data = array(
                 <article class="qn-card qn-metric-card"><span class="dashicons dashicons-building"></span><p class="qn-label"><?php esc_html_e('Total Hospitals', 'qualinav-admin-console'); ?></p><strong data-metric="total_hospitals">-</strong><small><?php esc_html_e('Configured facilities', 'qualinav-admin-console'); ?></small></article>
                 <article class="qn-card qn-metric-card"><span class="dashicons dashicons-yes-alt"></span><p class="qn-label"><?php esc_html_e('Active Hospitals', 'qualinav-admin-console'); ?></p><strong data-metric="active_hospitals">-</strong><small><?php esc_html_e('Currently enabled', 'qualinav-admin-console'); ?></small></article>
                 <article class="qn-card qn-metric-card"><span class="dashicons dashicons-networking"></span><p class="qn-label"><?php esc_html_e('Health Systems', 'qualinav-admin-console'); ?></p><strong id="qn-metric-health-systems">-</strong><small><?php esc_html_e('Systems and networks', 'qualinav-admin-console'); ?></small></article>
-                <article class="qn-card qn-metric-card"><span class="dashicons dashicons-groups"></span><p class="qn-label"><?php esc_html_e('Quality Directors', 'qualinav-admin-console'); ?></p><strong data-metric="total_quality_directors">-</strong><small><?php esc_html_e('Hospital leaders', 'qualinav-admin-console'); ?></small></article>
+                <article class="qn-card qn-metric-card"><span class="dashicons dashicons-groups"></span><p class="qn-label"><?php esc_html_e('Hospital Quality Directors', 'qualinav-admin-console'); ?></p><strong data-metric="total_quality_directors">-</strong><small><?php esc_html_e('Hospital leaders', 'qualinav-admin-console'); ?></small></article>
                 <article class="qn-card qn-metric-card"><span class="dashicons dashicons-email-alt"></span><p class="qn-label"><?php esc_html_e('Pending Invitations', 'qualinav-admin-console'); ?></p><strong id="qn-metric-pending-invites">-</strong><small><?php esc_html_e('Awaiting acceptance', 'qualinav-admin-console'); ?></small></article>
                 <article class="qn-card qn-metric-card"><span class="dashicons dashicons-clipboard"></span><p class="qn-label"><?php esc_html_e('Setup Pending', 'qualinav-admin-console'); ?></p><strong data-metric="onboarding_pending">-</strong><small><?php esc_html_e('Setup still open', 'qualinav-admin-console'); ?></small></article>
             </div>
@@ -106,7 +106,7 @@ $initial_admin_data = array(
             <section class="qn-panel qn-section" id="hospitals" data-section="hospitals" hidden>
                 <div class="qn-section-toolbar">
                     <div>
-                        <p><?php esc_html_e('Manage facility records, classifications, onboarding visibility, and Quality Director assignment.', 'qualinav-admin-console'); ?></p>
+                        <p><?php esc_html_e('Manage facility records, classifications, onboarding visibility, and Hospital Quality Director assignment.', 'qualinav-admin-console'); ?></p>
                     </div>
                     <button class="qn-button qn-button-primary" type="button" id="qn-create-hospital-button"><span class="dashicons dashicons-plus-alt2"></span><?php esc_html_e('Create Hospital', 'qualinav-admin-console'); ?></button>
                 </div>
@@ -144,7 +144,7 @@ $initial_admin_data = array(
                                 <th><?php esc_html_e('Classification', 'qualinav-admin-console'); ?></th>
                                 <th><?php esc_html_e('State', 'qualinav-admin-console'); ?></th>
                                 <th><?php esc_html_e('Status & Setup', 'qualinav-admin-console'); ?></th>
-                                <th><?php esc_html_e('Primary Quality Director', 'qualinav-admin-console'); ?></th>
+                                <th><?php esc_html_e('Primary Hospital Quality Director', 'qualinav-admin-console'); ?></th>
                                 <th><?php esc_html_e('Actions', 'qualinav-admin-console'); ?></th>
                             </tr>
                         </thead>
@@ -390,8 +390,9 @@ $initial_admin_data = array(
                 </div>
                 <label><span><?php esc_html_e('Full name', 'qualinav-admin-console'); ?></span><input type="text" name="full_name"></label>
                 <label><span><?php esc_html_e('Email', 'qualinav-admin-console'); ?></span><input type="email" name="email" required></label>
-                <label id="qn-invite-organization-field"><span><?php esc_html_e('Hospital', 'qualinav-admin-console'); ?></span><select name="organization_id" id="qn-invite-organization" class="qn-searchable-select-source"></select></label>
-                <label id="qn-invite-role-field"><span><?php esc_html_e('Role', 'qualinav-admin-console'); ?></span><select name="qualinav_role" id="qn-invite-role"></select></label>
+                <label class="qn-admin-invite-field-wide" id="qn-invite-state-field"><span><?php esc_html_e('State', 'qualinav-admin-console'); ?></span><select id="qn-invite-state" class="qn-searchable-select-source"></select></label>
+                <label class="qn-admin-invite-field-wide" id="qn-invite-organization-field"><span><?php esc_html_e('Hospital', 'qualinav-admin-console'); ?></span><select name="organization_id" id="qn-invite-organization" class="qn-searchable-select-source"></select></label>
+                <label class="qn-admin-invite-field-wide" id="qn-invite-role-field"><span><?php esc_html_e('Role', 'qualinav-admin-console'); ?></span><select name="qualinav_role" id="qn-invite-role"></select></label>
                 <div class="qn-form-actions"><button class="qn-button" type="button" data-close-invite><?php esc_html_e('Cancel', 'qualinav-admin-console'); ?></button><button class="qn-button qn-button-primary" type="submit"><?php esc_html_e('Send Invite', 'qualinav-admin-console'); ?></button></div>
                 <p class="qn-form-message" id="qn-invite-form-message"></p>
             </form>

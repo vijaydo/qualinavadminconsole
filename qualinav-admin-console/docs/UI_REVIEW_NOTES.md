@@ -1,5 +1,25 @@
 # UI Review Notes
 
+## Hospital Setup Step 5 Data Reporting Cadence
+
+- Rebuilt Step 5 as the `Data Reporting Cadence` calendar after moving monitoring/reporting measure selection into Step 4.
+- Added grouped reporting rows with checkbox selection, Measure / Submission, Reported To / Through, and Reporting Cadence and Due Dates columns.
+- Converted the cadence/due-date cell into a compact dropdown per reporting row and changed source references to quiet inline text.
+- Removed the duplicate Step 5 explainer card so the page header and calendar panel do not repeat the same message.
+- Moved the reporting-calendar guidance into an info icon beside the `Hospital Data Reporting Calendar` heading.
+- Marked rows selected from Step 4 for review while preserving existing saved reporting rows and legacy payload fields.
+- Kept committee meeting cadence as a separate lower section and avoided backend/schema changes beyond additive row data.
+- Bumped QualiNav Admin Console to `0.1.235`.
+
+## Hospital Setup Step 4 Monitoring Overhaul
+
+- Rebuilt the former Measures/QI step as `Internal and External Clinical Quality Monitoring and Reporting`.
+- Moved the stepper label to `Monitoring` and kept Reporting Calendar & Committees as the next step.
+- Replaced large monitoring/reporting dropdowns with grouped inline checkbox panels for internal monitoring areas and external reporting programs.
+- Removed the older dashboard/data readiness, active QI project, and QI defaults blocks from the visible and printable Step 4 flow after review against Kim's marked-up screenshots.
+- Preserved the older keys behind the scenes so no stored data is destroyed, but they no longer count toward Step 4 progress.
+- Bumped QualiNav Admin Console to `0.1.230`.
+
 ## Phase UI-2 Changes
 
 - Fixed `/qualinav` routing for QualiNav global admins so the default admin experience is `/qualinav/admin`.
@@ -188,6 +208,33 @@
 - Accreditation 360 is only rendered if an existing seeded question with key `accreditation_360` is present; no schema or questionnaire seed changes were made.
 - Legacy free-text checklist values are preserved as custom selected pills but are not automatically mapped to canonical options.
 
+## UI-Day0-Step2-Transcript-Cleanup
+
+### Changes Made
+
+- Removed the visible Step 2 survey-history repeater so the setup no longer asks for survey deficiency or POC history details that Kim flagged as legally sensitive.
+- Kept `projected_next_survey_window` as its own compact Next Survey Window card, matching the transcript instruction that this item should stay.
+- Preserved existing `survey_history` answers as hidden legacy data for backend compatibility, but removed it from the printable setup question list and progress-tracked fields.
+- Removed the old Joint Commission helper copy from the accreditation body field so the deemed-status branch stays clean and neutral.
+- Bumped the plugin version to 0.1.211.
+- Follow-up: moved the state survey agency example and website guidance into field info icons so the Step 2 agency row stays compact. Bumped the plugin version to 0.1.212.
+- Follow-up: renamed the Step 2 agency group to State Survey Agency, moved life-safety and other-survey helper copy into info icons, and consolidated survey history, next window, other survey reviews, and readiness activities into one Survey History panel. Bumped the plugin version to 0.1.213.
+- Follow-up: removed legacy Step 2 fields and stale Joint Commission helper text from the printable setup question list. Bumped the plugin version to 0.1.214.
+- Follow-up: removed the visible survey-history repeater from Step 2 after transcript review confirmed Kim treated survey report/history detail as legally sensitive. Existing `survey_history` answers remain preserved as hidden legacy data. Bumped the plugin version to 0.1.215.
+- Follow-up: grouped the life safety agency name/website fields into an attached branch panel that appears only when Different agency is selected, and tightened the Survey Readiness grid to reduce awkward label wrapping. Bumped the plugin version to 0.1.216.
+- Follow-up: fixed the Different agency branch panel so it spans the full State Survey Agency card with a proper two-column grid instead of squeezing labels into narrow stacked text. Bumped the plugin version to 0.1.217.
+- Follow-up: strengthened the life-safety branch CSS selector so the two child fields render as two wide columns instead of inheriting the global four-column grid. Bumped the plugin version to 0.1.218.
+- Follow-up: aligned the Survey Readiness controls by giving each label a consistent reserved height, so the third readiness selector starts on the same baseline as the first two controls. Bumped the plugin version to 0.1.219.
+- Follow-up: increased the Survey Readiness label rail to 60px after browser measurement showed the longest label needed more vertical reservation for exact input alignment. Bumped the plugin version to 0.1.220.
+- Follow-up: moved Current readiness activities to a full-width second row in Survey Readiness so the checklist control no longer competes visually with the two survey-window dropdowns. Bumped the plugin version to 0.1.221.
+- Follow-up: strengthened the Survey Readiness grid selector so the two top dropdowns render as two balanced columns instead of inheriting the global four-column grid. Bumped the plugin version to 0.1.222.
+- Follow-up: replaced the Step 2 Current readiness activities dropdown with an inline compact checklist panel to remove the oversized dropdown and scrollbar. Bumped the plugin version to 0.1.223.
+- Follow-up: removed the leftover tall Survey Readiness label rail after moving the readiness checklist to its own row, eliminating the excessive blank space above the two dropdowns. Bumped the plugin version to 0.1.224.
+- Step 3 overhaul: replaced service-line dropdowns with a dedicated Hospital Service Lines checklist panel, updated Kim's service groupings, kept clinical service model questions in a separate compact panel, and hid legacy/transfusion-only fields from the primary UI. Bumped the plugin version to 0.1.225.
+- Step 3 follow-up: converted Clinical Service Models from dropdown popovers into visible enterprise-style option blocks, using radio choices for single-model fields and checkboxes for multi-applicable radiology/anesthesia fields. Bumped the plugin version to 0.1.226.
+- Step 3 spacing follow-up: prevented Clinical Service Model cards from stretching to match taller neighboring cards and tightened option tile padding so each model block ends after its own options. Bumped the plugin version to 0.1.227.
+- Step 3 layout follow-up: changed Clinical Service Models from a row-based grid to two stacked columns so shorter model panels no longer leave open vertical gaps before the next panel. Bumped the plugin version to 0.1.228.
+
 ### UX Follow-up
 
 - Replaced always-visible checklist pills for historical deficiency areas and current readiness activities with collapsed custom multi-select dropdowns.
@@ -292,9 +339,9 @@
 
 ### Changes Made
 
-- Added a custom Day 0 Step 6 renderer for Measures & QI Projects instead of using the generic textarea/repeater renderer.
-- Grouped Step 6 into Measure Upload Plan, Current Quality Dashboard, Active QI Projects, and QI Program Defaults.
-- Replaced measure upload textareas with compact measure cards that capture upload status, cadence, source system, and aggregate/de-identified notes.
+- Added a custom Day 0 Step 6 renderer for Measures & QI Projects instead of using the generic textarea/repeater renderer. This implementation was later superseded by the Kim/Lindsay Step 4 monitoring checklist overhaul.
+- The old Measure Upload Plan, Current Quality Dashboard, Active QI Projects, and QI Program Defaults fields are preserved behind the scenes only; they are no longer shown in the active Step 4 UI, printable question list, or progress calculation.
+- Replaced the active visible flow with Internal Clinical Quality Monitoring and External Quality Reporting checklist groups.
 - Preserved legacy free-text measure values by carrying them into structured notes where possible.
 - Kept Current quality dashboard as a shorter textarea with aggregate/dashboard-only placeholder guidance.
 - Converted Data source currency, QI framework, project charters status, and baseline data status into structured dropdowns.
@@ -938,3 +985,490 @@
 - After invite/onboarding redirect to Hospital Setup, only the workspace welcome modal should be visible.
 - Opening Setup guide or Print/save setup questions should close the welcome modal first.
 - Escape should still close open QualiNav modals.
+
+## My Org-Style Embedded Hospital Console Shell
+
+### Changes Made
+
+- Added a QualiNav-only embedded hospital console mode behind `shell=my-org`.
+- Supported routes include `/qualinav?shell=my-org#day-0-setup` and `/qualinav?organization_id={id}&shell=my-org#day-0-setup`.
+- Embedded mode renders a My Org-style blue hospital header, selected hospital name, `Back to My Org` link, and compact module navigation.
+- Embedded mode omits the duplicate QualiNav sidebar and topbar while reusing the existing hospital console sections, renderers, REST calls, permissions, and save/read-only behavior.
+- Normal `/qualinav`, `/qualinav?organization_id={id}#day-0-setup`, `/qualinav/admin`, and Super Admin preview behavior are preserved.
+- The My Org plugin was not touched. The current My Org `Organization Setup` tile still needs a later My Org-side URL/target update to point at the embedded route and open in the same tab.
+- Bumped the QualiNav Admin Console plugin version to `0.1.87` because PHP/JS/CSS changed.
+
+### Verification Targets
+
+- Embedded routes should render without QualiNav sidebar/topbar and should preserve `shell=my-org` plus `organization_id` while switching modules.
+- QD/editor save and Save & Continue should continue to work in embedded mode.
+- Viewer read-only navigation should continue to work without save permission errors.
+- Super Admin preview with `organization_id` should continue to work.
+- Desktop and 390-430px mobile layouts should avoid horizontal overflow, duplicate headers, double scrollbars, raw JSON, and PHI/case text.
+
+## Organization Setup Site-Shell Route
+
+### Changes Made
+
+- Added a Data Hub-style `/organization-setup/` virtual route owned by the QualiNav Admin Console plugin.
+- The new route renders through the Grapevine theme shell with `get_header()` and `get_footer()`, so the site top header and collapsed Grapevine menu remain visible.
+- Refactored the hospital console markup into `templates/partials/hospital-console-content.php` so the same console content can be reused by both the standalone `/qualinav` shell and the new site-shell route.
+- `/organization-setup/#day-0-setup` defaults to Hospital Setup and supports the existing module hashes for dashboard, Scout Preview, reporting, committees, plans, clinical monitoring, and settings.
+- The site-shell route uses the embedded QualiNav visual mode, omitting the duplicate QualiNav sidebar/topbar while preserving existing REST calls, renderers, permissions, save/read-only behavior, and organization context checks.
+- Existing `/qualinav`, `/qualinav/admin`, `/qualinav?organization_id={id}#day-0-setup`, and `/qualinav?organization_id={id}&shell=my-org#day-0-setup` routes are preserved.
+- The My Org plugin and tile were not touched. After route verification, the My Org `Organization Setup` tile can be updated separately to point to `/organization-setup/#day-0-setup` in the same tab.
+- Bumped the QualiNav Admin Console plugin version to `0.1.88` because PHP/JS/CSS changed.
+
+### Verification Targets
+
+- `/organization-setup/#day-0-setup` should show the Grapevine top header and collapsed left menu, with no QualiNav sidebar/topbar.
+- Module navigation should work for Dashboard, Hospital Setup, Scout Preview, Reporting, Committees, Plans & Policies, Clinical Monitoring, and Settings.
+- Normal `/qualinav` and `/qualinav/admin` should remain visually and behaviorally unchanged.
+- QD/editor save and Save & Continue should work; viewer fields and save controls should remain read-only.
+- Desktop and 390-430px mobile layouts should avoid horizontal overflow, duplicate headers, double scrollbars, raw JSON, and PHI/case text.
+
+## Organization Setup Site-Shell Left Panel Layout
+
+### Changes Made
+
+- Updated the `/organization-setup/` site-shell route to use a Data Hub-style inner left panel for QualiNav module navigation instead of the top horizontal module pills.
+- The new left panel is scoped to the site-shell route and lists Dashboard, Hospital Setup, Scout Preview, Reporting, Committees, Plans & Policies, Clinical Monitoring, and Settings vertically on desktop.
+- The active module highlight continues to use the existing hash router and module renderers, so permissions, save/read-only behavior, REST calls, and module state are unchanged.
+- Normal `/qualinav`, `/qualinav/admin`, and the fallback `/qualinav?shell=my-org#day-0-setup` route keep their existing shell/navigation behavior.
+- No Grapevine theme, Grapevine Menus, My Org, Data Hub, database schema, Scout backend, Grapevine Login, or onboarding files were changed.
+- Bumped the QualiNav Admin Console plugin version to `0.1.89` because PHP/CSS changed.
+
+### Verification Targets
+
+- `/organization-setup/#day-0-setup` should show Grapevine header/menu, no QualiNav sidebar/topbar, and a Data Hub-like inner left panel.
+- The old top horizontal module pills should not render on the site-shell route.
+- Module hashes should continue to switch the active content without a full page reload.
+- Desktop and 390-430px mobile layouts should avoid horizontal overflow, duplicate headers, double scrollbars, raw JSON, and PHI/case text.
+
+## Organization Setup Data Hub-Style Structural Alignment
+
+### Changes Made
+
+- Inspected the live Data Hub template/CSS and mirrored its structural pattern for `/organization-setup/`.
+- The Organization Setup site-shell route now uses a Data Hub-style module header, dark tab bar, rounded white content frame, inner left panel, and right content region.
+- Mirrored the Data Hub route/container approach from `dh-wrap`, `dh-header`, `dh-tabs`, `dh-panel`, and the embedded Data Management `dm-data-hub-view-container`, `dm-shell`, `dm-sidebar`, and content layout.
+- Scoped theme-container width/padding overrides to `body.qn-site-shell-console` so the QualiNav site-shell route fills the Grapevine content area like Data Hub without touching theme files.
+- Reduced the standalone QualiNav card feel on the site-shell route by replacing the large blue embedded header and broadening the right content area.
+- Normal `/qualinav`, `/qualinav/admin`, fallback `/qualinav?shell=my-org#day-0-setup`, My Org, Data Hub, permissions, save/REST logic, Scout backend, Grapevine Login, onboarding, and database schema are unchanged.
+- Bumped the QualiNav Admin Console plugin version to `0.1.90` because PHP/CSS changed.
+
+### Verification Targets
+
+- `/organization-setup/#day-0-setup` should visually align with `/data-hub/#dm`: Grapevine shell, pale module header, dark tab bar, rounded content frame, inner left panel, and right content area.
+- The old top horizontal QualiNav pills should remain absent on the site-shell route.
+- Desktop and 390-430px mobile layouts should avoid horizontal overflow, duplicate headers, double scrollbars, raw JSON, and PHI/case text.
+
+## Organization Setup Site-Shell Polish Fixes
+
+### Changes Made
+
+- Fixed workspace welcome modal icon/card alignment and corrected mojibake apostrophe text.
+- Removed rounded corners from the Organization Setup site-shell content frame.
+- Removed the redundant left-panel subtitle and suppressed the duplicate selected-hospital hero text in the right content area.
+- Hardened site-shell left menu hover/focus/active styling so theme underline styles do not bleed into the module menu.
+- Bumped the QualiNav Admin Console plugin version to `0.1.91` because PHP/CSS changed.
+
+## Organization Setup Left Panel Label Removal
+
+### Changes Made
+
+- Removed the redundant left-panel title block from the `/organization-setup/` site-shell navigation.
+- The left panel now starts directly with the vertical module menu while the page header and active tab provide context.
+- Bumped the QualiNav Admin Console plugin version to `0.1.93` because PHP changed.
+
+## Organization Setup Site-Shell Default Module Correction
+
+### Changes Made
+
+- Removed Dashboard from the `/organization-setup/` site-shell left navigation so the route stays focused on Hospital Setup.
+- Normalized empty or `#dashboard` hashes on the site-shell route back to `#day-0-setup`.
+- Standalone `/qualinav` dashboard navigation and rendering remain unchanged.
+- Bumped the QualiNav Admin Console plugin version to `0.1.96` because PHP/JS changed.
+
+## Hospital Dashboard Workspace Profile Removal
+
+### Changes Made
+
+- Removed the redundant `Current Hospital Context` / `Workspace profile` card from the hospital console dashboard.
+- The actual organization context, setup questions, permissions, and save/read-only behavior are unchanged.
+- Bumped the QualiNav Admin Console plugin version to `0.1.97` because PHP changed.
+
+## Organization Setup Brand-Blue Interaction Polish
+
+### Changes Made
+
+- Updated `/organization-setup/` site-shell interaction styling so primary buttons, hover states, active left-menu items, progress bars, and active setup steps use the configured brand primary/secondary blue colors.
+- Follow-up correction: the active organization uses orange as `--qn-primary` and blue as `--qn-secondary`, so site-shell interactions now use the brand secondary blue.
+- Added a scoped console-level underline reset so QualiNav console links and buttons do not pick up theme hover underlines.
+- Updated the site-shell back button hover to use brand secondary blue instead of the orange primary color.
+- Kept explicit warning and PHI safety notices in warning colors.
+- Bumped the QualiNav Admin Console plugin version to `0.1.100` because CSS changed.
+
+## Organization Setup Site-Shell Navy Menu States
+
+### Changes Made
+
+- Updated the `/organization-setup/` site-shell side menu so active, hover, focus, active, and visited states keep Grapevine shell navy text/icons (`#03283e`) instead of inheriting the orange organization primary color.
+- Preserved the pale blue selected-menu background/border and the no-underline side-menu behavior.
+- Bumped the QualiNav Admin Console plugin version to `0.1.103` because CSS changed.
+
+## Hospital Setup Form Field Alignment
+
+### Changes Made
+
+- Updated question grids so form fields align to the top of their grid rows instead of stretching when neighboring fields include helper text.
+- Applied the same top alignment to survey/repeater card grids so text boxes, selects, and labels stay visually aligned.
+- Bumped the QualiNav Admin Console plugin version to `0.1.104` because CSS changed.
+
+## Final Review Confirmation Card Polish
+
+### Changes Made
+
+- Reworked the final Hospital Setup confirmation checkbox into a polished accessible custom checkbox while preserving the underlying checkbox field and submission behavior.
+- Improved the confirmation card spacing, border radius, background treatment, focus state, hover state, and text alignment for a more enterprise-grade final review experience.
+- Bumped the QualiNav Admin Console plugin version to `0.1.105` because JS/CSS changed.
+
+## Downstream Module Layout Density Polish
+
+### Changes Made
+
+- Tightened the Reporting-style module layout used by Reporting, Committees, Plans & Policies, Clinical Monitoring, and Settings.
+- Reduced oversized headings, summary cards, empty-state panels, capability cards, shadows, and spacing so module pages feel more like enterprise app screens inside the Grapevine shell.
+- Bumped the QualiNav Admin Console plugin version to `0.1.106` because CSS changed.
+
+## Reporting Pending-State Hierarchy Cleanup
+
+### Changes Made
+
+- Reduced repeated pending labels on the Reporting page by removing the pending Scout context chip and top-right pending pill while Hospital Setup is incomplete.
+- Converted the oversized Reporting pending panel into a compact action strip with the primary Hospital Setup CTA.
+- Replaced the marketing-style capability card grid with a compact planned-workflow list and improved padding inside summary tiles.
+- Bumped the QualiNav Admin Console plugin version to `0.1.107` because JS/CSS changed.
+
+## Reporting Planned-List Padding Correction
+
+### Changes Made
+
+- Fixed the planned-workflow heading alignment so the title no longer floats to the far right.
+- Increased tile padding, icon size, and minimum row height for Reporting summary tiles, the action strip, and planned-workflow rows.
+- Bumped the QualiNav Admin Console plugin version to `0.1.108` because CSS changed.
+
+## Reporting Tile Icon Padding Correction
+
+### Changes Made
+
+- Increased internal left padding, icon column width, and icon/text gap in Reporting summary tiles and planned-workflow tiles.
+- Expanded planned-workflow row height and icon boxes so icons no longer feel crowded against the tile edge.
+- Bumped the QualiNav Admin Console plugin version to `0.1.109` because CSS changed.
+
+## Reporting Tile Icon Inset Correction
+
+### Changes Made
+
+- Increased the left inset substantially in Reporting summary and planned-workflow tiles so icon boxes no longer sit visually flush against the tile edge.
+- Increased the icon/text gap while keeping icon boxes slightly smaller, creating clearer whitespace around the circled icon areas.
+- Bumped the QualiNav Admin Console plugin version to `0.1.110` because CSS changed.
+
+## Site-Shell Module Card/Icon Polish
+
+### Changes Made
+
+- Polished site-shell module card/icon alignment so Reporting and related module preview cards use consistent centered icon tiles, fixed spacing, and lighter nested card treatment.
+- Reworked Reporting summary and planned-workflow tiles to use stable flex layouts with fixed-size icon boxes instead of oversized icon columns.
+- Added targeted site-shell overrides so the WordPress wrapper reset no longer strips padding from QualiNav module cards.
+- Bumped the QualiNav Admin Console plugin version to `0.1.112` because CSS changed.
+
+## Settings Page Empty-State Polish
+
+### Changes Made
+
+- Polished Hospital Settings pending/setup-ready states by consolidating repeated empty sections into a single setup-derived preferences readiness card, compact workspace context, clearer reminder readiness copy, and direct Hospital Setup CTA.
+- Added a secondary Settings CTA that opens Hospital Setup at the Regulatory Monitoring & Preferences section when onboarding steps are available.
+- Bumped the QualiNav Admin Console plugin version to `0.1.113` because JS/CSS changed.
+
+## Settings Page Compact Readiness Simplification
+
+### Changes Made
+
+- Settings was simplified into a compact readiness summary until a full editable settings engine exists.
+- Replaced the oversized pending/readiness panels with small workspace, preference source, readiness, and action sections.
+- Kept setup-ready preference summaries compact by showing captured sources, tools, reminder timing, and backup visibility only when data exists.
+- Bumped the QualiNav Admin Console plugin version to `0.1.114` because JS/CSS changed.
+
+## Settings Compact UI Fix
+
+### Changes Made
+
+- Settings page compact UI polish reduced oversized cards, fixed readiness row alignment, and made actions/settings status feel like a lightweight readiness panel instead of a placeholder module.
+- Added explicit readiness row classes and Settings-specific card/button sizing so labels and values no longer visually run together.
+- Bumped the QualiNav Admin Console plugin version to `0.1.115` because JS/CSS changed.
+
+## Remove Settings From Hospital Console Navigation
+
+### Changes Made
+
+- Hospital Settings was removed from visible hospital workspace navigation until a true editable settings engine exists.
+- Removed Settings from the standalone hospital console nav, My Org-style embedded module nav, and Organization Setup site-shell left panel.
+- Removed the hospital dashboard Settings CTA and added a safe `#settings` fallback to the dashboard route so stale links do not break the console.
+- Hospital Setup Step 8 remains the source for regulatory monitoring, reminders, tools, and backup visibility preferences.
+- Bumped the QualiNav Admin Console plugin version to `0.1.116` because JS/PHP changed.
+
+## Site-Shell Navigation Fix - Add Hospital Users, Remove Settings
+
+### Changes Made
+
+- Site-shell hospital navigation now exposes Hospital Users/invitations and hides Hospital Settings until a true editable settings engine exists.
+- Added `Hospital Users` to the `/organization-setup/` left panel using the existing hospital users module and canonical `#users` hash.
+- Kept stale `#settings` links safely routed away from the hidden Settings module.
+- Hospital Setup Step 8 remains the source for preference intake.
+- Bumped the QualiNav Admin Console plugin version to `0.1.117` because JS/PHP changed.
+
+## Site-Shell Nav + Hospital Users Enterprise Polish
+
+### Changes Made
+
+- Organization Setup site-shell navigation now focuses on operational modules by removing Dashboard and Settings while keeping Hospital Users visible.
+- Manual site-shell `#dashboard` and `#settings` hashes safely route to Hospital Setup.
+- Hospital Users was polished into a compact enterprise access-management page with a smaller header, cleaner metrics, tighter filters, denser tables, compact pending-invite empty state, and smaller action menu behavior.
+- Hospital Setup Step 8 remains the source for preference intake.
+- Bumped the QualiNav Admin Console plugin version to `0.1.118` because PHP/JS/CSS changed.
+
+## Hospital Users Single-Hospital Workspace Polish
+
+### Changes Made
+
+- Hospital Users selected-workspace view was simplified by removing redundant hospital-name repetition and hiding the Hospital Access column in the single-hospital context.
+- Kept the selected workspace header focused on role, active-user count, and pending-invite count instead of repeating the hospital name.
+- Preserved multi-hospital access support and admin/global views; only the selected hospital workspace Users table changed.
+- Bumped the QualiNav Admin Console plugin version to `0.1.119` because PHP/JS/CSS changed.
+
+## Hospital Users Avatar Polish + WordPress Profile Photo Support
+
+### Changes Made
+
+- Hospital Users avatars now use WordPress avatar URLs when available, with a polished circular initials fallback for users without profile photos.
+- Added a safe `avatar_url` field to the normalized user payload using WordPress `get_avatar_url($user_id, array('size' => 96))`.
+- Updated user table rendering so broken avatar images hide and fall back to initials instead of showing a broken image icon.
+- Bumped the QualiNav Admin Console plugin version to `0.1.120` because PHP/JS/CSS changed.
+
+## Hospital Users Metric Icon Padding Fix
+
+### Changes Made
+
+- Hospital Users summary metric icon tiles were tightened and centered for better enterprise spacing.
+- Switched the selected-workspace metric cards to a compact flex layout with smaller centered icon tiles and reduced vertical padding.
+- Bumped the QualiNav Admin Console plugin version to `0.1.121` because CSS changed.
+
+## QualiNav Form Focus Ring Polish
+
+### Changes Made
+
+- Removed the browser/theme orange focus outline from QualiNav form controls and search fields.
+- Replaced it with a scoped QualiNav teal/blue focus ring for inputs, selects, textareas, and search wrappers.
+- Bumped the QualiNav Admin Console plugin version to `0.1.122` because CSS changed.
+
+## Hospital Users Role Action Safety Fix
+
+### Changes Made
+
+- Hospital Users actions now hide unsafe self-management and last-Quality-Director downgrade/disable/archive actions.
+- Added backend protections for self role/status removal and last active Quality Director downgrade/disable/archive attempts.
+- Viewer/read-only behavior continues to show no write action menus because role actions remain tied to existing invite/manage permissions.
+- Bumped the QualiNav Admin Console plugin version to `0.1.123` because PHP/JS changed.
+
+## Hospital Users Metric Card Padding / Icon Alignment Fix
+
+### Changes Made
+
+- Hospital Users metric cards now have corrected internal padding and naturally-flowing centered icon tiles so icons no longer crowd card borders.
+- Increased selected-workspace summary card padding, icon tile size, and icon/text gap while keeping the layout scoped to Hospital Users.
+- Removed the colored top-border accent from Hospital Users metric cards to avoid the orange line crowding the icon tile.
+- Bumped the QualiNav Admin Console plugin version to `0.1.124` because CSS changed.
+
+## Hospital Users Metrics Match Reporting Pattern
+
+### Changes Made
+
+- Hospital Users metric cards now mirror the Reporting summary-card pattern for icon inset, tile size, card padding, typography, and label/value order.
+- Updated the Hospital Users metric markup to render label, value, and helper text in the same order as Reporting metrics.
+- Bumped the QualiNav Admin Console plugin version to `0.1.125` because JS/CSS changed.
+
+### Follow-up Fix
+
+- Applied the same Reporting-style spacing to the base `.qn-users-summary-card` rules because the live `/organization-setup/#users` page was still using the unscoped Users metric CSS.
+- Bumped the QualiNav Admin Console plugin version to `0.1.126` to force the corrected CSS asset version.
+- Added a site-shell padding exception for `.qn-users-summary-card`, matching the existing Reporting exception, because the site-shell article reset was overriding Users metric card padding with `padding: 0 !important`.
+- Bumped the QualiNav Admin Console plugin version to `0.1.127`.
+
+## Post-Onboarding Site-Shell Welcome Entry
+
+### Changes Made
+
+- QualiNav invite/onboarding completion now targets the Grapevine site-shell Organization Setup route: `/organization-setup/#day-0-setup`.
+- The legacy standalone Hospital Setup route remains available for manually opened old links.
+- Workspace welcome auto-show now also runs after Hospital Setup onboarding state hydrates, so direct site-shell entry to `#day-0-setup` can show the welcome modal without relying on Dashboard rendering.
+- Updated the welcome modal secondary action from `Explore workspace first` to `Explore QualiNav workspace`; it closes the modal and keeps the user inside the site-shell workspace.
+- Existing localStorage dismissal behavior, Super Admin suppression, modal stacking protection, and no-PHI copy remain unchanged.
+- Bumped the QualiNav Admin Console plugin version to `0.1.128`.
+
+## Post-Onboarding Home Welcome Journey
+
+### Changes Made
+
+- Corrected the QualiNav invite/onboarding completion journey so hospital users land on the main QualiNav home page at `/?qualinav_welcome=1` instead of directly inside `/organization-setup/#day-0-setup`.
+- Added a QualiNav Admin Console-owned home welcome hook that enqueues the existing console assets and renders a compact workspace welcome modal on the WordPress front page only when the safe `qualinav_welcome=1` marker is present.
+- The home welcome modal uses `Continue Hospital Setup` to navigate to `/organization-setup/#day-0-setup`.
+- The home welcome modal uses `Explore QualiNav` to close the modal and leave the user on the home page.
+- Viewer and Super Admin auto-show are suppressed; the hook is limited to logged-in hospital editor/admin roles.
+- My Org, Data Hub, Grapevine CM homepage rendering, Grapevine onboarding forms, invite token security, and `/organization-setup/#day-0-setup` direct access were not changed.
+- Bumped the QualiNav Admin Console plugin version to `0.1.129`.
+
+## Admin Invitation Historical Action Safety
+
+### Changes Made
+
+- Accepted and revoked historical invitations no longer show `Resend` or `Revoke` actions in the admin/hospital invitation tables.
+- Pending and expired invitations continue to expose resend/revoke actions when the current user has the existing manage-invite permission.
+- This matches the existing backend guard that prevents resending accepted/revoked invitations, avoiding a misleading action that cannot send email.
+- Bumped the QualiNav Admin Console plugin version to `0.1.130`.
+
+## Super Admin User Access Removal Action
+
+### Changes Made
+
+- Added clear Super Admin user-row actions for `Disable User`, `Remove Access`, and `Reactivate User` using the existing QualiNav status endpoint.
+- `Remove Access` archives QualiNav access instead of hard-deleting the WordPress user account, preserving identity and audit history across hubs.
+- Existing backend guards remain in force for self-removal and last active Quality Director protection.
+- Bumped the QualiNav Admin Console plugin version to `0.1.131`.
+
+## Admin Invite Modal Field Layout Fix
+
+### Changes Made
+
+- Fixed the Super Admin `Invite User` modal layout so the Hospital and Role controls stack full-width instead of crowding each other in a two-column row.
+- Scoped the layout change to the admin invite modal fields so hospital invite modal behavior is unchanged.
+- Bumped the QualiNav Admin Console plugin version to `0.1.132`.
+
+## Workspace Welcome Primary CTA Contrast Fix
+
+### Changes Made
+
+- Scoped the workspace welcome modal primary CTA so `Continue Hospital Setup` uses the orange accent background with explicit dark readable text.
+- Removed the persistent teal-looking ring from the CTA while keeping a deliberate warm keyboard focus treatment for accessibility.
+- Bumped the QualiNav Admin Console plugin version to `0.1.133`.
+- Follow-up: removed the heavy visible CTA border in normal and hover states, preserving only a subtle keyboard-focus outline. Bumped the plugin version to `0.1.134`.
+- Follow-up: kept the hover color while suppressing pointer focus/active border effects on the welcome CTA. Bumped the plugin version to `0.1.135`.
+- Follow-up: moved the welcome CTA override after the global button rules so the CTA reliably stays borderless and changes to the blue theme hover with white text. Bumped the plugin version to `0.1.136`.
+
+## Admin Invite Modal State Filter
+
+### Changes Made
+
+- Added a State dropdown above Hospital in the Super Admin `Invite User` modal.
+- Hospital options are sorted by state and display as `Hospital - State` until a state is selected.
+- Selecting a state filters the Hospital dropdown while fixed-hospital invite flows continue to hide State/Hospital selectors.
+- Bumped the QualiNav Admin Console plugin version to `0.1.137`.
+
+## Home Welcome Organization Context Fix
+
+### Changes Made
+
+- Kept the post-invite/onboarding destination on the main QualiNav home page, but now carries the invited `organization_id` as safe context with `qualinav_welcome=1`.
+- The home welcome modal uses that authorized organization context for its browser dismissal key and for the `Continue Hospital Setup` destination.
+- `Continue Hospital Setup` now routes to `/organization-setup/?organization_id={id}#day-0-setup` when the invite org is known, preventing the hospital page from treating the same onboarding journey as a different first-time workspace.
+- Invalid or unauthorized `organization_id` values do not render the home welcome modal.
+- Bumped the QualiNav Admin Console plugin version to `0.1.138`.
+
+## Hospital Setup Canonical Organization Tables
+
+### Changes Made
+
+- Added permanent Admin Console-owned canonical organization setup tables under `wp_qualinav_org_*` for profile, contacts, accreditation, survey history, services, committees, reporting requirements, plans, policy reviews, monitoring areas, goals, learning items, regulatory sources, tools, reminder preferences, milestones, and milestone updates.
+- Hospital Setup saves now write through a structured mapping layer into those canonical tables while preserving the existing questionnaire answer table as legacy compatibility during the transition.
+- Section auto-save uses idempotent organization/item keys so repeated saves update canonical rows instead of creating duplicate committee, plan, contact, source, or milestone records.
+- Core organization identity fields such as hospital name, city, beds, and Critical Access Hospital type are also synced into existing organization columns when those columns are present.
+- My Org, My Space, Quality Lab, Data Hub, Scout backend, and existing QI/Data Hub tables were not modified.
+- Bumped the QualiNav Admin Console plugin version to `0.1.139`.
+
+## Hospital Setup Canonical Auto-Save Context Fix
+
+### Changes Made
+
+- Updated the Admin Console canonical setup mapper so single-question auto-saves rebuild from the full saved Hospital Setup answer map before syncing related canonical tables and milestones.
+- This prevents related milestone rows, such as survey windows and setup-derived schedules, from being overwritten by weaker fallback values when neighboring fields auto-save later.
+- My Space, My Org, Quality Lab, Data Hub, Scout backend, and Grapevine plugins were not modified.
+- Bumped the QualiNav Admin Console plugin version to `0.1.140`.
+# Organization Setup Question Deep Links
+
+- Added `setup_question` support for Hospital Setup URLs so trusted module links can open the relevant setup section and focus a specific question without changing the My Space dashboard headings or visual layout.
+
+## Scout Preview Readability Polish
+
+- Updated the Scout Preview presentation layer so completed previews show only returned workflow sections, avoiding noisy `Not returned` cards in the main grid.
+- Replaced raw key/value pipe dumps in workflow cards with short readable summaries and examples from the returned Scout data.
+- Normalized common setup labels such as `cah` and `cms_state_survey` into user-facing language.
+- Reframed the persona block as hospital context so executive/read-only viewers and Quality Directors can understand what Scout used without role-confusing copy.
+- Bumped the QualiNav Admin Console plugin version to `0.1.143`.
+
+## Scout Preview Enterprise Review Polish
+
+- Converted the completed Scout Preview workflow output from tall uneven cards into a compact review list with concise summaries, representative chips, counts, and detail actions.
+- Removed quiet filler sections such as empty attention and empty source-reference panels when Scout returned no warnings, missing inputs, or sources.
+- Tightened the Scout status and hospital context panels and prevented placeholder values such as `Not Specified` from overriding real derived context such as Critical Access Hospital.
+- Ensured the header Generate Preview control remains hidden when generation is not available to the current viewer.
+- Bumped the QualiNav Admin Console plugin version to `0.1.144`.
+
+## Enterprise Site-Shell Module UI + Executive Read-Only View Polish
+
+- Added a site-shell-only read-only review mode for Reporting, Committees, Plans & Policies, Clinical Monitoring, Scout Preview, and Hospital Users.
+- Executive/read-only users no longer see setup, generate, invite, or workflow-edit CTAs in the hospital workspace modules.
+- Scout Preview now uses a compact structured review layout in the site shell, with fewer raw key/value walls and no repeated "not returned" placeholder cards.
+- Site-shell module cards, tables, Scout workflow rows, and summary metrics were tightened for enterprise spacing without changing module headings, route names, permissions, Scout backend behavior, My Org, Data Hub, or the Grapevine theme.
+
+### Version
+
+- Bumped the QualiNav Admin Console plugin version to `0.1.145`.
+
+## Committees Site-Shell Table-First UI Polish
+
+- Normalized the Committees site-shell presentation so Quality Director/editor and executive/read-only users share the same table-first enterprise layout.
+- Hid the placeholder `What this module will support` capability cards and next-step CTA panel from the site-shell Committees route.
+- Removed duplicated generated committee detail cards below the committee preview table; the table remains the primary review surface.
+- Preserved headings, routes, permission behavior, Scout backend output, My Org, Data Hub, Grapevine theme files, and `/qualinav/admin`.
+- Bumped the QualiNav Admin Console plugin version to `0.1.146`.
+
+## Clinical Monitoring Site-Shell UI Polish
+
+- Tightened the Clinical Monitoring site-shell review surfaces for Quality Director/editor and executive/read-only users without changing the existing headings or route behavior.
+- Reworked active improvement project and monitoring-gap cards with compact icon tiles, readable title/status rows, smaller metadata blocks, and enterprise spacing.
+- Converted repeated monitoring table actions into compact action chips and improved table column sizing for the recurring monitoring review.
+- Preserved Scout backend output, stored preview data, permissions, My Org, Data Hub, Grapevine theme files, and `/qualinav/admin`.
+- Bumped the QualiNav Admin Console plugin version to `0.1.147`.
+
+## Organization Setup Site-Shell Scroll Containment
+
+- Scoped the `/organization-setup/` desktop layout so the Grapevine header, Organization Setup header, dark tab bar, and left module navigation stay stationary while only the active right-side module panel scrolls.
+- Kept mobile behavior stacked with normal page scrolling to avoid trapped small-screen scroll regions.
+- Preserved module headings, route behavior, permissions, Scout backend output, My Org, My Space, Data Hub, Grapevine theme files, and `/qualinav/admin`.
+- Bumped the QualiNav Admin Console plugin version to `0.1.148`.
+
+## Kim/Lindsay Hospital Setup Phase 1
+
+- Implemented Phase 1 of Kim/Lindsay Hospital Setup overhaul: Quality Leader terminology, Step 1-4 restructure, survey process simplification, service-line checklists, measures moved before reporting, Step 8 preference cleanup, and legacy answer preservation.
+- Reworked Hospital Setup display order to Hospital & Quality Leader Info, Survey / Accreditation / Regulatory Readiness, Services & Clinical Model, Internal & External Quality Monitoring / Measures, Reporting Calendar & Committees, Plans, Policies & Monitoring, Goals/Learning/Contacts, and Communication/Tools/Reminder Preferences.
+- Kept legacy answer keys additive and preserved; no Scout backend, database schema, uploads, current-year due-date automation, Grapevine theme/menu, `/organization-setup/`, `/qualinav/admin`, My Org, or Data Hub changes were made.
+- Bumped the QualiNav Admin Console plugin version to `0.1.153`.
+
+## Hospital Setup Step 5 Data Reporting Cadence
+
+- Renamed Step 5 to Data Reporting Cadence so it follows the Step 4 monitoring/reporting selections.
+- Reworked the visible workflow around a Hospital Data Reporting Calendar seeded from Step 4 selections when no saved reporting rows exist.
+- Added editable cadence, due-date guidance, source reference, submit-through, owner, backup, approval, and lead-time fields for each reporting row.
+- Simplified committee cadence to meeting name, frequency/timing, report flow, and report lead time while preserving older committee keys as legacy carry-forward data.
+- Kept current-year due-date automation and Scout backend mapping out of this pass.
+- Bumped the QualiNav Admin Console plugin version to `0.1.234`.

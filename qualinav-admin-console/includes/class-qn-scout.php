@@ -83,7 +83,7 @@ class QN_Scout
             $current_role = $user->qualinav_role;
         }
 
-        $answer_map = QN_Questionnaire::get_answer_map($organization_id);
+        $answer_map = QN_Onboarding::hydrate_canonical_references($organization_id, QN_Organizations::get_hospital($organization_id), QN_Questionnaire::get_answer_map($organization_id));
         $persona_context = self::build_persona_context($organization_id, $answer_map, $user_id);
 
         $payload = array(
@@ -403,18 +403,7 @@ class QN_Scout
     public static function is_onboarding_submitted($organization_id)
     {
         $hospital = QN_Organizations::get_hospital($organization_id);
-        if ($hospital && isset($hospital['onboarding_status']) && $hospital['onboarding_status'] === 'submitted') {
-            return true;
-        }
-
-        $latest_run = self::get_latest_run($organization_id);
-        if ($latest_run && !empty($latest_run['id'])) {
-            return true;
-        }
-
-        $progress = QN_Onboarding::get_progress($organization_id);
-
-        return !empty($progress['total_percent']) && absint($progress['total_percent']) >= 100;
+        return $hospital && isset($hospital['onboarding_status']) && $hospital['onboarding_status'] === 'submitted';
     }
 
     private static function build_persona_summary($context)
@@ -606,18 +595,17 @@ class QN_Scout
 
         $has_policy_cycle = self::has_answer($answer_map, 'annual_policy_review_cycle');
         $has_dashboard = self::has_answer($answer_map, 'current_quality_dashboard');
-        $has_readiness = self::has_answer($answer_map, 'current_readiness_activities');
+        $has_readiness = self::has_answer($answer_map, 'last_accreditation_licensing_survey_date') || self::has_answer($answer_map, 'other_certification_licensing_surveys');
         $has_monitoring = self::has_answer($answer_map, 'weakest_monitoring_areas') || self::has_answer($answer_map, 'contracted_service_quality_data_flow');
-        $has_qi_projects = self::has_answer($answer_map, 'active_qi_projects');
         $has_gaps = self::has_answer($answer_map, 'program_gaps') || self::has_answer($answer_map, 'templates_needed');
 
         if ($missing >= 2 || (!$has_policy_cycle && !$has_dashboard && !$has_readiness)) {
             return 'thin';
         }
-        if ($present >= 4 && $has_policy_cycle && $has_dashboard && $has_monitoring && $has_qi_projects && !$has_gaps) {
+        if ($present >= 4 && $has_policy_cycle && $has_dashboard && $has_monitoring && !$has_gaps) {
             return 'mature';
         }
-        if ($present > 0 || $has_policy_cycle || $has_dashboard || $has_readiness || $has_qi_projects || $has_gaps) {
+        if ($present > 0 || $has_policy_cycle || $has_dashboard || $has_readiness || $has_gaps) {
             return 'partial';
         }
 
@@ -642,7 +630,7 @@ class QN_Scout
     private static function group_onboarding_answers($organization_id, $answers = null)
     {
         if ($answers === null) {
-            $answers = QN_Questionnaire::get_answer_map($organization_id);
+            $answers = QN_Onboarding::hydrate_canonical_references($organization_id, QN_Organizations::get_hospital($organization_id), QN_Questionnaire::get_answer_map($organization_id));
         }
         $sections = QN_Questionnaire::get_sections();
         $grouped = array();

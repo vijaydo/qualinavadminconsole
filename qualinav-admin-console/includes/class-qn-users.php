@@ -63,7 +63,9 @@ class QN_Users
         return array(
             'qualinav_super_admin' => __('QualiNav Super Admin', 'qualinav-admin-console'),
             'qualinav_admin' => __('QualiNav Admin', 'qualinav-admin-console'),
-            'quality_director' => __('Quality Director', 'qualinav-admin-console'),
+            'quality_director' => __('Hospital Quality Director', 'qualinav-admin-console'),
+            'executive_leader' => __('Executive Leader (CEO or CFO)', 'qualinav-admin-console'),
+            'clinical_ancillary_services_leader' => __('Clinical or Ancillary Services Leader or Director', 'qualinav-admin-console'),
             'hospital_admin' => __('Hospital Admin', 'qualinav-admin-console'),
             'backup_quality_user' => __('Backup Quality User', 'qualinav-admin-console'),
             'reporting_user' => __('Reporting User', 'qualinav-admin-console'),

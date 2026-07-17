@@ -64,6 +64,125 @@ class QN_DB
         return $wpdb->prefix . 'qualinav_onboarding_progress';
     }
 
+    public static function org_profile_table()
+    {
+        global $wpdb;
+
+        return $wpdb->prefix . 'qualinav_org_profile';
+    }
+
+    public static function org_contacts_table()
+    {
+        global $wpdb;
+
+        return $wpdb->prefix . 'qualinav_org_contacts';
+    }
+
+    public static function org_accreditation_table()
+    {
+        global $wpdb;
+
+        return $wpdb->prefix . 'qualinav_org_accreditation';
+    }
+
+    public static function org_survey_history_table()
+    {
+        global $wpdb;
+
+        return $wpdb->prefix . 'qualinav_org_survey_history';
+    }
+
+    public static function org_services_table()
+    {
+        global $wpdb;
+
+        return $wpdb->prefix . 'qualinav_org_services';
+    }
+
+    public static function org_committees_table()
+    {
+        global $wpdb;
+
+        return $wpdb->prefix . 'qualinav_org_committees';
+    }
+
+    public static function org_reporting_requirements_table()
+    {
+        global $wpdb;
+
+        return $wpdb->prefix . 'qualinav_org_reporting_requirements';
+    }
+
+    public static function org_plans_table()
+    {
+        global $wpdb;
+
+        return $wpdb->prefix . 'qualinav_org_plans';
+    }
+
+    public static function org_policy_reviews_table()
+    {
+        global $wpdb;
+
+        return $wpdb->prefix . 'qualinav_org_policy_reviews';
+    }
+
+    public static function org_monitoring_areas_table()
+    {
+        global $wpdb;
+
+        return $wpdb->prefix . 'qualinav_org_monitoring_areas';
+    }
+
+    public static function org_goals_table()
+    {
+        global $wpdb;
+
+        return $wpdb->prefix . 'qualinav_org_goals';
+    }
+
+    public static function org_learning_items_table()
+    {
+        global $wpdb;
+
+        return $wpdb->prefix . 'qualinav_org_learning_items';
+    }
+
+    public static function org_regulatory_sources_table()
+    {
+        global $wpdb;
+
+        return $wpdb->prefix . 'qualinav_org_regulatory_sources';
+    }
+
+    public static function org_tools_table()
+    {
+        global $wpdb;
+
+        return $wpdb->prefix . 'qualinav_org_tools';
+    }
+
+    public static function org_reminder_preferences_table()
+    {
+        global $wpdb;
+
+        return $wpdb->prefix . 'qualinav_org_reminder_preferences';
+    }
+
+    public static function org_milestones_table()
+    {
+        global $wpdb;
+
+        return $wpdb->prefix . 'qualinav_org_milestones';
+    }
+
+    public static function org_milestone_updates_table()
+    {
+        global $wpdb;
+
+        return $wpdb->prefix . 'qualinav_org_milestone_updates';
+    }
+
     public static function health_systems_table()
     {
         global $wpdb;

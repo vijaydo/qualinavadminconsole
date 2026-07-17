@@ -407,6 +407,71 @@ class QN_Invitations
         return home_url('/onboarding/');
     }
 
+    public static function accepted_invitation_redirect($invitation)
+    {
+        if (!$invitation || empty($invitation['user_id'])) {
+            return new WP_Error('qn_invalid_invitation', __('This invitation is invalid.', 'qualinav-admin-console'), array('status' => 404));
+        }
+
+        if ($invitation['status'] !== 'accepted') {
+            return new WP_Error('qn_invitation_not_accepted', __('This invitation has not been accepted yet.', 'qualinav-admin-console'), array('status' => 400));
+        }
+
+        if ($invitation['status'] === 'revoked') {
+            return new WP_Error('qn_invitation_revoked', __('This invitation has been revoked.', 'qualinav-admin-console'), array('status' => 400));
+        }
+
+        $user_id = absint($invitation['user_id']);
+        $user = get_user_by('id', $user_id);
+        if (!$user) {
+            return new WP_Error('qn_invited_user_missing', __('This invitation is not linked to an active account record.', 'qualinav-admin-console'), array('status' => 404));
+        }
+
+        if (is_user_logged_in()) {
+            $current_user = wp_get_current_user();
+            if (!$current_user || absint($current_user->ID) !== $user_id || strcasecmp((string) $current_user->user_email, (string) $invitation['email']) !== 0) {
+                return new WP_Error(
+                    'qn_invitation_wrong_user',
+                    __('This invitation belongs to a different user. Please sign out or open the invitation in a private browser window, then try again.', 'qualinav-admin-console'),
+                    array('status' => 403)
+                );
+            }
+        }
+
+        $organization_id = absint($invitation['organization_id']);
+        if ($organization_id && QN_Users::user_has_organization($user_id, $organization_id)) {
+            QN_Users::set_current_organization($user_id, $organization_id);
+        }
+
+        return array(
+            'user_id' => $user_id,
+            'email' => $user->user_email,
+            'organization_id' => $organization_id,
+            'redirect' => QN_Users::is_qualinav_admin($user_id)
+                ? home_url('/qualinav/admin')
+                : add_query_arg('organization_id', $organization_id, home_url('/')),
+        );
+    }
+
+    public static function accepted_invitation_allows_magic_login($invitation)
+    {
+        if (!$invitation || $invitation['status'] !== 'accepted' || !self::is_hospital_invitation_role($invitation['qualinav_role'])) {
+            return false;
+        }
+
+        $expires_ts = 0;
+        if (!empty($invitation['expires_at'])) {
+            try {
+                $expires_at = new DateTimeImmutable((string) $invitation['expires_at'], new DateTimeZone('UTC'));
+                $expires_ts = $expires_at->getTimestamp();
+            } catch (Exception $e) {
+                $expires_ts = 0;
+            }
+        }
+
+        return $expires_ts > current_time('timestamp', true);
+    }
+
     public static function onboarding_completion_redirect($redirect_url, $user_id)
     {
         $handoff = self::get_valid_onboarding_handoff($user_id);

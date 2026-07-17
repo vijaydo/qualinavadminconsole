@@ -6,6 +6,18 @@ if (!defined('ABSPATH')) {
 
 class QN_Activator
 {
+    public static function maybe_upgrade()
+    {
+        $installed_version = get_option('qn_admin_console_version', '');
+        if ($installed_version === QN_ADMIN_CONSOLE_VERSION) {
+            return;
+        }
+
+        self::create_org_setup_tables();
+        QN_Questionnaire::seed_default_questionnaire();
+        update_option('qn_admin_console_version', QN_ADMIN_CONSOLE_VERSION, false);
+    }
+
     public static function activate()
     {
         self::migrate_users_table();
@@ -15,9 +27,11 @@ class QN_Activator
         self::create_user_organizations_table();
         self::create_health_systems_table();
         self::create_questionnaire_tables();
+        self::create_org_setup_tables();
         self::create_scout_runs_table();
         self::backfill_user_organizations();
         QN_Questionnaire::seed_default_questionnaire();
+        update_option('qn_admin_console_version', QN_ADMIN_CONSOLE_VERSION, false);
         QN_Router::add_rewrite_rules();
         flush_rewrite_rules();
     }
@@ -190,7 +204,7 @@ class QN_Activator
     {
         global $wpdb;
 
-        $roles = array('quality_director', 'hospital_admin', 'backup_quality_user', 'reporting_user', 'policy_owner', 'committee_user', 'viewer');
+        $roles = array('quality_director', 'executive_leader', 'clinical_ancillary_services_leader', 'hospital_admin', 'backup_quality_user', 'reporting_user', 'policy_owner', 'committee_user', 'viewer');
         $placeholders = implode(',', array_fill(0, count($roles), '%s'));
         $users = $wpdb->get_results(
             $wpdb->prepare(
@@ -247,6 +261,7 @@ class QN_Activator
             validation_json LONGTEXT NULL,
             conditional_logic_json LONGTEXT NULL,
             is_required TINYINT(1) NOT NULL DEFAULT 0,
+            is_progress_tracked TINYINT(1) NOT NULL DEFAULT 0,
             sort_order INT NOT NULL DEFAULT 0,
             is_active TINYINT(1) NOT NULL DEFAULT 1,
             created_at DATETIME NULL,
@@ -282,6 +297,179 @@ class QN_Activator
             PRIMARY KEY  (id),
             UNIQUE KEY org_section (organization_id, section_key),
             KEY idx_org (organization_id)
+        ) {$charset_collate};");
+    }
+
+    private static function create_org_setup_tables()
+    {
+        global $wpdb;
+
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $charset_collate = $wpdb->get_charset_collate();
+
+        dbDelta("CREATE TABLE " . QN_DB::org_profile_table() . " (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            organization_id BIGINT UNSIGNED NOT NULL,
+            hospital_name VARCHAR(255) NULL,
+            city VARCHAR(160) NULL,
+            state_code VARCHAR(20) NULL,
+            state_id BIGINT UNSIGNED NULL,
+            licensed_beds INT NULL,
+            acute_beds INT NULL,
+            swing_beds INT NULL,
+            is_critical_access_hospital VARCHAR(40) NULL,
+            independent_or_system VARCHAR(120) NULL,
+            quality_director_name VARCHAR(255) NULL,
+            quality_director_role_start_date VARCHAR(80) NULL,
+            quality_director_background TEXT NULL,
+            source_answers_json LONGTEXT NULL,
+            updated_by BIGINT UNSIGNED NULL,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NULL,
+            PRIMARY KEY  (id),
+            UNIQUE KEY org_unique (organization_id),
+            KEY idx_state_id (state_id),
+            KEY idx_updated_by (updated_by)
+        ) {$charset_collate};");
+
+        dbDelta("CREATE TABLE " . QN_DB::org_accreditation_table() . " (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            organization_id BIGINT UNSIGNED NOT NULL,
+            accreditation_status VARCHAR(120) NULL,
+            accrediting_body VARCHAR(160) NULL,
+            cms_certification_pathway VARCHAR(160) NULL,
+            state_survey_agency VARCHAR(255) NULL,
+            life_safety_survey_agency VARCHAR(255) NULL,
+            open_plans_of_correction LONGTEXT NULL,
+            projected_next_survey_window VARCHAR(160) NULL,
+            historical_deficiency_areas LONGTEXT NULL,
+            current_readiness_activities LONGTEXT NULL,
+            source_answers_json LONGTEXT NULL,
+            updated_by BIGINT UNSIGNED NULL,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NULL,
+            PRIMARY KEY  (id),
+            UNIQUE KEY org_unique (organization_id),
+            KEY idx_accrediting_body (accrediting_body),
+            KEY idx_updated_by (updated_by)
+        ) {$charset_collate};");
+
+        self::create_org_collection_table(QN_DB::org_survey_history_table(), 'survey_key', 'survey_title');
+        self::create_org_single_json_table(QN_DB::org_services_table());
+        self::create_org_collection_table(QN_DB::org_committees_table(), 'committee_key', 'committee_name');
+        self::create_org_collection_table(QN_DB::org_reporting_requirements_table(), 'requirement_key', 'requirement_name');
+        self::create_org_collection_table(QN_DB::org_plans_table(), 'plan_key', 'plan_name');
+        self::create_org_collection_table(QN_DB::org_policy_reviews_table(), 'review_key', 'review_name');
+        self::create_org_collection_table(QN_DB::org_monitoring_areas_table(), 'area_key', 'area_name');
+        self::create_org_collection_table(QN_DB::org_goals_table(), 'goal_key', 'goal_name');
+        self::create_org_collection_table(QN_DB::org_learning_items_table(), 'learning_key', 'learning_name');
+        self::create_org_collection_table(QN_DB::org_contacts_table(), 'contact_key', 'contact_name');
+        self::create_org_collection_table(QN_DB::org_regulatory_sources_table(), 'source_key', 'source_name');
+        self::create_org_collection_table(QN_DB::org_tools_table(), 'tool_key', 'tool_name');
+
+        dbDelta("CREATE TABLE " . QN_DB::org_reminder_preferences_table() . " (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            organization_id BIGINT UNSIGNED NOT NULL,
+            update_preference VARCHAR(160) NULL,
+            auto_propose_task_adjustments VARCHAR(80) NULL,
+            reminder_lead_time VARCHAR(160) NULL,
+            reminder_buffer_time VARCHAR(160) NULL,
+            backup_visibility_users LONGTEXT NULL,
+            final_review_confirmation VARCHAR(80) NULL,
+            source_answers_json LONGTEXT NULL,
+            updated_by BIGINT UNSIGNED NULL,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NULL,
+            PRIMARY KEY  (id),
+            UNIQUE KEY org_unique (organization_id),
+            KEY idx_updated_by (updated_by)
+        ) {$charset_collate};");
+
+        dbDelta("CREATE TABLE " . QN_DB::org_milestones_table() . " (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            organization_id BIGINT UNSIGNED NOT NULL,
+            milestone_key VARCHAR(160) NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            category VARCHAR(120) NULL,
+            status VARCHAR(80) NULL,
+            cadence VARCHAR(120) NULL,
+            due_window VARCHAR(160) NULL,
+            linked_object_type VARCHAR(120) NULL,
+            linked_object_id BIGINT UNSIGNED NULL,
+            source_answers_json LONGTEXT NULL,
+            updated_by BIGINT UNSIGNED NULL,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NULL,
+            PRIMARY KEY  (id),
+            UNIQUE KEY org_milestone (organization_id, milestone_key),
+            KEY idx_org (organization_id),
+            KEY idx_category (category),
+            KEY idx_status (status),
+            KEY idx_linked_object (linked_object_type, linked_object_id)
+        ) {$charset_collate};");
+
+        dbDelta("CREATE TABLE " . QN_DB::org_milestone_updates_table() . " (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            milestone_id BIGINT UNSIGNED NOT NULL,
+            organization_id BIGINT UNSIGNED NOT NULL,
+            status VARCHAR(80) NULL,
+            note TEXT NULL,
+            update_json LONGTEXT NULL,
+            created_by BIGINT UNSIGNED NULL,
+            created_at DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            KEY idx_milestone (milestone_id),
+            KEY idx_org (organization_id),
+            KEY idx_status (status),
+            KEY idx_created_by (created_by)
+        ) {$charset_collate};");
+    }
+
+    private static function create_org_single_json_table($table)
+    {
+        global $wpdb;
+
+        $charset_collate = $wpdb->get_charset_collate();
+
+        dbDelta("CREATE TABLE {$table} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            organization_id BIGINT UNSIGNED NOT NULL,
+            data_json LONGTEXT NULL,
+            source_answers_json LONGTEXT NULL,
+            updated_by BIGINT UNSIGNED NULL,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NULL,
+            PRIMARY KEY  (id),
+            UNIQUE KEY org_unique (organization_id),
+            KEY idx_updated_by (updated_by)
+        ) {$charset_collate};");
+    }
+
+    private static function create_org_collection_table($table, $key_column, $name_column)
+    {
+        global $wpdb;
+
+        $charset_collate = $wpdb->get_charset_collate();
+
+        dbDelta("CREATE TABLE {$table} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            organization_id BIGINT UNSIGNED NOT NULL,
+            {$key_column} VARCHAR(160) NOT NULL,
+            {$name_column} VARCHAR(255) NULL,
+            status VARCHAR(80) NULL,
+            cadence VARCHAR(120) NULL,
+            owner VARCHAR(255) NULL,
+            details_json LONGTEXT NULL,
+            source_answer_json LONGTEXT NULL,
+            updated_by BIGINT UNSIGNED NULL,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NULL,
+            PRIMARY KEY  (id),
+            UNIQUE KEY org_item (organization_id, {$key_column}),
+            KEY idx_org (organization_id),
+            KEY idx_status (status),
+            KEY idx_updated_by (updated_by)
         ) {$charset_collate};");
     }
 

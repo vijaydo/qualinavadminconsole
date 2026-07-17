@@ -311,6 +311,24 @@ class QN_REST_API
             'permission_callback' => array(__CLASS__, 'can_read_me'),
         ));
 
+        register_rest_route(self::NAMESPACE, '/onboarding/plan-policy-document', array(
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => array(__CLASS__, 'upload_plan_policy_document'),
+            'permission_callback' => array(__CLASS__, 'can_read_me'),
+        ));
+
+        register_rest_route(self::NAMESPACE, '/onboarding/plan-policy-document/delete', array(
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => array(__CLASS__, 'delete_plan_policy_document'),
+            'permission_callback' => array(__CLASS__, 'can_read_me'),
+        ));
+
+        register_rest_route(self::NAMESPACE, '/onboarding/plan-policy-document/status', array(
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => array(__CLASS__, 'plan_policy_document_status'),
+            'permission_callback' => array(__CLASS__, 'can_read_me'),
+        ));
+
         register_rest_route(self::NAMESPACE, '/scout/generate', array(
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => array(__CLASS__, 'generate_scout_preview'),
@@ -631,6 +649,11 @@ class QN_REST_API
             return new WP_Error('qn_self_role_lower', __('You cannot lower your own admin role.', 'qualinav-admin-console'), array('status' => 400));
         }
 
+        $guard = self::guard_user_access_change($user_id, $new_role, null);
+        if (is_wp_error($guard)) {
+            return $guard;
+        }
+
         $updated = QN_Invitations::update_user_role($user_id, $new_role);
 
         return is_wp_error($updated) ? $updated : rest_ensure_response($updated);
@@ -640,16 +663,23 @@ class QN_REST_API
     {
         $user_id = absint($request['id']);
         $new_role = sanitize_key($request->get_param('qualinav_role'));
+        if ($user_id === get_current_user_id()) {
+            return new WP_Error('qn_no_self_role_change', __('You cannot change your own hospital access role.', 'qualinav-admin-console'), array('status' => 400));
+        }
         $access = self::validate_hospital_target_user($user_id);
         if (is_wp_error($access)) {
             return $access;
         }
 
         $current_org = QN_Users::get_user_organization_id(get_current_user_id());
+        $guard = self::guard_user_access_change($user_id, $new_role, null, $current_org, $access);
+        if (is_wp_error($guard)) {
+            return $guard;
+        }
         $current_role = QN_Users::get_role_for_organization(get_current_user_id(), $current_org);
         $target_role = $access['qualinav_role'];
         if ($target_role === 'quality_director') {
-            return new WP_Error('qn_no_qd_role_change', __('Hospital users cannot modify a Quality Director role.', 'qualinav-admin-console'), array('status' => 403));
+            return new WP_Error('qn_no_qd_role_change', __('Hospital users cannot modify a Hospital Quality Director role.', 'qualinav-admin-console'), array('status' => 403));
         }
 
         if (!QN_Invitations::can_invite_role($current_role, $new_role) || in_array($new_role, array('qualinav_super_admin', 'qualinav_admin', 'quality_director'), true)) {
@@ -664,7 +694,13 @@ class QN_REST_API
 
     public static function admin_update_user_status(WP_REST_Request $request)
     {
-        $updated = QN_Invitations::update_user_status(absint($request['id']), sanitize_key($request->get_param('qualinav_status')));
+        $user_id = absint($request['id']);
+        $new_status = sanitize_key($request->get_param('qualinav_status'));
+        $guard = self::guard_user_access_change($user_id, null, $new_status);
+        if (is_wp_error($guard)) {
+            return $guard;
+        }
+        $updated = QN_Invitations::update_user_status($user_id, $new_status);
 
         return is_wp_error($updated) ? $updated : rest_ensure_response($updated);
     }
@@ -683,7 +719,7 @@ class QN_REST_API
 
         $target_role = $access['qualinav_role'];
         if ($target_role === 'quality_director') {
-            return new WP_Error('qn_no_qd_status_change', __('Hospital users cannot modify a Quality Director status.', 'qualinav-admin-console'), array('status' => 403));
+            return new WP_Error('qn_no_qd_status_change', __('Hospital users cannot modify a Hospital Quality Director status.', 'qualinav-admin-console'), array('status' => 403));
         }
 
         $new_status = sanitize_key($request->get_param('qualinav_status'));
@@ -692,6 +728,10 @@ class QN_REST_API
         }
 
         $current_org = QN_Users::get_user_organization_id(get_current_user_id());
+        $guard = self::guard_user_access_change($user_id, null, $new_status, $current_org, $access);
+        if (is_wp_error($guard)) {
+            return $guard;
+        }
         $updated = QN_Users::update_user_organization_status($user_id, $current_org, $new_status);
         QN_Audit_Log::log('user_status_changed', 'user', $user_id, $access, $updated, $current_org);
 
@@ -795,6 +835,267 @@ class QN_REST_API
         }
 
         return is_wp_error($submitted) ? $submitted : rest_ensure_response($submitted);
+    }
+
+    public static function upload_plan_policy_document(WP_REST_Request $request)
+    {
+        $organization_id = self::resolve_onboarding_organization($request);
+        if (is_wp_error($organization_id)) {
+            return $organization_id;
+        }
+        if (!QN_Onboarding::can_edit_onboarding(get_current_user_id(), $organization_id)) {
+            return new WP_Error('qn_policy_document_forbidden', __('You cannot manage documents for this hospital.', 'qualinav-admin-console'), array('status' => 403));
+        }
+        if (!function_exists('grapevine_ai_run_scout_document_operation')) {
+            return new WP_Error('qn_policy_document_bridge_unavailable', __('Scout document services are not available.', 'qualinav-admin-console'), array('status' => 503));
+        }
+
+        $policy_key = sanitize_key((string) $request->get_param('policy_key'));
+        $inventory = self::plan_policy_inventory($organization_id);
+        $row_index = self::plan_policy_row_index($inventory, $policy_key);
+        if ($row_index < 0) {
+            return new WP_Error('qn_policy_document_row_missing', __('Save this plan or policy row before uploading its document.', 'qualinav-admin-console'), array('status' => 400));
+        }
+
+        $files = $request->get_file_params();
+        $file = isset($files['file']) && is_array($files['file']) ? $files['file'] : array();
+        $upload_error = isset($file['error']) ? (int) $file['error'] : UPLOAD_ERR_NO_FILE;
+        if ($upload_error !== UPLOAD_ERR_OK || empty($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
+            return new WP_Error('qn_policy_document_missing', __('Choose a document to upload.', 'qualinav-admin-console'), array('status' => 400));
+        }
+        $filename = sanitize_file_name((string) ($file['name'] ?? 'document'));
+        $extension = strtolower((string) pathinfo($filename, PATHINFO_EXTENSION));
+        $mime_types = array(
+            'pdf' => 'application/pdf',
+            'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'txt' => 'text/plain',
+            'md' => 'text/markdown',
+            'html' => 'text/html',
+            'json' => 'application/json',
+            'jsonl' => 'application/x-ndjson',
+        );
+        if (!isset($mime_types[$extension])) {
+            return new WP_Error('qn_policy_document_type', __('Upload a PDF, DOCX, TXT, Markdown, HTML, JSON, or JSONL file.', 'qualinav-admin-console'), array('status' => 400));
+        }
+        $size = isset($file['size']) ? (int) $file['size'] : 0;
+        if ($size <= 0 || $size > 26214400) {
+            return new WP_Error('qn_policy_document_size', __('The document must be between 1 byte and 25 MB.', 'qualinav-admin-console'), array('status' => 400));
+        }
+        $contents = file_get_contents((string) $file['tmp_name']);
+        if (!is_string($contents) || $contents === '') {
+            return new WP_Error('qn_policy_document_read', __('The selected document could not be read.', 'qualinav-admin-console'), array('status' => 400));
+        }
+
+        $row = $inventory[$row_index];
+        $document_id = sanitize_text_field((string) ($row['document_id'] ?? ''));
+        if ($document_id === '') {
+            $document_id = wp_generate_uuid4();
+        }
+        $hospital = QN_Organizations::get_hospital($organization_id);
+        $answers = QN_Questionnaire::get_answer_map($organization_id);
+        $response = grapevine_ai_run_scout_document_operation(array(
+            'operation' => 'ingest',
+            'document_id' => $document_id,
+            'title' => sanitize_text_field((string) ($row['policy_name'] ?? pathinfo($filename, PATHINFO_FILENAME))),
+            'filename' => $filename,
+            'content_type' => $mime_types[$extension],
+            'content_base64' => base64_encode($contents),
+            'organization' => array(
+                'name' => $hospital ? (string) ($hospital['name'] ?? '') : '',
+                'type' => $hospital ? (string) ($hospital['hospital_type_label'] ?? $hospital['hospital_type'] ?? 'Hospital') : 'Hospital',
+                'state' => $hospital ? (string) ($hospital['state_code'] ?? $hospital['state_name'] ?? '') : '',
+                'accrediting_body' => (string) ($answers['accrediting_body'] ?? ''),
+            ),
+            'metadata' => array(
+                'source_app' => 'qualinav_admin_console',
+                'source_module' => 'hospital_setup',
+                'organization_id' => (string) $organization_id,
+                'policy_key' => $policy_key,
+            ),
+        ));
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $inventory[$row_index]['upload_status'] = sanitize_key((string) ($response['status'] ?? 'failed'));
+        $inventory[$row_index]['document_id'] = $document_id;
+        $inventory[$row_index]['document_name'] = $filename;
+        $inventory[$row_index]['document_version_id'] = sanitize_text_field((string) ($response['document_version_id'] ?? ''));
+        $inventory[$row_index]['ingestion_job_id'] = sanitize_text_field((string) ($response['job_id'] ?? ''));
+        $inventory[$row_index]['storage_path'] = '';
+        $inventory[$row_index]['scout_status'] = $inventory[$row_index]['upload_status'] === 'ready' ? 'indexed' : $inventory[$row_index]['upload_status'];
+        $saved = QN_Onboarding::save_step(
+            $organization_id,
+            'plans_policies_monitoring',
+            array('plan_policy_inventory' => $inventory),
+            get_current_user_id()
+        );
+        if (is_wp_error($saved)) {
+            return $saved;
+        }
+        QN_Audit_Log::log('plan_policy_document_ingested', 'organization', $organization_id, null, array(
+            'policy_key' => $policy_key,
+            'document_id' => $document_id,
+            'status' => $inventory[$row_index]['upload_status'],
+        ), $organization_id);
+
+        return rest_ensure_response(array(
+            'document' => $response,
+            'policy' => $inventory[$row_index],
+            'progress' => isset($saved['progress']) ? $saved['progress'] : null,
+        ));
+    }
+
+    public static function delete_plan_policy_document(WP_REST_Request $request)
+    {
+        $organization_id = self::resolve_onboarding_organization($request);
+        if (is_wp_error($organization_id)) {
+            return $organization_id;
+        }
+        if (!QN_Onboarding::can_edit_onboarding(get_current_user_id(), $organization_id)) {
+            return new WP_Error('qn_policy_document_forbidden', __('You cannot manage documents for this hospital.', 'qualinav-admin-console'), array('status' => 403));
+        }
+        if (!function_exists('grapevine_ai_run_scout_document_operation')) {
+            return new WP_Error('qn_policy_document_bridge_unavailable', __('Scout document services are not available.', 'qualinav-admin-console'), array('status' => 503));
+        }
+        $payload = $request->get_json_params();
+        $policy_key = sanitize_key((string) ($payload['policy_key'] ?? $request->get_param('policy_key')));
+        $inventory = self::plan_policy_inventory($organization_id);
+        $row_index = self::plan_policy_row_index($inventory, $policy_key);
+        if ($row_index < 0 || empty($inventory[$row_index]['document_id'])) {
+            return new WP_Error('qn_policy_document_missing', __('No Scout document is attached to this plan or policy.', 'qualinav-admin-console'), array('status' => 404));
+        }
+        $hospital = QN_Organizations::get_hospital($organization_id);
+        $answers = QN_Questionnaire::get_answer_map($organization_id);
+        $document_id = sanitize_text_field((string) $inventory[$row_index]['document_id']);
+        $shared_reference = false;
+        foreach ($inventory as $index => $policy) {
+            if ($index !== $row_index && sanitize_text_field((string) ($policy['document_id'] ?? '')) === $document_id) {
+                $shared_reference = true;
+                break;
+            }
+        }
+        if (!$shared_reference) {
+            $response = grapevine_ai_run_scout_document_operation(array(
+                'operation' => 'delete',
+                'document_id' => $document_id,
+                'organization' => array(
+                    'name' => $hospital ? (string) ($hospital['name'] ?? '') : '',
+                    'type' => $hospital ? (string) ($hospital['hospital_type_label'] ?? $hospital['hospital_type'] ?? 'Hospital') : 'Hospital',
+                    'state' => $hospital ? (string) ($hospital['state_code'] ?? $hospital['state_name'] ?? '') : '',
+                    'accrediting_body' => (string) ($answers['accrediting_body'] ?? ''),
+                ),
+            ));
+            if (is_wp_error($response)) {
+                return $response;
+            }
+        }
+        $inventory[$row_index]['upload_status'] = 'not_configured';
+        $inventory[$row_index]['document_id'] = '';
+        $inventory[$row_index]['document_name'] = '';
+        $inventory[$row_index]['document_version_id'] = '';
+        $inventory[$row_index]['ingestion_job_id'] = '';
+        $inventory[$row_index]['storage_path'] = '';
+        $inventory[$row_index]['scout_status'] = 'structured_ready';
+        $saved = QN_Onboarding::save_step(
+            $organization_id,
+            'plans_policies_monitoring',
+            array('plan_policy_inventory' => $inventory),
+            get_current_user_id()
+        );
+        if (is_wp_error($saved)) {
+            return $saved;
+        }
+        QN_Audit_Log::log($shared_reference ? 'plan_policy_document_unlinked' : 'plan_policy_document_deleted', 'organization', $organization_id, null, array(
+            'policy_key' => $policy_key,
+            'document_id' => $document_id,
+            'shared_reference' => $shared_reference,
+        ), $organization_id);
+        return rest_ensure_response(array(
+            'deleted' => !$shared_reference,
+            'unlinked' => $shared_reference,
+            'policy' => $inventory[$row_index],
+        ));
+    }
+
+    public static function plan_policy_document_status(WP_REST_Request $request)
+    {
+        $organization_id = self::resolve_onboarding_organization($request);
+        if (is_wp_error($organization_id)) {
+            return $organization_id;
+        }
+        if (!QN_Onboarding::can_edit_onboarding(get_current_user_id(), $organization_id)) {
+            return new WP_Error('qn_policy_document_forbidden', __('You cannot manage documents for this hospital.', 'qualinav-admin-console'), array('status' => 403));
+        }
+        if (!function_exists('grapevine_ai_run_scout_document_operation')) {
+            return new WP_Error('qn_policy_document_bridge_unavailable', __('Scout document services are not available.', 'qualinav-admin-console'), array('status' => 503));
+        }
+
+        $payload = $request->get_json_params();
+        $policy_key = sanitize_key((string) ($payload['policy_key'] ?? $request->get_param('policy_key')));
+        $inventory = self::plan_policy_inventory($organization_id);
+        $row_index = self::plan_policy_row_index($inventory, $policy_key);
+        $job_id = $row_index >= 0 ? sanitize_text_field((string) ($inventory[$row_index]['ingestion_job_id'] ?? '')) : '';
+        if ($row_index < 0 || $job_id === '') {
+            return new WP_Error('qn_policy_document_job_missing', __('No active Scout indexing job was found for this document.', 'qualinav-admin-console'), array('status' => 404));
+        }
+
+        $hospital = QN_Organizations::get_hospital($organization_id);
+        $answers = QN_Questionnaire::get_answer_map($organization_id);
+        $response = grapevine_ai_run_scout_document_operation(array(
+            'operation' => 'status',
+            'job_id' => $job_id,
+            'document_id' => sanitize_text_field((string) ($inventory[$row_index]['document_id'] ?? '')),
+            'organization' => array(
+                'name' => $hospital ? (string) ($hospital['name'] ?? '') : '',
+                'type' => $hospital ? (string) ($hospital['hospital_type_label'] ?? $hospital['hospital_type'] ?? 'Hospital') : 'Hospital',
+                'state' => $hospital ? (string) ($hospital['state_code'] ?? $hospital['state_name'] ?? '') : '',
+                'accrediting_body' => (string) ($answers['accrediting_body'] ?? ''),
+            ),
+        ));
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $status = sanitize_key((string) ($response['status'] ?? 'failed'));
+        $inventory[$row_index]['upload_status'] = $status;
+        $inventory[$row_index]['scout_status'] = $status === 'ready' ? 'indexed' : $status;
+        if (in_array($status, array('ready', 'ocr_required', 'failed', 'cancelled'), true)) {
+            $inventory[$row_index]['ingestion_job_id'] = '';
+        }
+        $saved = QN_Onboarding::save_step(
+            $organization_id,
+            'plans_policies_monitoring',
+            array('plan_policy_inventory' => $inventory),
+            get_current_user_id()
+        );
+        if (is_wp_error($saved)) {
+            return $saved;
+        }
+
+        return rest_ensure_response(array(
+            'document' => $response,
+            'policy' => $inventory[$row_index],
+            'terminal' => in_array($status, array('ready', 'ocr_required', 'failed', 'cancelled'), true),
+        ));
+    }
+
+    private static function plan_policy_inventory($organization_id)
+    {
+        $answers = QN_Questionnaire::get_answer_map($organization_id);
+        return isset($answers['plan_policy_inventory']) && is_array($answers['plan_policy_inventory'])
+            ? array_values($answers['plan_policy_inventory'])
+            : array();
+    }
+
+    private static function plan_policy_row_index($inventory, $policy_key)
+    {
+        foreach ((array) $inventory as $index => $row) {
+            if (is_array($row) && sanitize_key((string) ($row['policy_key'] ?? '')) === $policy_key) {
+                return (int) $index;
+            }
+        }
+        return -1;
     }
 
     public static function generate_scout_preview(WP_REST_Request $request)
@@ -947,6 +1248,75 @@ class QN_REST_API
         }
 
         return $data;
+    }
+
+    private static function guard_user_access_change($user_id, $new_role = null, $new_status = null, $organization_id = null, $access = null)
+    {
+        $user_id = absint($user_id);
+        $current_user_id = get_current_user_id();
+        $target = QN_Users::get_user_row($user_id);
+        if (!$target) {
+            return new WP_Error('qn_user_not_found', __('User not found.', 'qualinav-admin-console'), array('status' => 404));
+        }
+
+        if ($user_id === absint($current_user_id)) {
+            if ($new_role !== null && sanitize_key($new_role) !== QN_Users::get_user_qualinav_role($user_id)) {
+                return new WP_Error('qn_no_self_role_change', __('You cannot change your own access role.', 'qualinav-admin-console'), array('status' => 400));
+            }
+            if ($new_status !== null && sanitize_key($new_status) !== 'active') {
+                return new WP_Error('qn_no_self_status_change', __('You cannot disable or archive your own access.', 'qualinav-admin-console'), array('status' => 400));
+            }
+        }
+
+        $organization_id = $organization_id ? absint($organization_id) : (!empty($target->organization_id) ? absint($target->organization_id) : QN_Users::get_current_organization_id($user_id));
+        if (!$organization_id) {
+            return true;
+        }
+
+        $access = $access ? $access : QN_Users::get_user_organization_access($user_id, $organization_id);
+        $target_role = $access && !empty($access['qualinav_role']) ? sanitize_key($access['qualinav_role']) : sanitize_key($target->qualinav_role);
+        $target_status = $access && !empty($access['status']) ? sanitize_key($access['status']) : sanitize_key($target->qualinav_status);
+        $role_change_removes_qd = $new_role !== null && sanitize_key($new_role) !== 'quality_director';
+        $status_change_removes_active = $new_status !== null && in_array(sanitize_key($new_status), array('disabled', 'archived'), true);
+
+        if ($target_role === 'quality_director' && $target_status === 'active' && ($role_change_removes_qd || $status_change_removes_active)) {
+            if (self::active_quality_director_count($organization_id) <= 1) {
+                return new WP_Error('qn_last_qd_protected', __('Add another active Hospital Quality Director before changing this access.', 'qualinav-admin-console'), array('status' => 400));
+            }
+        }
+
+        return true;
+    }
+
+    private static function active_quality_director_count($organization_id)
+    {
+        global $wpdb;
+
+        $organization_id = absint($organization_id);
+        if (!$organization_id) {
+            return 0;
+        }
+
+        $mapping = QN_DB::user_organizations_table();
+        if (QN_DB::table_exists($mapping)) {
+            return absint($wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT COUNT(DISTINCT user_id) FROM {$mapping} WHERE organization_id = %d AND qualinav_role = %s AND status = %s",
+                    $organization_id,
+                    'quality_director',
+                    'active'
+                )
+            ));
+        }
+
+        return absint($wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->users} WHERE organization_id = %d AND qualinav_role = %s AND qualinav_status = %s",
+                $organization_id,
+                'quality_director',
+                'active'
+            )
+        ));
     }
 
     private static function validate_hospital_target_user($user_id)

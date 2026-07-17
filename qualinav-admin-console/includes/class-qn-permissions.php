@@ -34,6 +34,18 @@ class QN_Permissions
                 'edit_quality_program',
                 'view_reports',
             ),
+            'executive_leader' => array(
+                'access_hospital_console',
+                'manage_hospital_users',
+                'invite_limited_users',
+                'edit_hospital_profile',
+                'view_reports',
+            ),
+            'clinical_ancillary_services_leader' => array(
+                'access_hospital_console',
+                'edit_quality_program',
+                'view_reports',
+            ),
             'hospital_admin' => array(
                 'access_hospital_console',
                 'manage_hospital_users',
