@@ -11662,6 +11662,30 @@ body.qn-site-shell-console .qn-clinical-gap-title .qn-scout-status-badge {
     max-width: 760px;
 }
 
+.qn-site-shell-console .qn-data-hub-handoff-body .qn-button {
+    flex: 0 0 auto;
+    min-width: 176px;
+    background: #0b4f6c;
+    border-color: #0b4f6c;
+    box-shadow: 0 8px 18px rgba(11, 79, 108, 0.16);
+    color: #ffffff;
+}
+
+.qn-site-shell-console .qn-data-hub-handoff-body .qn-button:hover,
+.qn-site-shell-console .qn-data-hub-handoff-body .qn-button:active {
+    background: #073c53;
+    border-color: #073c53;
+    color: #ffffff;
+}
+
+.qn-site-shell-console .qn-data-hub-handoff-body .qn-button:focus-visible {
+    box-shadow: 0 0 0 3px rgba(11, 79, 108, 0.26);
+}
+
+.qn-site-shell-console .qn-data-hub-handoff-body .qn-button .dashicons {
+    color: inherit;
+}
+
 .qn-data-hub-boundary,
 .qn-document-privacy-notice {
     margin-top: 14px;
@@ -11728,5 +11752,9 @@ body.qn-site-shell-console .qn-clinical-gap-title .qn-scout-status-badge {
     .qn-document-privacy-notice {
         align-items: stretch;
         flex-direction: column;
+    }
+
+    .qn-site-shell-console .qn-data-hub-handoff-body .qn-button {
+        width: 100%;
     }
 }
