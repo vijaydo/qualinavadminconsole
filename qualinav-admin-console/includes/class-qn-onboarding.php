@@ -356,8 +356,15 @@ class QN_Onboarding
             $answers['hospital_zip'] = isset($hospital['zip']) ? (string) $hospital['zip'] : '';
             $answers['licensed_beds'] = $hospital['licensed_beds'];
             $answers['acute_beds'] = $hospital['acute_beds'];
-            $answers['swing_beds'] = $hospital['swing_beds'];
-            $answers['hospital_type'] = (string) $hospital['hospital_type'];
+            // Preserve a saved setup answer when an older organizations table
+            // does not carry these newer profile columns. A null/blank legacy
+            // value must not erase what the Quality Leader just saved.
+            if (isset($hospital['swing_beds']) && $hospital['swing_beds'] !== null) {
+                $answers['swing_beds'] = $hospital['swing_beds'];
+            }
+            if (!empty($hospital['hospital_type'])) {
+                $answers['hospital_type'] = (string) $hospital['hospital_type'];
+            }
             $answers['is_critical_access_hospital'] = $hospital['hospital_type'] === 'critical_access_hospital' ? 'yes' : 'no';
             $answers['independent_or_system'] = !empty($hospital['parent_system_id']) ? 'system_owned' : 'independent';
             $answers['system_network_name'] = (string) $hospital['parent_system_name'];
