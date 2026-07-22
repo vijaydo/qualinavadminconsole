@@ -9237,15 +9237,21 @@
             (['queued', 'processing'].indexOf(row.upload_status) !== -1 ? 'Indexing for Scout' :
             (row.upload_status === 'failed' ? 'Indexing failed' : 'No document')));
         var documentBusy = ['queued', 'processing'].indexOf(row.upload_status) !== -1;
-        var documentAction = documentBusy ? 'Indexing...' : (hasDocument ? 'Replace' : 'Upload');
+        var documentAction = documentBusy ? 'Document is indexing' : (hasDocument ? 'Replace document' : 'Upload document');
         var reusableDocuments = planPolicyReusableDocuments(row.policy_key);
         var uploadEnabled = documentUploadsEnabled() && canEditOnboarding() && !documentBusy;
         var uploadTitle = !documentUploadsEnabled() ? ' title="Document upload is temporarily unavailable."' :
             (documentBusy ? ' title="This document is already uploaded and indexing."' : '');
+        var documentActions = hasDocument ?
+            '<span class="qn-plan-policy-document-actions" aria-label="Document actions">' +
+                '<button type="button" class="qn-plan-policy-document-action" data-plan-policy-view="' + escapeHtml(row.policy_key) + '" title="View document" aria-label="View document"><span class="dashicons dashicons-visibility" aria-hidden="true"></span></button>' +
+                '<button type="button" class="qn-plan-policy-document-action qn-plan-policy-upload" data-plan-policy-upload="' + escapeHtml(row.policy_key) + '" title="' + escapeHtml(documentAction) + '" aria-label="' + escapeHtml(documentAction) + '"' + (uploadEnabled ? '' : ' disabled') + uploadTitle + '><span class="dashicons dashicons-update" aria-hidden="true"></span></button>' +
+                (canEditOnboarding() ? '<button type="button" class="qn-plan-policy-document-action qn-plan-policy-document-action-danger qn-plan-policy-remove" data-plan-policy-remove="' + escapeHtml(row.policy_key) + '"' + (isAdditionalPlan ? ' data-remove-plan-record="1"' : '') + ' title="' + (isAdditionalPlan ? 'Delete plan' : 'Remove document') + '" aria-label="' + (isAdditionalPlan ? 'Delete plan' : 'Remove document') + '"' + (documentBusy ? ' disabled' : '') + '><span class="dashicons dashicons-trash" aria-hidden="true"></span></button>' : '') +
+            '</span>' :
+            '<span class="qn-plan-policy-document-actions" aria-label="Document actions"><button type="button" class="qn-plan-policy-document-action qn-plan-policy-upload" data-plan-policy-upload="' + escapeHtml(row.policy_key) + '" title="Upload document" aria-label="Upload document"' + (uploadEnabled ? '' : ' disabled') + uploadTitle + '><span class="dashicons dashicons-upload" aria-hidden="true"></span></button></span>';
         var documentControls = '<span class="qn-plan-policy-document-controls">' +
-            '<button type="button" class="qn-button qn-button-secondary qn-plan-policy-upload" data-plan-policy-upload="' + escapeHtml(row.policy_key) + '"' + (uploadEnabled ? '' : ' disabled') + uploadTitle + '><span class="dashicons dashicons-upload"></span>' + escapeHtml(documentAction) + '</button>' +
+            documentActions +
             (documentUploadsEnabled() ? '<input type="file" hidden data-plan-policy-file="' + escapeHtml(row.policy_key) + '" accept=".pdf,.docx,.txt,.md,.html,.json,.jsonl">' : '') +
-            (hasDocument && canEditOnboarding() && !documentBusy ? '<button type="button" class="qn-button qn-button-link qn-plan-policy-remove" data-plan-policy-remove="' + escapeHtml(row.policy_key) + '"' + (isAdditionalPlan ? ' data-remove-plan-record="1"' : '') + '>' + (isAdditionalPlan ? 'Delete plan' : 'Remove') + '</button>' : '') +
             '<small class="qn-plan-policy-document-status">' + escapeHtml(documentStatus) + (row.document_name ? ': ' + escapeHtml(row.document_name) : '') + '</small>' +
             '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="upload_status" value="' + escapeFieldValue(row.upload_status || 'not_configured') + '">' +
             '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="document_id" value="' + escapeFieldValue(row.document_id || '') + '">' +
@@ -9510,6 +9516,43 @@
             setOnboardingSaveStatus('error', 'Document failed');
         }).finally(function () {
             input.value = '';
+            restoreButton();
+        });
+    }
+
+    function viewPlanPolicyDocument(policyKey, trigger) {
+        if (!policyKey || !state.onboardingOrganizationId) {
+            return;
+        }
+        var targetWindow = browserWindow();
+        var preview = targetWindow ? targetWindow.open('about:blank', '_blank') : null;
+        if (preview) {
+            preview.opener = null;
+            preview.document.title = 'Opening document...';
+            preview.document.body.textContent = 'Opening your secure document...';
+        }
+        var restoreButton = setButtonLoading(trigger, '');
+        api('/onboarding/plan-policy-document/view', {
+            method: 'POST',
+            body: {
+                organization_id: state.onboardingOrganizationId,
+                policy_key: policyKey
+            }
+        }).then(function (result) {
+            if (!result || !result.url) {
+                throw new Error('This document could not be opened securely.');
+            }
+            if (preview) {
+                preview.location.replace(result.url);
+            } else {
+                showToast('Your browser blocked the document window. Allow pop-ups for QualiNav and try again.', 'warning');
+            }
+        }).catch(function (error) {
+            if (preview) {
+                preview.close();
+            }
+            showToast(error && error.message ? error.message : 'The document could not be opened.', 'warning');
+        }).finally(function () {
             restoreButton();
         });
     }
@@ -12044,6 +12087,12 @@
             if (planPolicyCreateSource) {
                 event.preventDefault();
                 createAdditionalPlanAndUpload(planPolicyCreateSource.getAttribute('data-plan-policy-create-source'), planPolicyCreateSource);
+                return;
+            }
+            var planPolicyView = event.target.closest('[data-plan-policy-view]');
+            if (planPolicyView) {
+                event.preventDefault();
+                viewPlanPolicyDocument(planPolicyView.getAttribute('data-plan-policy-view'), planPolicyView);
                 return;
             }
             var planPolicyUpload = event.target.closest('[data-plan-policy-upload]');

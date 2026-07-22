@@ -3474,21 +3474,62 @@ textarea:focus-visible {
     width: 100%;
 }
 
-.qn-plan-policy-upload {
-    justify-content: center;
-    min-height: 40px;
-    width: 100%;
-}
-
 .qn-plan-policy-document-controls {
     display: grid;
-    gap: 5px;
+    gap: 7px;
     min-width: 0;
 }
 
-.qn-plan-policy-document-controls .qn-plan-policy-remove {
-    min-height: 28px;
-    padding: 3px 6px;
+.qn-plan-policy-document-actions {
+    align-items: center;
+    display: flex;
+    gap: 7px;
+}
+
+.qn-plan-policy-document-action {
+    align-items: center;
+    background: #fff;
+    border: 1px solid #c7d8e6;
+    border-radius: 9px;
+    color: #173b57;
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 38px;
+    height: 38px;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+    width: 38px;
+}
+
+.qn-plan-policy-document-action:hover:not(:disabled),
+.qn-plan-policy-document-action:focus-visible {
+    background: #eaf7fb;
+    border-color: #6db9d1;
+    color: #0f607b;
+    transform: translateY(-1px);
+}
+
+.qn-plan-policy-document-action:disabled {
+    cursor: not-allowed;
+    opacity: 0.48;
+}
+
+.qn-plan-policy-document-action .dashicons {
+    font-size: 20px;
+    height: 20px;
+    width: 20px;
+}
+
+.qn-plan-policy-document-action-danger {
+    color: #a53a3a;
+}
+
+.qn-plan-policy-document-action-danger:hover:not(:disabled),
+.qn-plan-policy-document-action-danger:focus-visible {
+    background: #fff1f1;
+    border-color: #e3a5a5;
+    color: #8a2424;
 }
 
 .qn-plan-policy-document-status {

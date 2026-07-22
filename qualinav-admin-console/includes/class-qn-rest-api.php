@@ -323,6 +323,12 @@ class QN_REST_API
             'permission_callback' => array(__CLASS__, 'can_read_me'),
         ));
 
+        register_rest_route(self::NAMESPACE, '/onboarding/plan-policy-document/view', array(
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => array(__CLASS__, 'view_plan_policy_document'),
+            'permission_callback' => array(__CLASS__, 'can_read_me'),
+        ));
+
         register_rest_route(self::NAMESPACE, '/onboarding/plan-policy-document/status', array(
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => array(__CLASS__, 'plan_policy_document_status'),
@@ -1210,6 +1216,61 @@ class QN_REST_API
             'unlinked' => $shared_reference,
             'plan_record_removed' => $is_additional_plan && $remove_plan_record,
             'policy' => ($is_additional_plan && $remove_plan_record) ? null : $inventory[$row_index],
+        ));
+    }
+
+    public static function view_plan_policy_document(WP_REST_Request $request)
+    {
+        $organization_id = self::resolve_onboarding_organization($request);
+        if (is_wp_error($organization_id)) {
+            return $organization_id;
+        }
+        if (!QN_Onboarding::can_edit_onboarding(get_current_user_id(), $organization_id)) {
+            return new WP_Error('qn_policy_document_forbidden', __('You cannot view documents for this hospital.', 'qualinav-admin-console'), array('status' => 403));
+        }
+        if (!function_exists('grapevine_ai_run_scout_document_operation')) {
+            return new WP_Error('qn_policy_document_bridge_unavailable', __('Scout document services are not available.', 'qualinav-admin-console'), array('status' => 503));
+        }
+        $payload = $request->get_json_params();
+        $policy_key = sanitize_key((string) ($payload['policy_key'] ?? $request->get_param('policy_key')));
+        $inventory = self::plan_policy_inventory($organization_id);
+        $row_index = self::plan_policy_row_index($inventory, $policy_key);
+        if ($row_index < 0 || empty($inventory[$row_index]['document_id'])) {
+            return new WP_Error('qn_policy_document_missing', __('No Scout document is attached to this plan or policy.', 'qualinav-admin-console'), array('status' => 404));
+        }
+        $hospital = QN_Organizations::get_hospital($organization_id);
+        $answers = QN_Questionnaire::get_answer_map($organization_id);
+        $document_id = sanitize_text_field((string) $inventory[$row_index]['document_id']);
+        $response = grapevine_ai_run_scout_document_operation(array(
+            'operation' => 'view',
+            'document_id' => $document_id,
+            'organization' => array(
+                'name' => $hospital ? (string) ($hospital['name'] ?? '') : '',
+                'type' => $hospital ? (string) ($hospital['hospital_type_label'] ?? $hospital['hospital_type'] ?? 'Hospital') : 'Hospital',
+                'state' => $hospital ? (string) ($hospital['state_code'] ?? $hospital['state_name'] ?? '') : '',
+                'accrediting_body' => (string) ($answers['accrediting_body'] ?? ''),
+            ),
+            'metadata' => array(
+                'organization_id' => (string) $organization_id,
+            ),
+        ));
+        if (is_wp_error($response)) {
+            return $response;
+        }
+        $url = esc_url_raw((string) ($response['url'] ?? ''));
+        $scheme = strtolower((string) wp_parse_url($url, PHP_URL_SCHEME));
+        if ($url === '' || !in_array($scheme, array('https', 'http'), true)) {
+            return new WP_Error('qn_policy_document_view_unavailable', __('This document could not be opened securely.', 'qualinav-admin-console'), array('status' => 502));
+        }
+        QN_Audit_Log::log('plan_policy_document_viewed', 'organization', $organization_id, null, array(
+            'policy_key' => $policy_key,
+            'document_id' => $document_id,
+        ), $organization_id);
+        return rest_ensure_response(array(
+            'document_id' => $document_id,
+            'filename' => sanitize_file_name((string) ($response['filename'] ?? $inventory[$row_index]['document_name'] ?? 'document')),
+            'url' => $url,
+            'expires_in' => absint($response['expires_in'] ?? 0),
         ));
     }
 
