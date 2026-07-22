@@ -103,6 +103,7 @@ class QN_Onboarding
             // A genuine edit after the whole-setup acknowledgement reopens the
             // final review, whether or not Scout has already been started.
             QN_Questionnaire::save_answers($organization_id, array('final_review_confirmation' => false), $user_id);
+            QN_Questionnaire::update_section_progress($organization_id, 'regulatory_tools_preferences', $user_id, false);
             $final_confirmation_is_checked = false;
         }
         if ($was_submitted && $answers_changed && !$final_confirmation_just_checked) {
@@ -283,7 +284,10 @@ class QN_Onboarding
             $data['onboarding_status'] = sanitize_key($status);
         }
         if (QN_DB::column_exists($table, 'onboarding_percent')) {
-            $data['onboarding_percent'] = QN_Questionnaire::calculate_total_progress($organization_id);
+            $answers = QN_Questionnaire::get_answer_map($organization_id, false);
+            $data['onboarding_percent'] = !empty($answers['final_review_confirmation'])
+                ? 100
+                : QN_Questionnaire::calculate_total_progress($organization_id);
         }
         if ($data) {
             $wpdb->update($table, $data, array('id' => absint($organization_id)));

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: QualiNav Admin Console
  * Description: Frontend console foundation, user model, routing, and access control for QualiNav.
- * Version: 0.1.317
+ * Version: 0.1.318
  * Author: QualiNav
  * Text Domain: qualinav-admin-console
  */
@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('QN_ADMIN_CONSOLE_VERSION', '0.1.317');
+define('QN_ADMIN_CONSOLE_VERSION', '0.1.318');
 define('QN_ADMIN_CONSOLE_FILE', __FILE__);
 define('QN_ADMIN_CONSOLE_DIR', plugin_dir_path(__FILE__));
 define('QN_ADMIN_CONSOLE_URL', plugin_dir_url(__FILE__));
