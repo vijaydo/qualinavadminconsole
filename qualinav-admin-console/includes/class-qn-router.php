@@ -243,6 +243,7 @@ class QN_Router
             'homeUrl' => esc_url_raw(home_url('/')),
             'shellMode' => $shell_mode,
             'isEmbeddedShell' => $shell_mode === 'my-org',
+            'documentUploadsEnabled' => qn_admin_console_document_uploads_enabled(),
         );
         self::enqueue_console_assets($console_config);
 
@@ -324,6 +325,7 @@ class QN_Router
             'isEmbeddedShell' => true,
             'isSiteShellConsole' => true,
             'defaultSection' => 'day-0-setup',
+            'documentUploadsEnabled' => qn_admin_console_document_uploads_enabled(),
         );
     }
 
@@ -340,6 +342,7 @@ class QN_Router
             'homeUrl' => esc_url_raw(home_url('/')),
             'isHomeWelcomePage' => true,
             'welcomeOrganizationId' => $welcome_organization_id,
+            'documentUploadsEnabled' => qn_admin_console_document_uploads_enabled(),
         );
     }
 

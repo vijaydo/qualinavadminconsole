@@ -292,7 +292,7 @@ $shell_classes = 'qn-app-shell' . ($is_myorg_embedded_shell ? ' qn-myorg-app-she
                             <div class="qn-onboarding-primary-actions">
                                 <p class="qn-form-message" id="qn-onboarding-message"></p>
                                 <button class="qn-button qn-button-primary" type="button" id="qn-onboarding-next"><?php esc_html_e('Save & Continue', 'qualinav-admin-console'); ?><span class="dashicons dashicons-arrow-right-alt2"></span></button>
-                                <button class="qn-button qn-button-primary" type="button" id="qn-onboarding-submit" hidden><?php esc_html_e('Submit Final Setup', 'qualinav-admin-console'); ?></button>
+                                <button class="qn-button qn-button-primary" type="button" id="qn-onboarding-submit" hidden><?php esc_html_e('Build My Initial Workspace', 'qualinav-admin-console'); ?></button>
                             </div>
                         </div>
                     </form>

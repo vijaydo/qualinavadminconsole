@@ -176,7 +176,7 @@ class QN_Org_Setup_Data
             }
         }
 
-        foreach (array('reporting_obligations', 'mbqip_measure_set', 'backup_preparer', 'report_lead_time', 'approval_requirements') as $key) {
+        foreach (array('reporting_obligations', 'mbqip_measure_set', 'backup_preparer', 'report_lead_time', 'report_lead_time_custom', 'approval_requirements') as $key) {
             if (array_key_exists($key, $answers)) {
                 self::upsert_collection_item(QN_DB::org_reporting_requirements_table(), $organization_id, 'requirement_key', 'requirement_name', $key, self::label_from_key($key), $answers[$key], $user_id);
             }
@@ -648,7 +648,7 @@ class QN_Org_Setup_Data
 
     private static function committee_reporting_keys()
     {
-        return array('committee_list', 'committee_required_status', 'standing_agenda_items', 'minutes_owner_location', 'board_agenda_timing', 'reporting_obligations', 'mbqip_measure_set', 'backup_preparer', 'report_lead_time', 'approval_requirements');
+        return array('committee_list', 'committee_required_status', 'standing_agenda_items', 'minutes_owner_location', 'board_agenda_timing', 'reporting_obligations', 'mbqip_measure_set', 'backup_preparer', 'report_lead_time', 'report_lead_time_custom', 'approval_requirements');
     }
 
     private static function plans_monitoring_keys()

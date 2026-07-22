@@ -55,6 +55,10 @@ class QN_Permissions
             ),
             'backup_quality_user' => array(
                 'access_hospital_console',
+                'complete_onboarding',
+                'manage_hospital_users',
+                'invite_hospital_users',
+                'edit_hospital_profile',
                 'edit_quality_program',
                 'view_reports',
             ),

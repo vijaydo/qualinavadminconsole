@@ -805,7 +805,8 @@ class QN_REST_API
         $payload = $request->get_json_params();
         $step_key = isset($payload['step_key']) ? sanitize_key($payload['step_key']) : '';
         $answers = isset($payload['answers']) && is_array($payload['answers']) ? $payload['answers'] : array();
-        $saved = QN_Onboarding::save_step($organization_id, $step_key, $answers, get_current_user_id());
+        $mark_reviewed = !empty($payload['mark_reviewed']);
+        $saved = QN_Onboarding::save_step($organization_id, $step_key, $answers, get_current_user_id(), $mark_reviewed);
 
         return is_wp_error($saved) ? $saved : rest_ensure_response($saved);
     }
@@ -839,6 +840,14 @@ class QN_REST_API
 
     public static function upload_plan_policy_document(WP_REST_Request $request)
     {
+        if (!qn_admin_console_document_uploads_enabled()) {
+            return new WP_Error(
+                'qn_policy_document_upload_disabled',
+                __('Document upload is temporarily unavailable.', 'qualinav-admin-console'),
+                array('status' => 503)
+            );
+        }
+
         $organization_id = self::resolve_onboarding_organization($request);
         if (is_wp_error($organization_id)) {
             return $organization_id;
@@ -851,9 +860,43 @@ class QN_REST_API
         }
 
         $policy_key = sanitize_key((string) $request->get_param('policy_key'));
+        $additional_plan_name = sanitize_text_field((string) $request->get_param('additional_plan_name'));
+        $link_requirement_key = sanitize_key((string) $request->get_param('link_requirement_key'));
         $inventory = self::plan_policy_inventory($organization_id);
         $row_index = self::plan_policy_row_index($inventory, $policy_key);
-        if ($row_index < 0) {
+        $link_requirement_index = -1;
+        $is_additional_plan = $additional_plan_name !== '';
+
+        if ($is_additional_plan) {
+            $link_requirement_index = self::plan_policy_row_index($inventory, $link_requirement_key);
+            if ($link_requirement_index < 0 || !empty($inventory[$link_requirement_index]['is_additional_plan'])) {
+                return new WP_Error('qn_policy_requirement_missing', __('The requirement to link is no longer available. Refresh and try again.', 'qualinav-admin-console'), array('status' => 400));
+            }
+            $policy_key = self::additional_plan_key($inventory, $additional_plan_name);
+            $inventory[] = array(
+                'policy_key' => $policy_key,
+                'policy_name' => $additional_plan_name,
+                'category' => __('Additional plan', 'qualinav-admin-console'),
+                'date_last_approved' => '',
+                'status' => 'in_place',
+                'folded_into' => '',
+                'folded_into_policy_key' => '',
+                'folded_into_document_id' => '',
+                'coverage_review_status' => 'not_applicable',
+                'notes' => '',
+                'upload_status' => 'not_configured',
+                'document_id' => '',
+                'document_name' => '',
+                'document_version_id' => '',
+                'ingestion_job_id' => '',
+                'storage_path' => '',
+                'document_sha256' => '',
+                'document_size_bytes' => 0,
+                'scout_status' => 'structured_ready',
+                'is_additional_plan' => '1',
+            );
+            $row_index = count($inventory) - 1;
+        } elseif ($row_index < 0) {
             return new WP_Error('qn_policy_document_row_missing', __('Save this plan or policy row before uploading its document.', 'qualinav-admin-console'), array('status' => 400));
         }
 
@@ -884,6 +927,91 @@ class QN_REST_API
         $contents = file_get_contents((string) $file['tmp_name']);
         if (!is_string($contents) || $contents === '') {
             return new WP_Error('qn_policy_document_read', __('The selected document could not be read.', 'qualinav-admin-console'), array('status' => 400));
+        }
+
+        $content_hash = hash('sha256', $contents);
+        $duplicate_index = -1;
+        foreach ($inventory as $index => $candidate) {
+            if (!is_array($candidate) || empty($candidate['document_id'])) {
+                continue;
+            }
+            $candidate_status = sanitize_key((string) ($candidate['upload_status'] ?? ''));
+            $candidate_hash = sanitize_text_field((string) ($candidate['document_sha256'] ?? ''));
+            if ($candidate_hash === $content_hash && in_array($candidate_status, array('ready', 'queued', 'processing'), true)) {
+                $duplicate_index = (int) $index;
+                break;
+            }
+        }
+        if ($duplicate_index >= 0) {
+            $duplicate = $inventory[$duplicate_index];
+            $duplicate_status = sanitize_key((string) ($duplicate['upload_status'] ?? 'processing'));
+            if ($is_additional_plan && $link_requirement_index >= 0) {
+                if ($duplicate_index === $link_requirement_index) {
+                    return new WP_Error(
+                        'qn_policy_document_already_attached',
+                        __('This document is already attached to this requirement and is being processed. There is no need to upload it again.', 'qualinav-admin-console'),
+                        array('status' => 409)
+                    );
+                }
+                array_splice($inventory, $row_index, 1);
+                $inventory[$link_requirement_index]['status'] = 'folded_into_another';
+                $inventory[$link_requirement_index]['folded_into'] = sanitize_text_field((string) ($duplicate['policy_name'] ?? ''));
+                $inventory[$link_requirement_index]['folded_into_policy_key'] = sanitize_key((string) ($duplicate['policy_key'] ?? ''));
+                $inventory[$link_requirement_index]['folded_into_document_id'] = sanitize_text_field((string) ($duplicate['document_id'] ?? ''));
+                $inventory[$link_requirement_index]['coverage_review_status'] = $duplicate_status === 'ready' ? 'pending_scout_review' : 'pending_indexing';
+                $saved = QN_Onboarding::save_step(
+                    $organization_id,
+                    'plans_policies_monitoring',
+                    array('plan_policy_inventory' => $inventory),
+                    get_current_user_id()
+                );
+                if (is_wp_error($saved)) {
+                    return $saved;
+                }
+                QN_Audit_Log::log('plan_policy_document_reused', 'organization', $organization_id, null, array(
+                    'policy_key' => sanitize_key((string) ($duplicate['policy_key'] ?? '')),
+                    'document_id' => sanitize_text_field((string) ($duplicate['document_id'] ?? '')),
+                    'status' => $duplicate_status,
+                    'linked_requirement_key' => $link_requirement_key,
+                ), $organization_id);
+                return rest_ensure_response(array(
+                    'document' => array(
+                        'document_id' => sanitize_text_field((string) ($duplicate['document_id'] ?? '')),
+                        'document_version_id' => sanitize_text_field((string) ($duplicate['document_version_id'] ?? '')),
+                        'job_id' => sanitize_text_field((string) ($duplicate['ingestion_job_id'] ?? '')),
+                        'status' => $duplicate_status,
+                        'content_hash' => $content_hash,
+                    ),
+                    'policy' => $duplicate,
+                    'reused_existing_document' => true,
+                    'progress' => isset($saved['progress']) ? $saved['progress'] : null,
+                ));
+            }
+            if ($duplicate_index === $row_index) {
+                return rest_ensure_response(array(
+                    'document' => array(
+                        'document_id' => sanitize_text_field((string) ($duplicate['document_id'] ?? '')),
+                        'document_version_id' => sanitize_text_field((string) ($duplicate['document_version_id'] ?? '')),
+                        'job_id' => sanitize_text_field((string) ($duplicate['ingestion_job_id'] ?? '')),
+                        'status' => $duplicate_status,
+                        'content_hash' => $content_hash,
+                    ),
+                    'policy' => $duplicate,
+                    'reused_existing_document' => true,
+                ));
+            }
+            return new WP_Error(
+                'qn_policy_document_duplicate',
+                sprintf(
+                    __('This document is already uploaded as %s. Choose that existing plan instead of uploading it again.', 'qualinav-admin-console'),
+                    sanitize_text_field((string) ($duplicate['policy_name'] ?? __('another plan', 'qualinav-admin-console')))
+                ),
+                array(
+                    'status' => 409,
+                    'existing_policy_key' => sanitize_key((string) ($duplicate['policy_key'] ?? '')),
+                    'existing_document_id' => sanitize_text_field((string) ($duplicate['document_id'] ?? '')),
+                )
+            );
         }
 
         $row = $inventory[$row_index];
@@ -923,7 +1051,17 @@ class QN_REST_API
         $inventory[$row_index]['document_version_id'] = sanitize_text_field((string) ($response['document_version_id'] ?? ''));
         $inventory[$row_index]['ingestion_job_id'] = sanitize_text_field((string) ($response['job_id'] ?? ''));
         $inventory[$row_index]['storage_path'] = '';
+        $inventory[$row_index]['document_sha256'] = sanitize_text_field((string) ($response['content_hash'] ?? $content_hash));
+        $inventory[$row_index]['document_size_bytes'] = $size;
         $inventory[$row_index]['scout_status'] = $inventory[$row_index]['upload_status'] === 'ready' ? 'indexed' : $inventory[$row_index]['upload_status'];
+        if ($is_additional_plan && $link_requirement_index >= 0) {
+            $inventory[$link_requirement_index]['status'] = 'folded_into_another';
+            $inventory[$link_requirement_index]['folded_into'] = $additional_plan_name;
+            $inventory[$link_requirement_index]['folded_into_policy_key'] = $policy_key;
+            $inventory[$link_requirement_index]['folded_into_document_id'] = $document_id;
+            $inventory[$link_requirement_index]['coverage_review_status'] =
+                $inventory[$row_index]['upload_status'] === 'ready' ? 'pending_scout_review' : 'pending_indexing';
+        }
         $saved = QN_Onboarding::save_step(
             $organization_id,
             'plans_policies_monitoring',
@@ -931,12 +1069,27 @@ class QN_REST_API
             get_current_user_id()
         );
         if (is_wp_error($saved)) {
+            grapevine_ai_run_scout_document_operation(array(
+                'operation' => 'delete',
+                'document_id' => $document_id,
+                'organization' => array(
+                    'name' => $hospital ? (string) ($hospital['name'] ?? '') : '',
+                    'type' => $hospital ? (string) ($hospital['hospital_type_label'] ?? $hospital['hospital_type'] ?? 'Hospital') : 'Hospital',
+                    'state' => $hospital ? (string) ($hospital['state_code'] ?? $hospital['state_name'] ?? '') : '',
+                    'accrediting_body' => (string) ($answers['accrediting_body'] ?? ''),
+                ),
+                'metadata' => array(
+                    'organization_id' => (string) $organization_id,
+                ),
+            ));
             return $saved;
         }
         QN_Audit_Log::log('plan_policy_document_ingested', 'organization', $organization_id, null, array(
             'policy_key' => $policy_key,
             'document_id' => $document_id,
             'status' => $inventory[$row_index]['upload_status'],
+            'is_additional_plan' => $is_additional_plan,
+            'linked_requirement_key' => $link_requirement_key,
         ), $organization_id);
 
         return rest_ensure_response(array(
@@ -968,6 +1121,29 @@ class QN_REST_API
         $hospital = QN_Organizations::get_hospital($organization_id);
         $answers = QN_Questionnaire::get_answer_map($organization_id);
         $document_id = sanitize_text_field((string) $inventory[$row_index]['document_id']);
+        $remove_plan_record = !empty($payload['remove_plan_record']);
+        $is_additional_plan = !empty($inventory[$row_index]['is_additional_plan']);
+        $references = array();
+        foreach ($inventory as $index => $policy) {
+            if ($index === $row_index || !is_array($policy)) {
+                continue;
+            }
+            $references_source = sanitize_key((string) ($policy['folded_into_policy_key'] ?? '')) === $policy_key ||
+                sanitize_text_field((string) ($policy['folded_into_document_id'] ?? '')) === $document_id;
+            if ($references_source) {
+                $references[] = sanitize_text_field((string) ($policy['policy_name'] ?? $policy['policy_key'] ?? 'requirement'));
+            }
+        }
+        if (!empty($references)) {
+            return new WP_Error(
+                'qn_policy_document_in_use',
+                sprintf(
+                    __('Unlink this plan from %s before deleting it.', 'qualinav-admin-console'),
+                    implode(', ', array_slice($references, 0, 5))
+                ),
+                array('status' => 409, 'references' => $references)
+            );
+        }
         $shared_reference = false;
         foreach ($inventory as $index => $policy) {
             if ($index !== $row_index && sanitize_text_field((string) ($policy['document_id'] ?? '')) === $document_id) {
@@ -985,18 +1161,27 @@ class QN_REST_API
                     'state' => $hospital ? (string) ($hospital['state_code'] ?? $hospital['state_name'] ?? '') : '',
                     'accrediting_body' => (string) ($answers['accrediting_body'] ?? ''),
                 ),
+                'metadata' => array(
+                    'organization_id' => (string) $organization_id,
+                ),
             ));
             if (is_wp_error($response)) {
                 return $response;
             }
         }
-        $inventory[$row_index]['upload_status'] = 'not_configured';
-        $inventory[$row_index]['document_id'] = '';
-        $inventory[$row_index]['document_name'] = '';
-        $inventory[$row_index]['document_version_id'] = '';
-        $inventory[$row_index]['ingestion_job_id'] = '';
-        $inventory[$row_index]['storage_path'] = '';
-        $inventory[$row_index]['scout_status'] = 'structured_ready';
+        if ($is_additional_plan && $remove_plan_record) {
+            array_splice($inventory, $row_index, 1);
+        } else {
+            $inventory[$row_index]['upload_status'] = 'not_configured';
+            $inventory[$row_index]['document_id'] = '';
+            $inventory[$row_index]['document_name'] = '';
+            $inventory[$row_index]['document_version_id'] = '';
+            $inventory[$row_index]['ingestion_job_id'] = '';
+            $inventory[$row_index]['storage_path'] = '';
+            $inventory[$row_index]['document_sha256'] = '';
+            $inventory[$row_index]['document_size_bytes'] = 0;
+            $inventory[$row_index]['scout_status'] = 'structured_ready';
+        }
         $saved = QN_Onboarding::save_step(
             $organization_id,
             'plans_policies_monitoring',
@@ -1006,15 +1191,25 @@ class QN_REST_API
         if (is_wp_error($saved)) {
             return $saved;
         }
+        if ($is_additional_plan && $remove_plan_record) {
+            global $wpdb;
+            $wpdb->delete(
+                QN_DB::org_plans_table(),
+                array('organization_id' => $organization_id, 'plan_key' => $policy_key),
+                array('%d', '%s')
+            );
+        }
         QN_Audit_Log::log($shared_reference ? 'plan_policy_document_unlinked' : 'plan_policy_document_deleted', 'organization', $organization_id, null, array(
             'policy_key' => $policy_key,
             'document_id' => $document_id,
             'shared_reference' => $shared_reference,
+            'plan_record_removed' => $is_additional_plan && $remove_plan_record,
         ), $organization_id);
         return rest_ensure_response(array(
             'deleted' => !$shared_reference,
             'unlinked' => $shared_reference,
-            'policy' => $inventory[$row_index],
+            'plan_record_removed' => $is_additional_plan && $remove_plan_record,
+            'policy' => ($is_additional_plan && $remove_plan_record) ? null : $inventory[$row_index],
         ));
     }
 
@@ -1052,6 +1247,9 @@ class QN_REST_API
                 'state' => $hospital ? (string) ($hospital['state_code'] ?? $hospital['state_name'] ?? '') : '',
                 'accrediting_body' => (string) ($answers['accrediting_body'] ?? ''),
             ),
+            'metadata' => array(
+                'organization_id' => (string) $organization_id,
+            ),
         ));
         if (is_wp_error($response)) {
             return $response;
@@ -1062,6 +1260,19 @@ class QN_REST_API
         $inventory[$row_index]['scout_status'] = $status === 'ready' ? 'indexed' : $status;
         if (in_array($status, array('ready', 'ocr_required', 'failed', 'cancelled'), true)) {
             $inventory[$row_index]['ingestion_job_id'] = '';
+        }
+        $source_document_id = sanitize_text_field((string) ($inventory[$row_index]['document_id'] ?? ''));
+        foreach ($inventory as $index => $policy) {
+            if ($index === $row_index || !is_array($policy)) {
+                continue;
+            }
+            $references_source = sanitize_key((string) ($policy['folded_into_policy_key'] ?? '')) === $policy_key ||
+                ($source_document_id !== '' && sanitize_text_field((string) ($policy['folded_into_document_id'] ?? '')) === $source_document_id);
+            if ($references_source) {
+                $inventory[$index]['coverage_review_status'] = $status === 'ready'
+                    ? 'pending_scout_review'
+                    : (in_array($status, array('queued', 'processing'), true) ? 'pending_indexing' : 'source_document_unavailable');
+            }
         }
         $saved = QN_Onboarding::save_step(
             $organization_id,
@@ -1096,6 +1307,21 @@ class QN_REST_API
             }
         }
         return -1;
+    }
+
+    private static function additional_plan_key($inventory, $plan_name)
+    {
+        $base = sanitize_key('additional_' . sanitize_title($plan_name));
+        if ($base === '' || $base === 'additional_') {
+            $base = 'additional_plan';
+        }
+        $candidate = $base;
+        $suffix = 2;
+        while (self::plan_policy_row_index($inventory, $candidate) >= 0) {
+            $candidate = $base . '_' . $suffix;
+            $suffix++;
+        }
+        return $candidate;
     }
 
     public static function generate_scout_preview(WP_REST_Request $request)

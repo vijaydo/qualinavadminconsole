@@ -40,6 +40,8 @@
         scoutBridgeAvailable: false,
         scoutCanGenerate: false,
         scoutOnboardingSubmitted: false,
+        scoutGenerationInFlight: false,
+        scoutAutoGenerationOrganizationId: null,
         autosaveTimer: null,
         systemCheck: null,
         adminPeopleLoaded: false,
@@ -56,6 +58,8 @@
         adminInvitationSearch: '',
         hospitalInvitationSearch: ''
     };
+    var usDatePickerPopover = null;
+    var usDatePickerContext = null;
 
     var roleLabels = {
         qualinav_super_admin: 'QualiNav Super Admin',
@@ -83,7 +87,7 @@
         executive_leader: 'Executive persona for hospital leadership, workspace oversight, and reporting visibility.',
         clinical_ancillary_services_leader: 'Clinical or ancillary services persona for quality work and reporting visibility.',
         hospital_admin: 'Can help manage hospital users and workspace administration.',
-        backup_quality_user: 'Can support quality work and see backup coverage context.',
+        backup_quality_user: 'Quality Director-level access for designated backup coverage.',
         reporting_user: 'Can support reporting workflows and related setup information.',
         policy_owner: 'Can support plan and policy ownership workflows.',
         committee_user: 'Can support committee and meeting workflow information.',
@@ -183,9 +187,9 @@
         if (roleLabels[role]) {
             return roleLabels[role];
         }
-        return String(role).replace(/_/g, ' ').replace(/\b\w/g, function (letter) {
+        return normalizePublicSetupCopy(String(role).replace(/_/g, ' ').replace(/\b\w/g, function (letter) {
             return letter.toUpperCase();
-        });
+        }));
     }
 
     function currentWorkspaceRole() {
@@ -332,9 +336,87 @@
         return value === null || value === undefined || value === '' ? '-' : String(value);
     }
 
+    var publicAcronymLabels = {
+        acc: 'ACC',
+        achc: 'ACHC',
+        ahrq: 'AHRQ',
+        ai: 'AI',
+        ami: 'AMI',
+        api: 'API',
+        cah: 'CAH',
+        cauti: 'CAUTI',
+        ccn: 'CCN',
+        cdc: 'CDC',
+        ceo: 'CEO',
+        cfo: 'CFO',
+        cihq: 'CIHQ',
+        clabsi: 'CLABSI',
+        clia: 'CLIA',
+        cms: 'CMS',
+        cphq: 'CPHQ',
+        cpps: 'CPPS',
+        crna: 'CRNA',
+        dexa: 'DEXA',
+        dnv: 'DNV',
+        docx: 'DOCX',
+        ecqm: 'eCQM',
+        ecqms: 'eCQMs',
+        edpec: 'EDPEC',
+        edtc: 'EDTC',
+        ehr: 'EHR',
+        elr: 'ELR',
+        ems: 'EMS',
+        fmea: 'FMEA',
+        hac: 'HAC',
+        hai: 'HAI',
+        hapi: 'HAPI',
+        hcahps: 'HCAHPS',
+        hcp: 'HCP',
+        hfap: 'HFAP',
+        hipaa: 'HIPAA',
+        hqic: 'HQIC',
+        hqr: 'HQR',
+        hrrp: 'HRRP',
+        ipps: 'IPPS',
+        iqr: 'IQR',
+        lwbs: 'LWBS',
+        mbqip: 'MBQIP',
+        mri: 'MRI',
+        mrsa: 'MRSA',
+        ncdr: 'NCDR',
+        nhsn: 'NHSN',
+        ocr: 'OCR',
+        oqr: 'OQR',
+        pdf: 'PDF',
+        pdsa: 'PDSA',
+        phi: 'PHI',
+        poc: 'POC',
+        pps: 'PPS',
+        pso: 'PSO',
+        pssm: 'PSSM',
+        qapi: 'QAPI',
+        qi: 'QI',
+        rca: 'RCA',
+        rn: 'RN',
+        safer: 'SAFER',
+        smtp: 'SMTP',
+        ssi: 'SSI',
+        tjc: 'TJC',
+        txt: 'TXT',
+        ui: 'UI',
+        url: 'URL',
+        utc: 'UTC',
+        vbp: 'VBP',
+        vp: 'VP',
+        zip: 'ZIP'
+    };
+
     function normalizePublicSetupCopy(value) {
-        return text(value).replace(/\bday 0\b/gi, function (match) {
+        var normalized = text(value).replace(/\bday 0\b/gi, function (match) {
             return match === match.toUpperCase() ? 'HOSPITAL SETUP' : 'Hospital Setup';
+        });
+        return normalized.replace(/\b[A-Za-z][A-Za-z0-9]*\b/g, function (token) {
+            return publicAcronymLabels[token.toLowerCase()] || token;
         });
     }
 
@@ -4608,7 +4690,8 @@
         });
     }
 
-    function loadScoutRuns(organizationId) {
+    function loadScoutRuns(organizationId, options) {
+        options = options || {};
         var path = '/scout/runs';
         if (organizationId) {
             path += '?organization_id=' + encodeURIComponent(organizationId);
@@ -4620,6 +4703,7 @@
             state.scoutCanGenerate = !!payload.can_generate;
             state.scoutOnboardingSubmitted = !!payload.onboarding_submitted || payload.onboarding_status === 'submitted' || !!state.latestScoutRun;
             renderHospitalDataSections();
+            return options.skipAutoGenerate ? false : maybeAutoGenerateScoutPreview();
         }).catch(function (error) {
             var body = document.getElementById('qn-scout-preview-body');
             if (body) {
@@ -4640,8 +4724,24 @@
         renderScoutPageChrome();
         if (generate) {
             generate.hidden = true;
-            generate.disabled = readOnly || !state.scoutCanGenerate;
-            generate.innerHTML = '<span class="dashicons dashicons-lightbulb"></span>Generate Preview';
+            generate.disabled = readOnly || !state.scoutCanGenerate || state.scoutGenerationInFlight;
+            generate.innerHTML = state.scoutGenerationInFlight
+                ? '<span class="dashicons dashicons-update"></span>Generating...'
+                : '<span class="dashicons dashicons-lightbulb"></span>Generate Preview';
+        }
+
+        if (state.scoutGenerationInFlight) {
+            body.innerHTML = renderScoutEmptyState(
+                'update',
+                'Scout is building your hospital preview',
+                'Your Hospital Setup has been saved. Scout is now creating the reporting schedule, committee flow, monitoring work, and priority queue automatically.',
+                '',
+                ''
+            );
+            if (generate && !readOnly) {
+                generate.hidden = false;
+            }
+            return;
         }
 
         if (!state.scoutOnboardingSubmitted && !state.latestScoutRun) {
@@ -4906,21 +5006,120 @@
             return '';
         }
         return '<section class="qn-scout-attention">' +
-            '<div class="qn-section-toolbar"><div><p class="qn-eyebrow">Needs your attention</p><h3>Inputs and warnings to review</h3></div></div>' +
+            '<div class="qn-section-toolbar"><div><p class="qn-eyebrow">Before you use this plan</p><h3>A few items need your review</h3><p class="qn-muted-note">Complete missing details when you can, and confirm any assumptions Scout made.</p></div></div>' +
             '<div class="qn-scout-attention-grid">' +
-            renderScoutAttentionGroup('Missing inputs', missing, 'editor-help', 'danger') +
-            renderScoutAttentionGroup('Scout warnings', warnings, 'warning', 'warning') +
-            renderScoutAttentionGroup('Backend/contract warnings', backend, 'shield', 'warning') +
+            (missing.length ? renderScoutAttentionGroup('Information to add', missing, 'editor-help', 'missing') : '') +
+            (warnings.length ? renderScoutAttentionGroup('Assumptions to confirm', warnings, 'warning', 'warning') : '') +
+            (backend.length ? renderScoutAttentionGroup('Technical notice', backend, 'shield', 'technical') : '') +
             '</div></section>';
     }
 
     function renderScoutAttentionGroup(title, items, icon, tone) {
         items = cleanScoutList(items);
-        return '<article><h4><span class="dashicons dashicons-' + escapeHtml(icon) + '"></span>' + escapeHtml(title) + '</h4>' +
-            (items.length ? '<div class="qn-scout-chip-list">' + items.map(function (item) {
-                return '<span class="qn-warning-chip qn-warning-chip-' + escapeHtml(tone) + '">' + escapeHtml(describeScoutItem(item)) + '</span>';
-            }).join('') + '</div>' : '<p class="qn-muted-note">None returned.</p>') +
+        return '<article class="qn-scout-attention-group qn-scout-attention-group-' + escapeHtml(tone) + '">' +
+            '<div class="qn-scout-attention-heading"><span class="dashicons dashicons-' + escapeHtml(icon) + '"></span><div><h4>' + escapeHtml(title) + '</h4><span>' + escapeHtml(items.length + (items.length === 1 ? ' item' : ' items')) + '</span></div></div>' +
+            '<div class="qn-scout-attention-list">' + items.map(function (item) {
+                return renderScoutAttentionItem(item, tone);
+            }).join('') + '</div>' +
+            (tone === 'missing' ? '<a class="qn-button qn-button-secondary qn-scout-attention-action" href="#day-0-setup">Update Hospital Setup</a>' : '') +
             '</article>';
+    }
+
+    function renderScoutAttentionItem(item, tone) {
+        var detail = normalizeScoutAttentionItem(item, tone);
+        return '<div class="qn-scout-attention-item">' +
+            '<strong>' + escapeHtml(detail.title) + '</strong>' +
+            (detail.description ? '<p>' + escapeHtml(detail.description) + '</p>' : '') +
+            (detail.basis ? '<span class="qn-scout-attention-basis"><span class="dashicons dashicons-info-outline"></span>Based on ' + escapeHtml(detail.basis) + '</span>' : '') +
+            '</div>';
+    }
+
+    function normalizeScoutAttentionItem(item, tone) {
+        var value = item;
+        if (typeof value === 'string') {
+            value = parseScoutObjectText(value) || {description: normalizePublicSetupCopy(value)};
+        }
+        value = value && typeof value === 'object' && !Array.isArray(value) ? value : {description: describeScoutItem(value)};
+        var key = value.input_key || value.key || '';
+        var title = value.title || value.label || value.name || '';
+        var description = value.description || value.detail || value.message || value.reason || '';
+        if (!title && key) {
+            title = scoutAttentionTitle(key);
+        }
+        if (!title) {
+            title = tone === 'warning' ? 'Confirm this planning assumption' : (tone === 'technical' ? 'Scout could not complete this step' : 'Additional information needed');
+        }
+        if (!description && value.value) {
+            description = describeScoutItem(value.value);
+        }
+        return {
+            title: normalizePublicSetupCopy(title),
+            description: normalizePublicSetupCopy(description),
+            basis: scoutEvidenceBasis(value.evidence_basis || value.source || '')
+        };
+    }
+
+    function parseScoutObjectText(raw) {
+        raw = String(raw || '').trim();
+        if (raw.charAt(0) !== '{' || raw.indexOf(':') === -1) {
+            return null;
+        }
+        var result = {};
+        ['input_key', 'key', 'title', 'label', 'name', 'description', 'detail', 'message', 'reason', 'evidence_basis', 'source'].forEach(function (key) {
+            var value = extractScoutObjectField(raw, key);
+            if (value !== '') {
+                result[key] = value;
+            }
+        });
+        return Object.keys(result).length ? result : null;
+    }
+
+    function extractScoutObjectField(raw, key) {
+        var marker = new RegExp("[\\\"']?" + key + "[\\\"']?\\s*:\\s*", 'i');
+        var match = marker.exec(raw);
+        if (!match) {
+            return '';
+        }
+        var index = match.index + match[0].length;
+        var quote = raw.charAt(index);
+        if (quote !== "'" && quote !== '"') {
+            return raw.slice(index).split(/,\s*[\"']?[a-z_]+[\"']?\s*:/i)[0].replace(/[},]\s*$/, '').trim();
+        }
+        index += 1;
+        var output = '';
+        for (; index < raw.length; index += 1) {
+            var character = raw.charAt(index);
+            if (character === '\\' && index + 1 < raw.length) {
+                output += raw.charAt(index + 1);
+                index += 1;
+                continue;
+            }
+            if (character === quote) {
+                break;
+            }
+            output += character;
+        }
+        return output.trim();
+    }
+
+    function scoutAttentionTitle(key) {
+        var labels = {
+            qi_project_details: 'Quality improvement project details',
+            aggregate_data_upload_schedule: 'Routine data upload schedule',
+            full_governing_board_schedule: 'Governing Board meeting schedule',
+            policy_review_cycle_definition: 'Policy review cycle'
+        };
+        return labels[key] || normalizePublicSetupCopy(String(key).replace(/_/g, ' ').replace(/\b\w/g, function (letter) { return letter.toUpperCase(); }));
+    }
+
+    function scoutEvidenceBasis(value) {
+        var labels = {
+            hospital_setup: 'Hospital Setup',
+            quality_work: 'your quality program information',
+            reporting_obligations: 'your reporting schedule'
+        };
+        var key = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+        return labels[key] || (key ? normalizePublicSetupCopy(key.replace(/_/g, ' ')) : '');
     }
 
     function renderScoutWorkflowCard(run, definition) {
@@ -5086,7 +5285,7 @@
             return '<p>' + escapeHtml(describeScoutItem(value)) + '</p>';
         }
         return Object.keys(value).slice(0, 8).map(function (key) {
-            return '<div class="qn-scout-kv"><span>' + escapeHtml(key.replace(/_/g, ' ')) + '</span><strong>' + escapeHtml(describeScoutItem(value[key])) + '</strong></div>';
+            return '<div class="qn-scout-kv"><span>' + escapeHtml(normalizePublicSetupCopy(key.replace(/_/g, ' '))) + '</span><strong>' + escapeHtml(describeScoutItem(value[key])) + '</strong></div>';
         }).join('');
     }
 
@@ -5172,7 +5371,7 @@
             learning_journey: 'Learning Journey',
             reminder_rules: 'Reminder Rules'
         };
-        return titles[key] || text(key).replace(/_/g, ' ').replace(/\b\w/g, function (letter) { return letter.toUpperCase(); });
+        return titles[key] || normalizePublicSetupCopy(text(key).replace(/_/g, ' ').replace(/\b\w/g, function (letter) { return letter.toUpperCase(); }));
     }
 
     function formatScoutValue(value, missingLabel) {
@@ -5377,15 +5576,49 @@
             return '<div class="qn-scout-detail-kv">' + Object.keys(value).filter(function (key) {
                 return value[key] !== null && value[key] !== undefined && value[key] !== '';
             }).map(function (key) {
-                return '<div><span>' + escapeHtml(key.replace(/_/g, ' ')) + '</span><strong>' + renderScoutReadableValue(value[key]) + '</strong></div>';
+                return '<div><span>' + escapeHtml(normalizePublicSetupCopy(key.replace(/_/g, ' '))) + '</span><strong>' + renderScoutReadableValue(value[key]) + '</strong></div>';
             }).join('') + '</div>';
         }
         return escapeHtml(describeScoutItem(value));
     }
 
-    function generateScoutPreview(trigger) {
-        var button = trigger || document.getElementById('qn-scout-generate-button');
+    function shouldAutoGenerateScoutPreview() {
+        var organizationId = Number(state.onboardingOrganizationId) || 0;
+        return !!organizationId &&
+            state.scoutOnboardingSubmitted &&
+            state.scoutBridgeAvailable &&
+            state.scoutCanGenerate &&
+            !state.latestScoutRun &&
+            !state.scoutGenerationInFlight &&
+            !isReadOnlyWorkspaceRole() &&
+            Number(state.scoutAutoGenerationOrganizationId || 0) !== organizationId;
+    }
+
+    function maybeAutoGenerateScoutPreview() {
+        if (!shouldAutoGenerateScoutPreview()) {
+            return Promise.resolve(false);
+        }
+        state.scoutAutoGenerationOrganizationId = Number(state.onboardingOrganizationId) || 0;
+        return generateScoutPreview(null, {automatic: true}).then(function () {
+            return true;
+        });
+    }
+
+    function generateScoutPreview(trigger, options) {
+        options = options || {};
+        if (state.scoutGenerationInFlight) {
+            return Promise.resolve(state.latestScoutRun);
+        }
+        var candidate = trigger && trigger.currentTarget ? trigger.currentTarget : trigger;
+        var button = candidate && typeof candidate.getAttribute === 'function'
+            ? candidate
+            : document.getElementById('qn-scout-generate-button');
+        state.scoutGenerationInFlight = true;
         var restoreButton = setButtonLoading(button, 'Generating...');
+        renderScoutPreview();
+        if (options.automatic) {
+            showToast('Hospital Setup saved. Scout is building your preview automatically.', 'success');
+        }
         var body = {organization_id: state.onboardingOrganizationId};
         return api('/scout/generate', {method: 'POST', body: body, timeout: 60000}).then(function (result) {
             state.latestScoutRun = result.run || null;
@@ -5394,9 +5627,10 @@
             return loadScoutRuns(state.onboardingOrganizationId);
         }).catch(function (error) {
             showToast(error && error.message ? error.message : 'Scout preview could not be generated. Please try again.', 'warning');
-            renderScoutPreview();
         }).finally(function () {
+            state.scoutGenerationInFlight = false;
             restoreButton();
+            renderScoutPreview();
         });
     }
 
@@ -5439,7 +5673,7 @@
                 setOnboardingSaveStatus(progress > 0 ? 'ready' : 'not-started', progress > 0 ? 'Ready' : 'Not started');
             }
         } else {
-            setText('#qn-onboarding-progress-text', isOnboardingSubmitted() ? 'Setup submitted - ' + progress + '% complete' : progress + '% complete');
+            setText('#qn-onboarding-progress-text', isOnboardingSubmitted() ? 'Ready for Scout - ' + progress + '% of optional detail added' : progress + '% of optional detail added');
         }
         setText('#qn-onboarding-step-summary', 'Step ' + (state.onboardingIndex + 1) + ' of ' + steps.length + ' - ' + (isOnboardingSubmitted() ? 'submitted, ' + progress + '% answer completeness' : progress + '% complete'));
         var bar = document.getElementById('qn-onboarding-progress-bar');
@@ -5557,7 +5791,7 @@
         var found = Array.isArray(progress) ? progress.find(function (item) {
             return item.section_key === step.section_key;
         }) : null;
-        if (found && Number(found.percent_complete) >= 100) {
+        if (found && (found.status === 'completed' || Number(found.percent_complete) >= 100)) {
             return 'complete';
         }
         if (found && Number(found.percent_complete) > 0) {
@@ -5617,11 +5851,15 @@
         }
         container.innerHTML = renderQuestionGroups(step, questions);
         updateStepOneBedWarning();
+        updateSwingBedConsistencyWarning();
         updateStepOneAffiliationUI();
         updateStepOneQualityLeaderTitleUI();
         updateStepTwoConditionalUI();
         updateStepThreeConditionalUI();
         updateStepSevenConditionalUI();
+        if (step.section_key === 'plans_policies_monitoring') {
+            window.setTimeout(resumePlanPolicyDocumentPolling, 0);
+        }
         if (!canEditOnboardingStep(step)) {
             container.querySelectorAll('input, textarea, select, button').forEach(function (node) {
                 node.disabled = true;
@@ -5640,7 +5878,7 @@
             var legacyStepOne = renderPreservedStepFourFields(['is_critical_access_hospital', 'acute_beds', 'licensed_for_swing_beds', 'quality_director_name']);
             return renderQuestionGroup('Hospital Information', 'building', questions.filter(function (question) {
                 return hospitalKeys.indexOf(question.question_key) !== -1;
-            }), '<div class="qn-bed-warning" id="qn-step1-bed-warning" hidden><span class="dashicons dashicons-warning"></span>Swing beds exceed licensed beds. Please verify.</div>' + legacyStepOne, function (question) {
+            }), '<div class="qn-bed-warning" id="qn-step1-bed-warning" hidden><span class="dashicons dashicons-warning"></span>Swing beds exceed licensed beds. Please verify.</div>' + renderSwingBedConsistencyWarning() + legacyStepOne, function (question) {
                 if (question.question_key === 'independent_or_system' && affiliationQuestion) {
                     return '<div class="qn-affiliation-cluster">' + renderQuestion(question) + renderQuestion(affiliationQuestion) + '</div>';
                 }
@@ -5652,14 +5890,17 @@
         if (step.section_key === 'accreditation_survey_readiness') {
             var pathwayKeys = ['survey_compliance_process', 'accrediting_body', 'accrediting_body_other'];
             var agencyKeys = ['state_survey_agency', 'state_survey_agency_url', 'life_safety_survey_agency_status', 'life_safety_survey_agency', 'life_safety_survey_agency_url'];
-            var historyReadinessKeys = ['last_accreditation_licensing_survey_date', 'other_certification_licensing_surveys_status', 'other_certification_licensing_surveys'];
+            var historyReadinessKeys = ['last_accreditation_licensing_survey_date'];
+            var otherSurveyKeys = ['other_certification_licensing_surveys_status', 'other_certification_licensing_surveys'];
             return renderSurveyPathwayGroup(questions.filter(function (question) {
                 return pathwayKeys.indexOf(question.question_key) !== -1;
             })) + renderQuestionGroup('Survey History', 'calendar-alt', questions.filter(function (question) {
                 return historyReadinessKeys.indexOf(question.question_key) !== -1;
             }), '', renderStepTwoQuestion, 'qn-survey-readiness-grid') + renderStateSurveyAgencyGroup(questions.filter(function (question) {
                 return agencyKeys.indexOf(question.question_key) !== -1;
-            }));
+            })) + renderQuestionGroup('Other Certification & Licensing Surveys', 'clipboard', questions.filter(function (question) {
+                return otherSurveyKeys.indexOf(question.question_key) !== -1;
+            }), '', renderStepTwoQuestion, 'qn-survey-readiness-grid');
         }
         if (step.section_key === 'services_clinical_model') {
             var serviceLineKeys = ['service_lines_core', 'service_lines_common', 'service_lines_growth_expansion', 'service_lines_other'];
@@ -5673,12 +5914,9 @@
         }
         if (step.section_key === 'committees_reporting') {
             var committeeKeys = ['committee_list'];
-            var cadenceDefaultKeys = ['report_lead_time', 'backup_preparer'];
-            return renderQuestionGroup('Meeting Preparation Defaults', 'clock', questions.filter(function (question) {
-                return cadenceDefaultKeys.indexOf(question.question_key) !== -1;
-            }), '', renderStepFourQuestion, 'qn-cadence-default-grid', 'These defaults help Scout prepare information before recurring quality meetings.') + renderQuestionGroup('Where Quality Is Reviewed', 'groups', questions.filter(function (question) {
+            return renderQuestionGroup('Where Quality Is Reviewed', 'groups', questions.filter(function (question) {
                 return committeeKeys.indexOf(question.question_key) !== -1;
-            }), '', renderStepFourQuestion, '', 'Use the local meeting name, identify what it reports to, and record the cadence. Reporting measures and submission deadlines remain in Data Hub.');
+            }), '', renderStepFourQuestion, '', 'Use the local meeting name, identify what it reports to, and record its normal cadence and preparation time. If a topic is covered by another meeting, use that meeting name instead. Reporting measures and submission deadlines remain in Data Hub.');
         }
         if (step.section_key === 'plans_policies_monitoring') {
             var inventoryKeys = ['plan_policy_inventory'];
@@ -5729,31 +5967,96 @@
         var onboarding = state.onboarding || {};
         var answers = onboarding.answers || {};
         var missingByStep = [];
+        var savedByStep = [];
         (onboarding.steps || []).forEach(function (step) {
             if (step.section_key === 'measures_qi_projects' || step.section_key === 'regulatory_tools_preferences') {
                 return;
             }
-            var missing = (onboarding.questions || []).filter(function (question) {
+            var stepQuestions = (onboarding.questions || []).filter(function (question) {
                 return getSectionKeyForQuestion(question) === step.section_key &&
                     question.question_key !== 'plan_policy_inventory' &&
-                    conditionalVisible(question) &&
+                    !(question.question_key === 'backup_preparer' && !backupPreparerUserOptions().length) &&
+                    conditionalVisible(question);
+            });
+            var missing = stepQuestions.filter(function (question) {
+                return getSectionKeyForQuestion(question) === step.section_key &&
                     !onboardingAnswerHasValue(answers[question.question_key]);
             }).map(function (question) {
                 return question.label;
             });
+            var saved = stepQuestions.filter(function (question) {
+                return onboardingAnswerHasValue(answers[question.question_key]);
+            }).filter(function (question) {
+                return question.question_key !== 'quality_leader_title_other';
+            }).map(function (question) {
+                var answer = answers[question.question_key];
+                if (
+                    question.question_key === 'quality_leader_title' &&
+                    fieldValue(answer).trim().toLowerCase() === 'other' &&
+                    onboardingAnswerHasValue(answers.quality_leader_title_other)
+                ) {
+                    answer = answers.quality_leader_title_other;
+                }
+                return {
+                    label: question.label,
+                    value: onboardingReviewValue(question, answer)
+                };
+            }).filter(function (item) {
+                return item.value;
+            });
             if (step.section_key === 'plans_policies_monitoring') {
                 var inventory = normalizePlanPolicyInventory(answers.plan_policy_inventory);
-                var unfinished = inventory.filter(function (row) {
+                var requiredInventory = inventory.filter(function (row) {
+                    return !isAdditionalPlanPolicyRow(row);
+                });
+                var additionalInventory = inventory.filter(isAdditionalPlanPolicyRow);
+                var unfinished = requiredInventory.filter(function (row) {
                     return !row.status;
                 }).length;
                 if (unfinished) {
                     missing.push(unfinished + ' plan or policy status' + (unfinished === 1 ? '' : 'es'));
                 }
+                var uniqueDocuments = {};
+                var foldedLinks = 0;
+                inventory.forEach(function (row) {
+                    if (row.document_id && row.upload_status === 'ready') {
+                        uniqueDocuments[row.document_id] = true;
+                    }
+                    if (row.status === 'folded_into_another' && row.folded_into_document_id) {
+                        foldedLinks++;
+                    }
+                });
+                saved.push({label: 'Required plan and policy items', value: String(requiredInventory.length)});
+                saved.push({label: 'Unique indexed documents', value: String(Object.keys(uniqueDocuments).length)});
+                saved.push({label: 'Requirements linked to another plan', value: String(foldedLinks)});
+                saved.push({
+                    label: 'Additional plans and policies',
+                    value: additionalInventory.length ?
+                        additionalInventory.map(function (row) { return row.policy_name; }).join(', ') :
+                        'None'
+                });
             }
             if (missing.length) {
                 missingByStep.push({title: step.title, items: missing});
             }
+            if (saved.length) {
+                savedByStep.push({title: step.title, items: saved});
+            }
         });
+        var swingBedMismatch = getSwingBedConsistencyMismatch();
+        if (swingBedMismatch) {
+            missingByStep.unshift({
+                title: 'Swing-bed consistency',
+                items: [swingBedMismatch.message]
+            });
+        }
+        var savedContent = savedByStep.length ? '<div class="qn-review-saved-sections">' + savedByStep.map(function (group) {
+            return '<section class="qn-review-saved-group"><h5>' + escapeHtml(group.title) + '</h5><dl>' +
+                group.items.map(function (item) {
+                    return '<div><dt>' + escapeHtml(item.label) + '</dt><dd>' + escapeHtml(item.value) + '</dd></div>';
+                }).join('') +
+            '</dl></section>';
+        }).join('') + '</div>' : '<p>No saved values are available yet.</p>';
         var content = missingByStep.length ? missingByStep.map(function (group) {
             var visible = group.items.slice(0, 5);
             return '<div class="qn-review-missing-group"><strong>' + escapeHtml(group.title) + '</strong><ul>' +
@@ -5762,7 +6065,48 @@
             '</ul></div>';
         }).join('') : '<div class="qn-review-complete"><span class="dashicons dashicons-yes-alt"></span><p>The active Hospital Setup sections have the information Scout needs. You can still revise them at any time.</p></div>';
         return '<section class="qn-question-group qn-onboarding-review"><header><span class="dashicons dashicons-clipboard"></span><h4>Setup Review</h4></header>' +
-            '<div class="qn-onboarding-review-body"><p>This is one consolidated review. Missing items do not block you from moving between steps; required confirmations are checked only when you submit.</p>' + content + '</div></section>';
+            '<div class="qn-onboarding-review-body"><p>Review the saved values Scout will use. Missing items do not block movement between steps; required confirmations are checked when you submit.</p>' +
+            savedContent + '<div class="qn-review-attention"><h5>Needs attention</h5>' + content + '</div></div></section>';
+    }
+
+    function onboardingReviewValue(question, value) {
+        if (value === true) {
+            return 'Yes';
+        }
+        if (value === false) {
+            return 'No';
+        }
+        if (question.question_key === 'backup_preparer' && String(value) === '0') {
+            return 'Not assigned';
+        }
+        if (Array.isArray(value)) {
+            if (!value.length) {
+                return '';
+            }
+            if (value[0] && typeof value[0] === 'object') {
+                var names = value.map(function (item) {
+                    return fieldValue(item.committee_name || item.report_name || item.name || item.title || '');
+                }).filter(Boolean).map(onboardingReviewScalar);
+                return names.length ? names.join(', ') : value.length + ' saved item' + (value.length === 1 ? '' : 's');
+            }
+            return value.map(function (item) {
+                return onboardingReviewScalar(optionLabelByValue(question.options || question.options_json || [], item) || item);
+            }).filter(Boolean).join(', ');
+        }
+        if (value && typeof value === 'object') {
+            var parts = Object.keys(value).filter(function (key) {
+                return onboardingAnswerHasValue(value[key]);
+            }).map(function (key) {
+                return onboardingReviewScalar(value[key]);
+            }).filter(Boolean);
+            return parts.join(' · ');
+        }
+        return onboardingReviewScalar(optionLabelByValue(question.options || question.options_json || [], fieldValue(value)) || value);
+    }
+
+    function onboardingReviewScalar(value) {
+        var raw = fieldValue(value);
+        return /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/.test(raw) ? optionLabel(raw) : raw;
     }
 
     function renderDocumentPrivacyNotice() {
@@ -5877,6 +6221,7 @@
             '<p class="qn-service-lines-intro">Please check all services currently offered at your hospital.</p>' +
             '<div class="qn-service-lines-layout">' + groupHtml + '</div>' +
             (otherQuestion ? '<div class="qn-service-lines-other">' + renderStepThreeQuestion(otherQuestion) + '</div>' : '') +
+            renderSwingBedConsistencyWarning() +
             (extraHtml || '') +
         '</section>';
     }
@@ -5973,6 +6318,10 @@
             return false;
         }
         return isGlobalAdmin() || state.me.qualinav_role === 'quality_director' || state.me.qualinav_role === 'hospital_admin';
+    }
+
+    function documentUploadsEnabled() {
+        return config.documentUploadsEnabled !== false;
     }
 
     function canUseHospitalSetupEditCopy() {
@@ -6804,11 +7153,11 @@
 
     function optionLabel(option) {
         if (option && typeof option === 'object') {
-            return text(option.label || option.name || option.value);
+            return normalizePublicSetupCopy(text(option.label || option.name || option.value));
         }
-        return text(option).replace(/_/g, ' ').replace(/\b\w/g, function (letter) {
+        return normalizePublicSetupCopy(text(option).replace(/_/g, ' ').replace(/\b\w/g, function (letter) {
             return letter.toUpperCase();
-        });
+        }));
     }
 
     function fieldValue(value) {
@@ -6894,15 +7243,160 @@
     }
 
     function renderUsDateInput(attrs, value) {
-        var isoValue = normalizeDateForStorage(value);
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(isoValue)) {
-            isoValue = '';
-        }
         return '<span class="qn-us-date-wrap">' +
-            '<input type="text" inputmode="numeric" autocomplete="off" placeholder="mm/dd/yyyy" data-date-format="us" pattern="\\d{1,2}/\\d{1,2}/\\d{4}" ' + attrs + ' value="' + escapeFieldValue(formatDateForDisplay(value)) + '">' +
-            '<button class="qn-us-date-trigger" type="button" data-us-date-trigger aria-label="Open calendar"><span class="dashicons dashicons-calendar-alt"></span></button>' +
-            '<input class="qn-us-date-native" type="date" data-us-date-picker value="' + escapeFieldValue(isoValue) + '" tabindex="-1" aria-hidden="true">' +
+            '<input type="text" inputmode="numeric" autocomplete="off" placeholder="mm/dd/yyyy" data-date-format="us" pattern="\\d{1,2}/\\d{1,2}/\\d{4}" aria-haspopup="dialog" ' + attrs + ' value="' + escapeFieldValue(formatDateForDisplay(value)) + '">' +
+            '<button class="qn-us-date-trigger" type="button" data-us-date-trigger aria-label="Open calendar" aria-haspopup="dialog" aria-expanded="false"><span class="dashicons dashicons-calendar-alt"></span></button>' +
         '</span>';
+    }
+
+    function localDateToIso(date) {
+        if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+            return '';
+        }
+        return date.getFullYear() + '-' + padDatePart(date.getMonth() + 1) + '-' + padDatePart(date.getDate());
+    }
+
+    function isoToLocalDate(value) {
+        var match = fieldValue(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!match || !isValidDateParts(match[2], match[3], match[1])) {
+            return null;
+        }
+        return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    }
+
+    function todayIsoDate() {
+        return localDateToIso(new Date());
+    }
+
+    function ensureUsDatePickerPopover() {
+        if (usDatePickerPopover && document.body.contains(usDatePickerPopover)) {
+            return usDatePickerPopover;
+        }
+        usDatePickerPopover = document.createElement('div');
+        usDatePickerPopover.className = 'qn-date-picker-popover';
+        usDatePickerPopover.setAttribute('role', 'dialog');
+        usDatePickerPopover.setAttribute('aria-label', 'Choose date');
+        usDatePickerPopover.hidden = true;
+        document.body.appendChild(usDatePickerPopover);
+        return usDatePickerPopover;
+    }
+
+    function positionUsDatePicker() {
+        if (!usDatePickerContext || !usDatePickerContext.wrapper) {
+            return;
+        }
+        var popover = ensureUsDatePickerPopover();
+        popover.hidden = false;
+        var rect = usDatePickerContext.wrapper.getBoundingClientRect();
+        var popRect = popover.getBoundingClientRect();
+        var margin = 12;
+        var left = Math.min(Math.max(margin, rect.left), window.innerWidth - popRect.width - margin);
+        var below = rect.bottom + 8;
+        var above = rect.top - popRect.height - 8;
+        var top = below + popRect.height < window.innerHeight - margin ? below : Math.max(margin, above);
+        popover.style.left = left + 'px';
+        popover.style.top = top + 'px';
+    }
+
+    function closeUsDatePicker() {
+        if (usDatePickerPopover) {
+            usDatePickerPopover.hidden = true;
+        }
+        if (usDatePickerContext && usDatePickerContext.wrapper) {
+            var trigger = usDatePickerContext.wrapper.querySelector('[data-us-date-trigger]');
+            if (trigger) {
+                trigger.setAttribute('aria-expanded', 'false');
+            }
+        }
+        usDatePickerContext = null;
+    }
+
+    function renderUsDatePicker() {
+        if (!usDatePickerContext) {
+            return;
+        }
+        var popover = ensureUsDatePickerPopover();
+        var context = usDatePickerContext;
+        var first = new Date(context.viewYear, context.viewMonth, 1);
+        var gridStart = new Date(context.viewYear, context.viewMonth, 1 - first.getDay());
+        var currentYear = new Date().getFullYear();
+        var selectedYear = Number(context.viewYear) || currentYear;
+        var startYear = Math.min(currentYear - 15, selectedYear - 5);
+        var endYear = Math.max(currentYear + 5, selectedYear + 5);
+        var yearOptions = [];
+        var monthOptions = [];
+        var days = [];
+        var weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+        for (var year = endYear; year >= startYear; year -= 1) {
+            yearOptions.push('<option value="' + year + '"' + (year === selectedYear ? ' selected' : '') + '>' + year + '</option>');
+        }
+        for (var month = 0; month < 12; month += 1) {
+            var monthLabel = new Date(2000, month, 1).toLocaleString('en-US', {month: 'long'});
+            monthOptions.push('<option value="' + month + '"' + (month === Number(context.viewMonth) ? ' selected' : '') + '>' + escapeHtml(monthLabel) + '</option>');
+        }
+        for (var index = 0; index < 42; index += 1) {
+            var date = new Date(gridStart);
+            date.setDate(gridStart.getDate() + index);
+            var iso = localDateToIso(date);
+            var classes = [
+                'qn-date-picker-day',
+                date.getMonth() === context.viewMonth ? '' : 'is-muted',
+                iso === context.selectedIso ? 'is-selected' : '',
+                iso === todayIsoDate() ? 'is-today' : ''
+            ].filter(Boolean).join(' ');
+            days.push('<button type="button" class="' + classes + '" data-qn-date="' + iso + '" aria-label="' + escapeHtml(date.toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'})) + '">' + date.getDate() + '</button>');
+        }
+
+        popover.innerHTML =
+            '<div class="qn-date-picker-popover-head">' +
+                '<div class="qn-date-picker-title">' +
+                    '<select class="qn-date-picker-month" data-qn-date-month aria-label="Choose month">' + monthOptions.join('') + '</select>' +
+                    '<select class="qn-date-picker-year" data-qn-date-year aria-label="Choose year">' + yearOptions.join('') + '</select>' +
+                '</div>' +
+            '</div>' +
+            '<div class="qn-date-picker-weekdays">' + weekdays.map(function (day) { return '<div>' + day + '</div>'; }).join('') + '</div>' +
+            '<div class="qn-date-picker-grid">' + days.join('') + '</div>' +
+            '<div class="qn-date-picker-quick">' +
+                '<button type="button" data-qn-date-today>Today</button>' +
+                '<button type="button" data-qn-date-clear>Clear</button>' +
+            '</div>';
+        positionUsDatePicker();
+    }
+
+    function openUsDatePicker(control) {
+        var wrapper = control ? control.closest('.qn-us-date-wrap') : null;
+        var input = wrapper ? wrapper.querySelector('[data-date-format="us"]') : null;
+        if (!wrapper || !input || input.disabled) {
+            return;
+        }
+        var selectedIso = normalizeDateForStorage(input.value);
+        var selectedDate = isoToLocalDate(selectedIso) || new Date();
+        usDatePickerContext = {
+            wrapper: wrapper,
+            input: input,
+            selectedIso: isoToLocalDate(selectedIso) ? selectedIso : '',
+            viewYear: selectedDate.getFullYear(),
+            viewMonth: selectedDate.getMonth()
+        };
+        var trigger = wrapper.querySelector('[data-us-date-trigger]');
+        if (trigger) {
+            trigger.setAttribute('aria-expanded', 'true');
+        }
+        renderUsDatePicker();
+    }
+
+    function selectUsDate(isoValue) {
+        if (!usDatePickerContext || !usDatePickerContext.input) {
+            return;
+        }
+        var input = usDatePickerContext.input;
+        input.value = isoValue ? formatDateForDisplay(isoValue) : '';
+        input.setCustomValidity('');
+        closeUsDatePicker();
+        input.dispatchEvent(new Event('input', {bubbles: true}));
+        input.dispatchEvent(new Event('change', {bubbles: true}));
+        input.focus();
     }
 
     function questionPlaceholder(question) {
@@ -7193,6 +7687,9 @@
         }
         if (key === 'other_certification_licensing_surveys') {
             return '<textarea class="qn-compact-textarea" data-onboarding-field="' + escapeHtml(key) + '" placeholder="Specify the survey organization, purpose of survey, frequency, and date of last survey. Example: CLIA survey, lab certification, every two years, last survey 03/2025. Do not paste survey reports.">' + escapeFieldValue(value) + '</textarea>';
+        }
+        if (key === 'last_accreditation_licensing_survey_date') {
+            return renderUsDateInput('data-onboarding-field="' + escapeHtml(key) + '"', value);
         }
         return '<input type="text" data-onboarding-field="' + escapeHtml(key) + '" value="' + escapeFieldValue(value) + '" placeholder="' + escapeHtml(stepTwoPlaceholder(key) || 'Enter agency name') + '">';
     }
@@ -7490,6 +7987,7 @@
     function renderStepThreeQuestion(question) {
         var value = onboardingQuestionValue(question);
         var required = question.is_required ? ' <span class="qn-required">*</span>' : '';
+        var selectionHint = clinicalModelSelectionHint(question.question_key);
         var helpText = stepThreeHelpText(question);
         var help = helpText ? '<small>' + escapeHtml(helpText) + '</small>' : '';
         var info = question.question_key === 'laboratory_model_other'
@@ -7499,7 +7997,17 @@
                 : '');
         var tag = question.question_key.indexOf('service_lines_') === 0 || ['laboratory_model', 'radiology_model', 'pharmacy_model', 'anesthesia_moderate_sedation_model', 'blood_bank_model', 'surgery_procedure_types'].indexOf(question.question_key) !== -1 ? 'div' : 'label';
         return '<' + tag + ' class="qn-question ' + questionLayoutClass(question) + '" data-question="' + escapeHtml(question.question_key) + '">' +
-            '<span class="qn-question-label">' + escapeHtml(question.label) + required + info + '</span>' + renderStepThreeField(question, value) + help + renderStepThreeConditionalNote(question.question_key) + '</' + tag + '>';
+            '<span class="qn-question-label">' + escapeHtml(question.label) + (selectionHint ? ' <span class="qn-selection-hint">(' + escapeHtml(selectionHint) + ')</span>' : '') + required + info + '</span>' + renderStepThreeField(question, value) + help + renderStepThreeConditionalNote(question.question_key) + '</' + tag + '>';
+    }
+
+    function clinicalModelSelectionHint(key) {
+        if (['laboratory_model', 'pharmacy_model', 'blood_bank_model'].indexOf(key) !== -1) {
+            return 'Select one';
+        }
+        if (key === 'radiology_model' || key === 'anesthesia_moderate_sedation_model') {
+            return 'Select all that apply';
+        }
+        return '';
     }
 
     function renderStepThreeField(question, value) {
@@ -7527,10 +8035,10 @@
 
     function renderClinicalModelChoices(key, value, options) {
         value = fieldValue(value);
-        return '<div class="qn-clinical-choice-grid qn-clinical-radio-grid">' + options.map(function (option) {
+        return '<div class="qn-clinical-choice-grid qn-clinical-single-select-grid" role="radiogroup" aria-label="' + escapeHtml(key.replace(/_/g, ' ')) + '">' + options.map(function (option) {
             var optionValueText = optionValue(option);
             var checked = value === optionValueText;
-            return '<label class="qn-clinical-choice-option"><input type="radio" name="' + escapeHtml(key) + '" data-onboarding-field="' + escapeHtml(key) + '" value="' + escapeFieldValue(optionValueText) + '"' + (checked ? ' checked' : '') + '><span>' + escapeHtml(optionLabel(option)) + '</span></label>';
+            return '<label class="qn-clinical-choice-option"><input type="checkbox" role="radio" aria-checked="' + (checked ? 'true' : 'false') + '" data-single-select-field="' + escapeHtml(key) + '" data-onboarding-field="' + escapeHtml(key) + '" value="' + escapeFieldValue(optionValueText) + '"' + (checked ? ' checked' : '') + '><span>' + escapeHtml(optionLabel(option)) + '</span></label>';
         }).join('') + '</div>';
     }
 
@@ -7923,10 +8431,10 @@
             return renderMultiselectField(key, value, stepFourOptions(key), 'Select reporting programs');
         }
         if (key === 'report_lead_time') {
-            return renderStepOneSelect(key, value, stepFourOptions(key), 'Select default lead time');
+            return renderMeetingPreparationLeadTimeField(key, value);
         }
         if (key === 'backup_preparer') {
-            return renderOrganizationUserField(key, value, 'Select default backup user');
+            return renderBackupPreparerField(key, value);
         }
         if (key === 'minutes_owner_location') {
             return renderMinutesOwnerLocationField(key, value);
@@ -7938,6 +8446,17 @@
             return '<textarea data-onboarding-field="' + escapeHtml(key) + '" placeholder="List recurring committee agenda items, such as quality dashboard, infection prevention, medication safety, incidents, and policy review.">' + escapeFieldValue(value) + '</textarea>';
         }
         return renderField(question, value);
+    }
+
+    function renderMeetingPreparationLeadTimeField(key, value) {
+        var answers = state.onboarding && state.onboarding.answers ? state.onboarding.answers : {};
+        var customValue = fieldValue(answers.report_lead_time_custom);
+        var showCustom = fieldValue(value) === 'custom';
+        return renderStepOneSelect(key, value, stepFourOptions(key), 'Select default lead time') +
+            '<span class="qn-meeting-prep-custom" data-meeting-prep-custom-default' + (showCustom ? '' : ' hidden') + '>' +
+                '<span>Custom preparation lead time <span class="qn-required">*</span></span>' +
+                '<input type="text" data-onboarding-field="report_lead_time_custom" data-meeting-prep-custom-input value="' + escapeFieldValue(customValue) + '" placeholder="Example: 10 business days"' + (showCustom ? ' required' : '') + '>' +
+            '</span>';
     }
 
     function stepFourHelpText(question) {
@@ -7989,7 +8508,7 @@
 
     function renderCommitteeRepeater(key, value) {
         value = buildCommitteeRows(Array.isArray(value) ? value : []);
-        var columns = ['committee_name', 'local_name', 'committee_frequency', 'committee_week_of_month', 'committee_weekday', 'committee_time', 'frequency_timing', 'user_role', 'reports_to', 'prep_lead_time'];
+        var columns = ['committee_name', 'local_name', 'committee_frequency', 'committee_week_of_month', 'committee_weekday', 'committee_time', 'frequency_timing', 'user_role', 'reports_to', 'prep_lead_time', 'prep_lead_time_custom'];
         return '<div class="qn-repeater qn-card-repeater" data-repeater="' + escapeHtml(key) + '" data-repeater-style="committee-card" data-columns="' + escapeHtml(JSON.stringify(columns)) + '">' +
             '<div class="qn-committee-seed-note"><span class="dashicons dashicons-info"></span><p>QualiNav starts with common quality-data committees from the setup guide. Confirm each meeting cadence, report flow, and lead time for this hospital.</p></div>' +
             value.map(function (row, index) {
@@ -8104,7 +8623,8 @@
                     preservedHidden +
                 '</div></div>' +
                 '<label><span>Reports flow to</span>' + renderRepeaterSelect(key, index, 'reports_to', row.reports_to || '', stepFourOptions('reports_to'), 'Select destination') + '</label>' +
-                '<label><span>Report lead time</span>' + renderRepeaterSelect(key, index, 'prep_lead_time', row.prep_lead_time || '', stepFourOptions('committee_report_lead_time'), 'Select lead time') + '</label>' +
+                '<div class="qn-meeting-prep-field"><label><span>Report lead time</span>' + renderRepeaterSelect(key, index, 'prep_lead_time', row.prep_lead_time || '', stepFourOptions('committee_report_lead_time'), 'Select lead time') + '</label>' +
+                    '<label class="qn-meeting-prep-custom" data-meeting-prep-custom-row' + (row.prep_lead_time === 'custom' ? '' : ' hidden') + '><span>Custom lead time <span class="qn-required">*</span></span><input type="text" data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="prep_lead_time_custom" data-meeting-prep-custom-input value="' + escapeFieldValue(row.prep_lead_time_custom || '') + '" placeholder="Example: 10 business days"' + (row.prep_lead_time === 'custom' ? ' required' : '') + '></label></div>' +
             '</div>' +
             '</div>';
     }
@@ -8214,6 +8734,28 @@
         return Array.isArray(answers.organization_user_options) ? answers.organization_user_options : [];
     }
 
+    function backupPreparerUserOptions() {
+        var currentUserId = state.me && state.me.user_id ? Number(state.me.user_id) : 0;
+        return organizationUserOptions().filter(function (user) {
+            var userId = Number(user && user.user_id ? user.user_id : 0);
+            return !!userId && (!currentUserId || userId !== currentUserId);
+        });
+    }
+
+    function renderBackupPreparerField(key, value) {
+        var users = backupPreparerUserOptions();
+        var savedValue = String(value || '0');
+        if (!users.length) {
+            return '<div class="qn-backup-preparer-empty" data-backup-preparer-empty>' +
+                '<span class="dashicons dashicons-groups"></span>' +
+                '<div><strong>No backup users are available yet.</strong>' +
+                '<small>You can assign a default backup preparer after adding another hospital user. This does not block Hospital Setup.</small></div>' +
+                (savedValue !== '0' ? '<input type="hidden" data-onboarding-field="' + escapeHtml(key) + '" value="' + escapeFieldValue(savedValue) + '">' : '') +
+            '</div>';
+        }
+        return renderOrganizationUserField(key, savedValue, 'Select default backup user', users);
+    }
+
     function renderOrganizationUserSelect(key, index, column, value, placeholder) {
         value = String(value || '0');
         return '<select data-repeater-row="' + escapeHtml(key) + '" data-index="' + index + '" data-column="' + escapeHtml(column) + '">' +
@@ -8225,15 +8767,22 @@
             }).join('') + '</select>';
     }
 
-    function renderOrganizationUserField(key, value, placeholder) {
+    function renderOrganizationUserField(key, value, placeholder, users) {
         value = String(value || '0');
+        users = Array.isArray(users) ? users : organizationUserOptions();
         if (!/^\d+$/.test(value)) {
-            var legacyMatch = organizationUserOptions().find(function (user) {
+            var legacyMatch = users.find(function (user) {
                 return String(user.display_name || '').toLowerCase().trim() === value.toLowerCase().trim();
             });
             value = legacyMatch ? String(legacyMatch.user_id) : '0';
         }
-        return '<select data-onboarding-field="' + escapeHtml(key) + '"><option value="0">' + escapeHtml(placeholder || 'Select hospital user') + '</option>' + organizationUserOptions().map(function (user) {
+        var selectedAvailable = value === '0' || users.some(function (user) {
+            return String(user.user_id || 0) === value;
+        });
+        var unavailableOption = !selectedAvailable ?
+            '<option value="' + escapeFieldValue(value) + '" selected disabled>Previously assigned user (unavailable)</option>' :
+            '';
+        return '<select data-onboarding-field="' + escapeHtml(key) + '"><option value="0">' + escapeHtml(placeholder || 'Select hospital user') + '</option>' + unavailableOption + users.map(function (user) {
             var userId = String(user.user_id || 0);
             return '<option value="' + escapeFieldValue(userId) + '"' + (userId === value ? ' selected' : '') + '>' + escapeHtml(user.display_name || ('User #' + userId)) + '</option>';
         }).join('') + '</select>';
@@ -8520,6 +9069,11 @@
 
     function normalizePlanPolicyInventory(value) {
         var byKey = {};
+        var templates = planPolicyInventoryRows();
+        var templateKeys = {};
+        templates.forEach(function (row) {
+            templateKeys[row.key] = true;
+        });
         if (Array.isArray(value)) {
             value.forEach(function (item) {
                 if (item && item.policy_key) {
@@ -8527,7 +9081,7 @@
                 }
             });
         }
-        return planPolicyInventoryRows().map(function (row) {
+        var required = templates.map(function (row) {
             var item = Object.assign({}, row, byKey[row.key] || {});
             item.policy_key = row.key;
             item.policy_name = row.name;
@@ -8539,6 +9093,26 @@
             item.scout_status = item.scout_status || 'structured_ready';
             return item;
         });
+        var additional = Array.isArray(value) ? value.filter(function (item) {
+            return item && item.policy_key && !templateKeys[item.policy_key] &&
+                (String(item.is_additional_plan || '') === '1' || item.is_additional_plan === true);
+        }).map(function (item) {
+            var additionalItem = Object.assign({}, item);
+            additionalItem.section_key = 'additional_plans';
+            additionalItem.section_title = 'Additional plans & policies';
+            additionalItem.category = additionalItem.category || 'Additional plan';
+            additionalItem.guidance = additionalItem.guidance || 'An additional hospital plan or policy that contains one or more required quality or patient-safety elements.';
+            additionalItem.status = additionalItem.status || 'in_place';
+            additionalItem.upload_status = additionalItem.upload_status || 'not_configured';
+            additionalItem.scout_status = additionalItem.scout_status || 'structured_ready';
+            additionalItem.is_additional_plan = '1';
+            return additionalItem;
+        }) : [];
+        return required.concat(additional);
+    }
+
+    function isAdditionalPlanPolicyRow(row) {
+        return !!row && (String(row.is_additional_plan || '') === '1' || row.is_additional_plan === true);
     }
 
     function legacyPlanStatusForInventory(policyKey) {
@@ -8599,7 +9173,15 @@
 
     function renderPlanPolicyInventory(question, value) {
         var rows = normalizePlanPolicyInventory(value);
-        var counts = rows.reduce(function (summary, row) {
+        var requiredRows = rows.filter(function (row) { return !isAdditionalPlanPolicyRow(row); });
+        var additionalRows = rows.filter(isAdditionalPlanPolicyRow);
+        var uniqueDocuments = {};
+        rows.forEach(function (row) {
+            if (row.document_id && row.upload_status === 'ready') {
+                uniqueDocuments[row.document_id] = true;
+            }
+        });
+        var counts = requiredRows.reduce(function (summary, row) {
             summary.total++;
             if (row.status === 'in_place') {
                 summary.confirmed++;
@@ -8607,22 +9189,26 @@
             if (row.status === 'not_currently_in_place' || row.status === 'folded_into_another' || row.status === 'not_sure') {
                 summary.followUp++;
             }
-            if (row.upload_status && row.upload_status !== 'not_configured') {
-                summary.documents++;
-            }
             return summary;
-        }, {total: 0, confirmed: 0, followUp: 0, documents: 0});
+        }, {total: 0, confirmed: 0, followUp: 0});
+        counts.documents = Object.keys(uniqueDocuments).length;
         return '<div class="qn-question qn-plan-policy-inventory" data-question="' + escapeHtml(question.question_key) + '" data-plan-policy-inventory="' + escapeHtml(question.question_key) + '">' +
             '<div class="qn-plan-policy-summary" aria-label="Plan and policy inventory progress">' +
                 renderPlanPolicySummaryPill(String(counts.total), 'Required items') +
-                renderPlanPolicySummaryPill(String(counts.documents), 'Documents ready') +
+                renderPlanPolicySummaryPill(String(counts.documents), 'Unique indexed documents') +
+                (additionalRows.length ? renderPlanPolicySummaryPill(String(additionalRows.length), 'Additional plans') : '') +
             '</div>' +
             planPolicyInventorySections().map(function (section) {
-                var sectionRows = rows.filter(function (row) {
+                var sectionRows = requiredRows.filter(function (row) {
                     return row.section_key === section.key;
                 });
                 return renderPlanPolicyInventorySection(section, sectionRows);
             }).join('') +
+            (additionalRows.length ? renderPlanPolicyInventorySection({
+                key: 'additional_plans',
+                title: 'Additional plans & policies',
+                description: 'Hospital documents not represented by one of the 17 required rows. These documents can be linked to any requirement they support.'
+            }, additionalRows) : '') +
         '</div>';
     }
 
@@ -8641,29 +9227,25 @@
     }
 
     function renderPlanPolicyInventoryRow(row) {
+        var isAdditionalPlan = isAdditionalPlanPolicyRow(row);
         var statusLabel = row.status ? optionLabelByValue(stepFiveOptions('plan_policy_status'), row.status) : 'Select status';
-        var foldedOpen = row.status === 'folded_into_another';
+        var foldedOpen = !isAdditionalPlan && row.status === 'folded_into_another';
         var rowId = 'qn-policy-row-' + row.policy_key;
         var hasDocument = !!row.document_id && ['ready', 'ocr_required', 'queued', 'processing'].indexOf(row.upload_status) !== -1;
         var documentStatus = row.upload_status === 'ready' ? 'Indexed for Scout' :
             (row.upload_status === 'ocr_required' ? 'OCR needed' :
             (['queued', 'processing'].indexOf(row.upload_status) !== -1 ? 'Indexing for Scout' :
             (row.upload_status === 'failed' ? 'Indexing failed' : 'No document')));
-        var documentAction = hasDocument ? 'Replace' : 'Upload';
-        var reusableDocuments = planPolicyReusableDocuments(row.policy_key, row.document_id);
-        var reuseControls = reusableDocuments.length && canEditOnboarding() ? '<span class="qn-plan-policy-reuse">' +
-            '<select data-plan-policy-link-source="' + escapeHtml(row.policy_key) + '" aria-label="Use an existing indexed document">' +
-                '<option value="">Use existing document...</option>' +
-                reusableDocuments.map(function (document) {
-                    return '<option value="' + escapeFieldValue(document.policy_key) + '">' + escapeHtml(document.document_name + ' (' + document.policy_name + ')') + '</option>';
-                }).join('') +
-            '</select>' +
-            '<button type="button" class="qn-button qn-button-secondary" data-plan-policy-link="' + escapeHtml(row.policy_key) + '">Use</button>' +
-        '</span>' : '';
+        var documentBusy = ['queued', 'processing'].indexOf(row.upload_status) !== -1;
+        var documentAction = documentBusy ? 'Indexing...' : (hasDocument ? 'Replace' : 'Upload');
+        var reusableDocuments = planPolicyReusableDocuments(row.policy_key);
+        var uploadEnabled = documentUploadsEnabled() && canEditOnboarding() && !documentBusy;
+        var uploadTitle = !documentUploadsEnabled() ? ' title="Document upload is temporarily unavailable."' :
+            (documentBusy ? ' title="This document is already uploaded and indexing."' : '');
         var documentControls = '<span class="qn-plan-policy-document-controls">' +
-            '<button type="button" class="qn-button qn-button-secondary qn-plan-policy-upload" data-plan-policy-upload="' + escapeHtml(row.policy_key) + '"' + (canEditOnboarding() ? '' : ' disabled') + '><span class="dashicons dashicons-upload"></span>' + escapeHtml(documentAction) + '</button>' +
-            '<input type="file" hidden data-plan-policy-file="' + escapeHtml(row.policy_key) + '" accept=".pdf,.docx,.txt,.md,.html,.json,.jsonl">' +
-            (hasDocument && canEditOnboarding() ? '<button type="button" class="qn-button qn-button-link qn-plan-policy-remove" data-plan-policy-remove="' + escapeHtml(row.policy_key) + '">Remove</button>' : '') +
+            '<button type="button" class="qn-button qn-button-secondary qn-plan-policy-upload" data-plan-policy-upload="' + escapeHtml(row.policy_key) + '"' + (uploadEnabled ? '' : ' disabled') + uploadTitle + '><span class="dashicons dashicons-upload"></span>' + escapeHtml(documentAction) + '</button>' +
+            (documentUploadsEnabled() ? '<input type="file" hidden data-plan-policy-file="' + escapeHtml(row.policy_key) + '" accept=".pdf,.docx,.txt,.md,.html,.json,.jsonl">' : '') +
+            (hasDocument && canEditOnboarding() && !documentBusy ? '<button type="button" class="qn-button qn-button-link qn-plan-policy-remove" data-plan-policy-remove="' + escapeHtml(row.policy_key) + '"' + (isAdditionalPlan ? ' data-remove-plan-record="1"' : '') + '>' + (isAdditionalPlan ? 'Delete plan' : 'Remove') + '</button>' : '') +
             '<small class="qn-plan-policy-document-status">' + escapeHtml(documentStatus) + (row.document_name ? ': ' + escapeHtml(row.document_name) : '') + '</small>' +
             '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="upload_status" value="' + escapeFieldValue(row.upload_status || 'not_configured') + '">' +
             '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="document_id" value="' + escapeFieldValue(row.document_id || '') + '">' +
@@ -8671,39 +9253,123 @@
             '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="document_version_id" value="' + escapeFieldValue(row.document_version_id || '') + '">' +
             '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="ingestion_job_id" value="' + escapeFieldValue(row.ingestion_job_id || '') + '">' +
             '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="storage_path" value="' + escapeFieldValue(row.storage_path || '') + '">' +
-            reuseControls +
+            '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="document_sha256" value="' + escapeFieldValue(row.document_sha256 || '') + '">' +
+            '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="document_size_bytes" value="' + escapeFieldValue(row.document_size_bytes || '') + '">' +
         '</span>';
+        var selectedFoldedKey = row.folded_into_policy_key || '';
+        if (!selectedFoldedKey && row.folded_into_document_id) {
+            var inferredSource = reusableDocuments.find(function (document) {
+                return document.document_id === row.folded_into_document_id &&
+                    (!row.folded_into || document.policy_name === row.folded_into);
+            });
+            selectedFoldedKey = inferredSource ? inferredSource.policy_key : '__new_plan__';
+        } else if (!selectedFoldedKey && row.folded_into && row.document_id) {
+            selectedFoldedKey = '__new_plan__';
+        }
+        var foldedSourceControls = isAdditionalPlan ? '' : '<div class="qn-plan-policy-folded-source" data-folded-field="' + escapeHtml(row.policy_key) + '"' + (foldedOpen ? '' : ' hidden') + '>' +
+            '<label><span>Plan or policy that contains this requirement <em>Required</em></span>' +
+                '<select data-plan-policy-link-source="' + escapeHtml(row.policy_key) + '" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="folded_into_policy_key"' + (foldedOpen ? ' required' : '') + '>' +
+                    '<option value="">Choose an uploaded plan...</option>' +
+                    reusableDocuments.map(function (document) {
+                        var statusSuffix = document.upload_status === 'ready' ? ' — Ready' : ' — Indexing...';
+                        return '<option value="' + escapeFieldValue(document.policy_key) + '"' + (selectedFoldedKey === document.policy_key ? ' selected' : '') + '>' + escapeHtml(document.policy_name + ' — ' + document.document_name + statusSuffix) + '</option>';
+                    }).join('') +
+                    '<option value="__new_plan__"' + (selectedFoldedKey === '__new_plan__' ? ' selected' : '') + '>Add another plan or policy...</option>' +
+                '</select>' +
+            '</label>' +
+            '<div class="qn-plan-policy-new-source"' + (selectedFoldedKey === '__new_plan__' ? '' : ' hidden') + ' data-plan-policy-new-source="' + escapeHtml(row.policy_key) + '">' +
+                '<label><span>Plan or policy name <em>Required</em></span><input type="text" data-plan-policy-new-name="' + escapeHtml(row.policy_key) + '" value="" placeholder="Example: Hospital-Wide Safety Management Plan"></label>' +
+                '<label><span>Document <em>Required</em></span><input type="file" data-plan-policy-new-file="' + escapeHtml(row.policy_key) + '" accept=".pdf,.docx,.txt,.md,.html,.json,.jsonl"></label>' +
+                '<p>This creates an independent additional-plan record, indexes the document once, and links this requirement to it.</p>' +
+                (canEditOnboarding() ? '<button type="button" class="qn-button qn-button-primary" data-plan-policy-create-source="' + escapeHtml(row.policy_key) + '"><span class="dashicons dashicons-upload"></span>Save, upload and link</button>' : '') +
+            '</div>' +
+            '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="folded_into" value="' + escapeFieldValue(row.folded_into || '') + '">' +
+            '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="folded_into_document_id" value="' + escapeFieldValue(row.folded_into_document_id || '') + '">' +
+            '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="coverage_review_status" value="' + escapeFieldValue(row.coverage_review_status || 'not_reviewed') + '">' +
+            (canEditOnboarding() ? '<button type="button" class="qn-button qn-button-secondary" data-plan-policy-link="' + escapeHtml(row.policy_key) + '"' + (selectedFoldedKey === '__new_plan__' ? ' hidden' : '') + '>Link selected plan</button>' : '') +
+            '<small>Linking records the relationship. Scout must review the indexed content before coverage can be confirmed.</small>' +
+        '</div>';
         return '<details class="qn-plan-policy-row" data-plan-policy-row="' + escapeHtml(row.policy_key) + '"' + (foldedOpen ? ' open' : '') + '>' +
             '<summary role="row">' +
                 '<span class="qn-plan-policy-name"><strong>' + escapeHtml(row.policy_name) + '</strong><small>' + escapeHtml(row.category) + '</small></span>' +
                 '<span>' + renderUsDateInput('data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="date_last_approved"', row.date_last_approved || '') + '</span>' +
-                '<span>' + renderPlanPolicyStatusSelect(row.policy_key, row.status || '') + '</span>' +
+                '<span>' + (isAdditionalPlan ? '<span class="qn-status-pill qn-status-neutral">Additional plan</span><input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="status" value="in_place">' : renderPlanPolicyStatusSelect(row.policy_key, row.status || '')) + '</span>' +
                 documentControls +
-                '<span class="qn-plan-policy-guidance-preview">' + escapeHtml(row.guidance) + '<em>Details</em></span>' +
+                '<span class="qn-plan-policy-guidance-preview">' + escapeHtml(row.guidance) + '<em>Notes &amp; linking options</em></span>' +
             '</summary>' +
             '<div class="qn-plan-policy-detail" id="' + escapeHtml(rowId) + '">' +
                 '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="policy_key" value="' + escapeFieldValue(row.policy_key) + '">' +
                 '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="policy_name" value="' + escapeFieldValue(row.policy_name) + '">' +
                 '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="category" value="' + escapeFieldValue(row.category) + '">' +
                 '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="scout_status" value="' + escapeFieldValue(row.scout_status || 'structured_ready') + '">' +
-                '<div class="qn-plan-policy-guidance"><span class="dashicons dashicons-lightbulb"></span><p>' + escapeHtml(row.guidance) + '</p></div>' +
+                '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="is_additional_plan" value="' + (isAdditionalPlan ? '1' : '') + '">' +
+                foldedSourceControls +
                 '<div class="qn-plan-policy-detail-grid">' +
-                    '<label data-folded-field="' + escapeHtml(row.policy_key) + '"><span>Folded into / housed within</span><input type="text" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="folded_into" value="' + escapeFieldValue(row.folded_into || '') + '" placeholder="Example: QAPI Plan, Patient Safety Plan, policy manual"></label>' +
                     '<label><span>Internal notes</span><textarea data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="notes" placeholder="Process notes only. Do not include patient, provider, peer-review, or case-level details.">' + escapeFieldValue(row.notes || '') + '</textarea></label>' +
                 '</div>' +
             '</div>' +
         '</details>';
     }
 
-    function planPolicyReusableDocuments(policyKey, currentDocumentId) {
+    function planPolicyReusableDocuments(policyKey) {
         var seen = {};
-        return normalizePlanPolicyInventory(state.onboarding && state.onboarding.answers ? state.onboarding.answers.plan_policy_inventory : []).filter(function (row) {
-            if (!row.document_id || row.policy_key === policyKey || row.document_id === currentDocumentId || row.upload_status !== 'ready' || seen[row.document_id]) {
+        return normalizePlanPolicyInventory(state.onboarding && state.onboarding.answers ? state.onboarding.answers.plan_policy_inventory : []).sort(function (a, b) {
+            return (a.folded_into_document_id ? 1 : 0) - (b.folded_into_document_id ? 1 : 0);
+        }).filter(function (row) {
+            if (!row.document_id || row.policy_key === policyKey || ['ready', 'queued', 'processing'].indexOf(row.upload_status) === -1 || seen[row.document_id]) {
                 return false;
             }
             seen[row.document_id] = true;
             return true;
         });
+    }
+
+    function updatePlanPolicyFoldedUI(field) {
+        var row = field ? field.closest('.qn-plan-policy-row') : null;
+        if (!row) {
+            return;
+        }
+        var policyKey = row.getAttribute('data-plan-policy-row');
+        var statusField = row.querySelector('[data-plan-policy-key="status"]');
+        var sourceField = row.querySelector('[data-plan-policy-link-source="' + policyKey + '"]');
+        var foldedPanel = row.querySelector('[data-folded-field="' + policyKey + '"]');
+        var newSourcePanel = row.querySelector('[data-plan-policy-new-source="' + policyKey + '"]');
+        var existingLinkButton = row.querySelector('[data-plan-policy-link="' + policyKey + '"]');
+        var folded = statusField && statusField.value === 'folded_into_another';
+        if (foldedPanel) {
+            foldedPanel.hidden = !folded;
+        }
+        if (sourceField) {
+            sourceField.required = folded;
+        }
+        if (newSourcePanel) {
+            newSourcePanel.hidden = !folded || !sourceField || sourceField.value !== '__new_plan__';
+            var newName = newSourcePanel.querySelector('[data-plan-policy-new-name]');
+            if (newName) {
+                newName.required = !newSourcePanel.hidden;
+            }
+        }
+        if (existingLinkButton) {
+            existingLinkButton.hidden = !folded || !sourceField || sourceField.value === '__new_plan__';
+        }
+        if (!folded) {
+            if (sourceField) {
+                sourceField.value = '';
+            }
+            ['folded_into', 'folded_into_policy_key', 'folded_into_document_id'].forEach(function (key) {
+                var hidden = row.querySelector('[data-plan-policy-key="' + key + '"]');
+                if (hidden) {
+                    hidden.value = '';
+                }
+            });
+            var reviewStatus = row.querySelector('[data-plan-policy-key="coverage_review_status"]');
+            if (reviewStatus) {
+                reviewStatus.value = 'not_reviewed';
+            }
+        }
+        if (folded) {
+            row.open = true;
+        }
     }
 
     function linkPlanPolicyDocument(policyKey) {
@@ -8715,20 +9381,84 @@
         }
         var rows = normalizePlanPolicyInventory(state.onboarding.answers.plan_policy_inventory);
         var target = rows.find(function (row) { return row.policy_key === policyKey; });
+        if (!target) {
+            showToast('That plan or policy is no longer available. Refresh and try again.', 'warning');
+            return;
+        }
+        if (sourceKey === '__new_plan__') {
+            showToast('Enter the plan name, choose its document, and use Save, upload and link.', 'warning');
+            return;
+        }
         var source = rows.find(function (row) { return row.policy_key === sourceKey; });
-        if (!target || !source || !source.document_id || source.upload_status !== 'ready') {
+        if (!target || !source || !source.document_id || ['ready', 'queued', 'processing'].indexOf(source.upload_status) === -1) {
             showToast('That document is no longer available. Refresh and try again.', 'warning');
             return;
         }
-        ['upload_status', 'document_id', 'document_name', 'document_version_id', 'ingestion_job_id', 'storage_path', 'scout_status'].forEach(function (key) {
-            target[key] = source[key] || '';
-        });
+        target.folded_into = source.policy_name;
+        target.folded_into_policy_key = source.policy_key;
+        target.folded_into_document_id = source.document_id;
+        target.coverage_review_status = source.upload_status === 'ready' ? 'pending_scout_review' : 'pending_indexing';
         state.onboarding.answers.plan_policy_inventory = rows;
         renderOnboardingFields(state.onboarding.steps[state.onboardingIndex]);
         setOnboardingSaveStatus('unsaved', 'Document linked - saving...');
         window.clearTimeout(state.autosaveTimer);
         state.autosaveTimer = window.setTimeout(autosaveOnboardingStep, 100);
-        showToast('Existing indexed document linked to this requirement.', 'success');
+        showToast(source.upload_status === 'ready' ?
+            'Existing indexed plan linked. Scout coverage review is still required.' :
+            'Plan linked while Scout indexes it. Coverage review will begin automatically when indexing finishes.', 'success');
+    }
+
+    function createAdditionalPlanAndUpload(requirementKey, trigger) {
+        var panel = document.querySelector('[data-plan-policy-new-source="' + requirementKey + '"]');
+        var nameField = panel ? panel.querySelector('[data-plan-policy-new-name]') : null;
+        var fileField = panel ? panel.querySelector('[data-plan-policy-new-file]') : null;
+        var planName = nameField ? nameField.value.trim() : '';
+        var file = fileField && fileField.files ? fileField.files[0] : null;
+        if (!planName) {
+            showToast('Enter the plan or policy name.', 'warning');
+            return;
+        }
+        if (!file) {
+            showToast('Choose the plan or policy document to upload.', 'warning');
+            return;
+        }
+        if (file.size <= 0 || file.size > 26214400) {
+            showToast('The document must be between 1 byte and 25 MB.', 'warning');
+            return;
+        }
+        var restoreButton = setButtonLoading(trigger, 'Uploading...');
+        var form = new FormData();
+        form.append('organization_id', state.onboardingOrganizationId);
+        form.append('additional_plan_name', planName);
+        form.append('link_requirement_key', requirementKey);
+        form.append('file', file, file.name);
+        setOnboardingSaveStatus('saving', 'Creating and indexing additional plan...');
+        apiForm('/onboarding/plan-policy-document', form, {timeout: 360000}).then(function (result) {
+            var policy = result && result.policy ? result.policy : {};
+            var policyKey = fieldValue(policy.policy_key || '');
+            var status = result && result.document ? fieldValue(result.document.status).toLowerCase().replace(/[^a-z0-9_]+/g, '_') : 'failed';
+            if (!policyKey) {
+                throw new Error('The additional plan was uploaded but its inventory key was not returned.');
+            }
+            var reused = !!(result && result.reused_existing_document);
+            showToast(reused ?
+                (status === 'ready' ? 'This document was already uploaded. The existing indexed plan was linked.' : 'This document is already uploaded and indexing. The existing plan was linked.') :
+                (status === 'ready' ? 'Additional plan indexed and linked. Scout coverage review is pending.' : 'Additional plan saved and queued for secure indexing.'), 'success');
+            return loadOnboarding(state.onboardingOrganizationId, {showLoading: false}).then(function () {
+                if (['queued', 'processing'].indexOf(status) !== -1) {
+                    return trackPlanPolicyDocumentStatus(policyKey);
+                }
+                setOnboardingSaveStatus(status === 'ready' ? 'saved' : 'error', status === 'ready' ? 'Additional plan ready' : 'Document needs review');
+            });
+        }).catch(function (error) {
+            showToast(error.message || 'The additional plan could not be created.', 'warning');
+            setOnboardingSaveStatus('error', 'Additional plan upload failed');
+        }).finally(function () {
+            if (fileField) {
+                fileField.value = '';
+            }
+            restoreButton();
+        });
     }
 
     function uploadPlanPolicyDocument(input) {
@@ -8769,7 +9499,7 @@
                 showToast('Document uploaded. Scout is indexing it securely in the background.', 'success');
                 setOnboardingSaveStatus('saving', 'Indexing document...');
                 return loadOnboarding(state.onboardingOrganizationId, {showLoading: false}).then(function () {
-                    return pollPlanPolicyDocumentStatus(policyKey, 0);
+                    return trackPlanPolicyDocumentStatus(policyKey);
                 });
             }
             showToast(status === 'ocr_required' ? 'Document saved, but readable text could not be extracted.' : 'Document indexed and ready for Scout.', status === 'ocr_required' ? 'warning' : 'success');
@@ -8821,21 +9551,54 @@
         });
     }
 
+    function trackPlanPolicyDocumentStatus(policyKey) {
+        if (!policyKey) {
+            return Promise.resolve();
+        }
+        state.planPolicyStatusPolls = state.planPolicyStatusPolls || {};
+        if (state.planPolicyStatusPolls[policyKey]) {
+            return state.planPolicyStatusPolls[policyKey];
+        }
+        state.planPolicyStatusPolls[policyKey] = pollPlanPolicyDocumentStatus(policyKey, 0).finally(function () {
+            delete state.planPolicyStatusPolls[policyKey];
+        });
+        return state.planPolicyStatusPolls[policyKey];
+    }
+
+    function resumePlanPolicyDocumentPolling() {
+        if (!state.onboarding || !state.onboarding.answers) {
+            return;
+        }
+        normalizePlanPolicyInventory(state.onboarding.answers.plan_policy_inventory).forEach(function (row) {
+            if (row.policy_key && row.ingestion_job_id && ['queued', 'processing'].indexOf(row.upload_status) !== -1) {
+                trackPlanPolicyDocumentStatus(row.policy_key);
+            }
+        });
+    }
+
     function deletePlanPolicyDocument(policyKey, trigger) {
         if (!policyKey || !canEditOnboarding()) {
             return;
         }
-        if (!window.confirm('Remove this document from Scout? The plan or policy inventory row will remain.')) {
+        var removePlanRecord = trigger && trigger.getAttribute('data-remove-plan-record') === '1';
+        var confirmation = removePlanRecord ?
+            'Delete this additional plan and its Scout document? Unlink it from every requirement first.' :
+            'Remove this document from Scout? The required plan or policy row will remain.';
+        if (!window.confirm(confirmation)) {
             return;
         }
         var restoreButton = setButtonLoading(trigger, 'Removing...');
         api('/onboarding/plan-policy-document/delete', {
             method: 'POST',
             timeout: 120000,
-            body: {organization_id: state.onboardingOrganizationId, policy_key: policyKey}
+            body: {
+                organization_id: state.onboardingOrganizationId,
+                policy_key: policyKey,
+                remove_plan_record: removePlanRecord
+            }
         }).then(function () {
-            showToast('Document removed from Scout.', 'success');
-            setOnboardingSaveStatus('saved', 'Document removed');
+            showToast(removePlanRecord ? 'Additional plan and document deleted.' : 'Document removed from Scout.', 'success');
+            setOnboardingSaveStatus('saved', removePlanRecord ? 'Additional plan deleted' : 'Document removed');
             return loadOnboarding(state.onboardingOrganizationId, {showLoading: false});
         }).catch(function (error) {
             showToast(error.message || 'The document could not be removed.', 'warning');
@@ -9666,9 +10429,9 @@
 
     function renderFinalReviewConfirmation(key, value) {
         return '<div class="qn-question qn-question-wide qn-step8-confirm-card" data-question="' + escapeHtml(key) + '">' +
-            '<label class="qn-step8-confirm-label"><input type="checkbox" data-onboarding-field="' + escapeHtml(key) + '"' + (value ? ' checked' : '') + '><span class="qn-step8-confirm-box" aria-hidden="true"></span><span class="qn-step8-confirm-text">I confirm this setup is ready to submit and contains no PHI or case-level details.</span></label>' +
-            '<p>Scout will use this setup to prepare the workspace preview.</p>' +
-            '<small id="qn-final-review-message" class="qn-step8-confirm-message" hidden>Please confirm the final review statement before submitting.</small>' +
+            '<label class="qn-step8-confirm-label"><input type="checkbox" data-onboarding-field="' + escapeHtml(key) + '"' + (value ? ' checked' : '') + '><span class="qn-step8-confirm-box" aria-hidden="true"></span><span class="qn-step8-confirm-text">This information is as complete as I can make it today and is ready for Scout to build my initial workspace.</span></label>' +
+            '<p>This is not a certification. You can return and update the setup whenever your hospital changes.</p>' +
+            '<small id="qn-final-review-message" class="qn-step8-confirm-message" hidden>Please confirm that the information is ready for Scout.</small>' +
             '</div>';
     }
 
@@ -9806,6 +10569,157 @@
         var licensed = Number(fieldValue((document.querySelector('[data-onboarding-field="licensed_beds"]') || {}).value));
         var swing = Number(fieldValue((document.querySelector('[data-onboarding-field="swing_beds"]') || {}).value));
         warning.hidden = !(licensed > 0 && swing > licensed);
+    }
+
+    function renderSwingBedConsistencyWarning() {
+        return '<div class="qn-bed-warning qn-swing-bed-consistency-warning" data-swing-bed-consistency-warning role="status" hidden>' +
+            '<span class="dashicons dashicons-info-outline" aria-hidden="true"></span>' +
+            '<div class="qn-swing-bed-consistency-copy">' +
+                '<strong data-swing-bed-consistency-title></strong>' +
+                '<span data-swing-bed-consistency-message></span>' +
+                '<div class="qn-swing-bed-consistency-actions">' +
+                    '<button type="button" class="qn-button qn-button-small" data-swing-bed-action="primary"></button>' +
+                    '<button type="button" class="qn-button qn-button-small qn-button-secondary" data-swing-bed-action="secondary"></button>' +
+                '</div>' +
+            '</div>' +
+        '</div>';
+    }
+
+    function swingBedServicesSelected(value) {
+        var values = Array.isArray(value) ? value : (value ? [value] : []);
+        return values.some(function (item) {
+            var normalized = String(item || '').trim().toLowerCase()
+                .replace(/[^a-z0-9]+/g, '_')
+                .replace(/^_+|_+$/g, '');
+            return normalized === 'swing_bed_services';
+        });
+    }
+
+    function getSwingBedConsistencyMismatch() {
+        var onboarding = state.onboarding || {};
+        var answers = onboarding.answers || {};
+        var countField = document.querySelector('[data-onboarding-field="swing_beds"]');
+        var serviceField = document.querySelector('[data-checklist="service_lines_core"] [data-checklist-field][value="swing_bed_services"]');
+        var storedCount = answers.swing_beds !== undefined ? answers.swing_beds : onboarding.swing_beds;
+        var swingBedCount = Number(fieldValue(countField ? countField.value : storedCount));
+        var licensedBedField = document.querySelector('[data-onboarding-field="licensed_beds"]');
+        var licensedBedCount = Number(fieldValue(licensedBedField ? licensedBedField.value : onboarding.licensed_beds));
+        var offersSwingBedServices = serviceField ? serviceField.checked : swingBedServicesSelected(answers.service_lines_core);
+        var hasSwingBedCount = swingBedCount > 0;
+
+        if (hasSwingBedCount && !offersSwingBedServices) {
+            return {
+                code: 'count_without_service',
+                title: 'Please confirm your swing-bed service',
+                message: 'You entered ' + swingBedCount + ' swing bed' + (swingBedCount === 1 ? '' : 's') + ', but Swing Bed Services is not selected. Tell Scout which answer is correct.',
+                primaryAction: 'add_service',
+                primaryLabel: 'We offer this service',
+                secondaryAction: 'clear_count',
+                secondaryLabel: 'Clear the bed count'
+            };
+        }
+        if (!hasSwingBedCount && offersSwingBedServices) {
+            return {
+                code: 'service_without_count',
+                title: 'One detail needed for Swing Bed Services',
+                message: 'You selected Swing Bed Services. How many' + (licensedBedCount > 0 ? ' of your ' + licensedBedCount + ' licensed beds' : ' licensed beds') + ' are approved for swing-bed use?',
+                primaryAction: 'add_count',
+                primaryLabel: 'Add swing-bed count',
+                secondaryAction: 'remove_service',
+                secondaryLabel: 'We do not offer this service'
+            };
+        }
+        return null;
+    }
+
+    function updateSwingBedConsistencyWarning() {
+        var mismatch = getSwingBedConsistencyMismatch();
+        document.querySelectorAll('[data-swing-bed-consistency-warning]').forEach(function (warning) {
+            var title = warning.querySelector('[data-swing-bed-consistency-title]');
+            var message = warning.querySelector('[data-swing-bed-consistency-message]');
+            var primary = warning.querySelector('[data-swing-bed-action="primary"]');
+            var secondary = warning.querySelector('[data-swing-bed-action="secondary"]');
+            warning.hidden = !mismatch;
+            warning.setAttribute('data-mismatch', mismatch ? mismatch.code : '');
+            if (title) {
+                title.textContent = mismatch ? mismatch.title : '';
+            }
+            if (message) {
+                message.textContent = mismatch ? mismatch.message : '';
+            }
+            [primary, secondary].forEach(function (button, index) {
+                if (!button) {
+                    return;
+                }
+                var prefix = index === 0 ? 'primary' : 'secondary';
+                button.hidden = !mismatch;
+                button.textContent = mismatch ? mismatch[prefix + 'Label'] : '';
+                button.setAttribute('data-swing-bed-resolution', mismatch ? mismatch[prefix + 'Action'] : '');
+            });
+        });
+    }
+
+    function focusSwingBedCountField() {
+        switchOnboardingStepBySection('hospital_director_info');
+        window.setTimeout(function () {
+            var field = document.querySelector('[data-onboarding-field="swing_beds"]');
+            if (!field) {
+                return;
+            }
+            field.scrollIntoView({behavior: 'smooth', block: 'center'});
+            field.focus();
+        }, 140);
+    }
+
+    function saveSwingBedResolution(action, trigger) {
+        if (action === 'add_count') {
+            focusSwingBedCountField();
+            return;
+        }
+
+        var answers = state.onboarding && state.onboarding.answers ? state.onboarding.answers : {};
+        var stepKey = '';
+        var changes = {};
+        var successMessage = '';
+        if (action === 'remove_service' || action === 'add_service') {
+            var services = Array.isArray(answers.service_lines_core) ? answers.service_lines_core.slice() : [];
+            services = services.filter(function (service) { return service !== 'swing_bed_services'; });
+            if (action === 'add_service') {
+                services.push('swing_bed_services');
+                successMessage = 'Swing Bed Services selected.';
+            } else {
+                successMessage = 'Swing Bed Services removed.';
+            }
+            stepKey = 'services_clinical_model';
+            changes.service_lines_core = services;
+        } else if (action === 'clear_count') {
+            stepKey = 'hospital_director_info';
+            changes.swing_beds = '';
+            successMessage = 'Swing-bed count cleared.';
+        } else {
+            return;
+        }
+
+        var restoreButton = setButtonLoading(trigger, 'Saving...');
+        api('/onboarding/save', {
+            method: 'POST',
+            body: {
+                organization_id: state.onboardingOrganizationId,
+                step_key: stepKey,
+                answers: changes
+            }
+        }).then(function () {
+            state.onboarding.answers = Object.assign({}, answers, changes);
+            if (changes.swing_beds !== undefined) {
+                state.onboarding.swing_beds = changes.swing_beds;
+            }
+            showToast(successMessage, 'success');
+            return loadOnboarding(state.onboardingOrganizationId, {showLoading: false});
+        }).catch(function (error) {
+            showToast(friendlyApiErrorMessage(error, 'Scout could not update this answer. Please try again.'), 'warning');
+        }).finally(function () {
+            restoreButton();
+        });
     }
 
     function updateStepOneAffiliationUI() {
@@ -10005,6 +10919,57 @@
         if (boardDetails) {
             boardDetails.hidden = !(boardTiming && boardTiming.value === 'other');
         }
+        var defaultLeadTime = document.querySelector('[data-onboarding-field="report_lead_time"]');
+        var defaultCustom = document.querySelector('[data-meeting-prep-custom-default]');
+        if (defaultCustom) {
+            var showDefaultCustom = !!(defaultLeadTime && defaultLeadTime.value === 'custom');
+            defaultCustom.hidden = !showDefaultCustom;
+            var defaultCustomInput = defaultCustom.querySelector('[data-meeting-prep-custom-input]');
+            if (defaultCustomInput) {
+                defaultCustomInput.required = showDefaultCustom;
+                if (!showDefaultCustom) {
+                    defaultCustomInput.setCustomValidity('');
+                }
+            }
+        }
+        document.querySelectorAll('[data-meeting-prep-custom-row]').forEach(function (customPanel) {
+            var row = customPanel.closest('.qn-repeater-row');
+            var leadTime = row ? row.querySelector('[data-column="prep_lead_time"]') : null;
+            var showCustom = !!(leadTime && leadTime.value === 'custom');
+            customPanel.hidden = !showCustom;
+            var customInput = customPanel.querySelector('[data-meeting-prep-custom-input]');
+            if (customInput) {
+                customInput.required = showCustom;
+                if (!showCustom) {
+                    customInput.setCustomValidity('');
+                }
+            }
+        });
+    }
+
+    function validateMeetingPreparationCustomFields(step) {
+        if (!step || step.section_key !== 'committees_reporting') {
+            return true;
+        }
+        var missing = null;
+        document.querySelectorAll('[data-meeting-prep-custom-default], [data-meeting-prep-custom-row]').forEach(function (panel) {
+            var input = panel.querySelector('[data-meeting-prep-custom-input]');
+            if (!panel.hidden && input) {
+                var isMissing = !fieldValue(input.value).trim();
+                input.setCustomValidity(isMissing ? 'Enter the custom preparation lead time.' : '');
+                if (isMissing && !missing) {
+                    missing = input;
+                }
+            }
+        });
+        if (!missing) {
+            return true;
+        }
+        setText('#qn-onboarding-message', 'Enter the custom preparation lead time before continuing.');
+        setOnboardingSaveStatus('unsaved', 'Custom lead time required');
+        showToast('Enter the custom preparation lead time before continuing.', 'warning');
+        missing.focus();
+        return false;
     }
 
     function updateStepSevenConditionalUI() {
@@ -10152,13 +11117,25 @@
 
     function collectOnboardingAnswers() {
         var answers = {};
+        var activeQuestionKeys = {};
+        (state.onboarding && state.onboarding.questions ? state.onboarding.questions : []).forEach(function (question) {
+            if (question && question.question_key) {
+                activeQuestionKeys[question.question_key] = true;
+            }
+        });
         document.querySelectorAll('[data-onboarding-field]').forEach(function (field) {
             var owner = field.closest('[data-question]');
             if (owner && owner.hidden) {
                 return;
             }
             var key = field.getAttribute('data-onboarding-field');
-            if (field.type === 'checkbox') {
+            if (field.hasAttribute('data-single-select-field')) {
+                if (field.checked) {
+                    answers[key] = field.value;
+                } else if (answers[key] === undefined) {
+                    answers[key] = '';
+                }
+            } else if (field.type === 'checkbox') {
                 answers[key] = field.checked;
             } else if (field.type === 'radio') {
                 if (field.checked) {
@@ -10177,9 +11154,9 @@
         });
         if (answers.independent_or_system !== undefined) {
             answers.independent_or_system = normalizeAffiliationStatus(answers.independent_or_system);
-        }
-        if (answers.independent_or_system === 'independent' || !answers.independent_or_system) {
-            answers.system_network_name = '';
+            if (answers.independent_or_system === 'independent' || !answers.independent_or_system) {
+                answers.system_network_name = '';
+            }
         }
         document.querySelectorAll('[data-plan-field]').forEach(function (field) {
             var key = field.getAttribute('data-plan-field');
@@ -10202,7 +11179,7 @@
                 rows[policyKey] = rows[policyKey] || {};
                 rows[policyKey][dataKey] = dateFieldValue(field);
             });
-            answers[key] = planPolicyInventoryRows().map(function (template) {
+            var requiredRows = planPolicyInventoryRows().map(function (template) {
                 var item = rows[template.key] || {};
                 item.policy_key = template.key;
                 item.policy_name = template.name;
@@ -10212,6 +11189,25 @@
                 item.scout_status = item.scout_status || 'structured_ready';
                 return item;
             });
+            var requiredKeys = {};
+            requiredRows.forEach(function (row) {
+                requiredKeys[row.policy_key] = true;
+            });
+            var additionalRows = Object.keys(rows).filter(function (policyKey) {
+                return !requiredKeys[policyKey] &&
+                    (String(rows[policyKey].is_additional_plan || '') === '1' || rows[policyKey].is_additional_plan === true);
+            }).map(function (policyKey) {
+                var item = rows[policyKey];
+                item.policy_key = policyKey;
+                item.policy_name = fieldValue(item.policy_name);
+                item.category = item.category || 'Additional plan';
+                item.status = 'in_place';
+                item.is_additional_plan = '1';
+                item.upload_status = item.upload_status || 'not_configured';
+                item.scout_status = item.scout_status || 'structured_ready';
+                return item;
+            });
+            answers[key] = requiredRows.concat(additionalRows);
         });
         document.querySelectorAll('[data-checklist]').forEach(function (checklist) {
             var key = checklist.getAttribute('data-checklist');
@@ -10240,7 +11236,12 @@
                 answers[key].push(item);
             });
         });
-        return answers;
+        return Object.keys(answers).reduce(function (activeAnswers, key) {
+            if (activeQuestionKeys[key]) {
+                activeAnswers[key] = answers[key];
+            }
+            return activeAnswers;
+        }, {});
     }
 
     function reportingOtherRowHasValue(item) {
@@ -10287,6 +11288,9 @@
             }
             return Promise.resolve();
         }
+        if (!validateMeetingPreparationCustomFields(step)) {
+            return Promise.resolve(false);
+        }
         var restoreButton = setButtonLoading(trigger, advance ? 'Saving...' : 'Saving...');
         setText('#qn-onboarding-message', 'Saving...');
         setOnboardingSaveStatus('saving', 'Saving...');
@@ -10296,7 +11300,8 @@
             body: {
                 organization_id: state.onboardingOrganizationId,
                 step_key: step.section_key,
-                answers: collectOnboardingAnswers()
+                answers: collectOnboardingAnswers(),
+                mark_reviewed: !!advance
             }
         }).then(function () {
             setText('#qn-onboarding-message', 'Saved.');
@@ -10502,23 +11507,26 @@
             if (message) {
                 message.hidden = false;
             }
-            setText('#qn-onboarding-message', 'Please confirm the final review statement before submitting.');
-            showToast('Please confirm the final review statement before submitting.', 'warning');
+            setText('#qn-onboarding-message', 'Please confirm that the information is ready for Scout.');
+            showToast('Please confirm that the information is ready for Scout.', 'warning');
             finalConfirmation.focus();
             return;
         }
         state.onboardingSubmitting = true;
-        var restoreButton = setButtonLoading(trigger, 'Submitting...');
-        setText('#qn-onboarding-message', 'Submitting final setup...');
+        var restoreButton = setButtonLoading(trigger, 'Starting Scout...');
+        setText('#qn-onboarding-message', 'Saving your setup and starting Scout...');
         saveOnboardingStep(false, null, {rejectOnError: true, timeout: 60000}).then(function () {
-            setText('#qn-onboarding-message', 'Submitting final setup...');
+            setText('#qn-onboarding-message', 'Starting your initial Scout workspace...');
             return api('/onboarding/submit', {method: 'POST', timeout: 60000, body: {organization_id: state.onboardingOrganizationId}});
         }).then(function (result) {
-            var completionMessage = 'You\u2019re all set - Hospital Setup has been submitted. Scout can now build your hospital operating-system preview. You can return anytime to update this setup, and QualiNav will prompt an annual review of this information.';
+            var completionMessage = 'You\u2019re all set. Scout is now building your initial hospital workspace from the information you reviewed. You can return anytime to update it.';
             setText('#qn-onboarding-message', completionMessage);
-            showToast('Hospital Setup submitted. Scout can now build your workspace preview.', 'success');
+            showToast('Hospital Setup saved. Scout is building your initial workspace.', 'success');
             return loadOnboarding(state.onboardingOrganizationId, {showLoading: false}).then(function () {
-                return loadScoutRuns(state.onboardingOrganizationId);
+                return loadScoutRuns(state.onboardingOrganizationId, {skipAutoGenerate: true});
+            }).then(function () {
+                generateScoutPreview(null, {automatic: true});
+                return true;
             });
         }).catch(function (error) {
             var message = friendlyApiErrorMessage(error, 'Final setup could not be submitted. Please try again or contact support.');
@@ -11032,6 +12040,12 @@
                 linkPlanPolicyDocument(planPolicyLink.getAttribute('data-plan-policy-link'));
                 return;
             }
+            var planPolicyCreateSource = event.target.closest('[data-plan-policy-create-source]');
+            if (planPolicyCreateSource) {
+                event.preventDefault();
+                createAdditionalPlanAndUpload(planPolicyCreateSource.getAttribute('data-plan-policy-create-source'), planPolicyCreateSource);
+                return;
+            }
             var planPolicyUpload = event.target.closest('[data-plan-policy-upload]');
             if (planPolicyUpload) {
                 event.preventDefault();
@@ -11181,12 +12195,23 @@
             if (event.key === 'Escape') {
                 closeActionMenus();
                 closeSearchableSelects();
+                closeUsDatePicker();
                 document.querySelectorAll('.qn-modal:not([hidden])').forEach(function (modal) {
                     modal.hidden = true;
                 });
             }
         });
         document.addEventListener('change', function (event) {
+            if (event.target.matches('[data-qn-date-month]') && usDatePickerContext) {
+                usDatePickerContext.viewMonth = Number(event.target.value);
+                renderUsDatePicker();
+                return;
+            }
+            if (event.target.matches('[data-qn-date-year]') && usDatePickerContext) {
+                usDatePickerContext.viewYear = Number(event.target.value);
+                renderUsDatePicker();
+                return;
+            }
             if (event.target.matches('[data-plan-policy-file]')) {
                 uploadPlanPolicyDocument(event.target);
                 return;
@@ -11253,6 +12278,19 @@
                 renderInviteHospitalOptions('');
             }
             if (event.target.matches('[data-onboarding-field], [data-plan-field], [data-plan-policy-field], [data-repeater-row], [data-repeater-detail], [data-structured-field], [data-checklist-field]')) {
+                if (event.target.matches('[data-single-select-field]') && event.target.checked) {
+                    var singleSelectKey = event.target.getAttribute('data-single-select-field');
+                    document.querySelectorAll('[data-single-select-field="' + singleSelectKey + '"]').forEach(function (field) {
+                        var selected = field === event.target;
+                        field.checked = selected;
+                        field.setAttribute('aria-checked', selected ? 'true' : 'false');
+                    });
+                } else if (event.target.matches('[data-single-select-field]')) {
+                    // Match radio behavior: clicking the selected option does not
+                    // clear the group.
+                    event.target.checked = true;
+                    event.target.setAttribute('aria-checked', 'true');
+                }
                 if (event.target.type === 'number' && event.target.value !== '') {
                     event.target.value = String(Math.max(0, Math.floor(Number(event.target.value) || 0)));
                 }
@@ -11265,7 +12303,11 @@
                     }
                     event.target.setCustomValidity('');
                 }
+                if (event.target.matches('[data-meeting-prep-custom-input]') && fieldValue(event.target.value).trim()) {
+                    event.target.setCustomValidity('');
+                }
                 updateStepOneBedWarning();
+                updateSwingBedConsistencyWarning();
                 updateStepOneAffiliationUI();
                 updateStepOneQualityLeaderTitleUI();
                 if (event.target.matches('[data-onboarding-field="independent_or_system"]')) {
@@ -11285,11 +12327,8 @@
                 if (event.target.matches('[data-repeater-row]')) {
                     refreshDueDatePanel(event.target);
                 }
-                if (event.target.matches('[data-plan-policy-key="status"]') && event.target.value === 'folded_into_another') {
-                    var policyRow = event.target.closest('.qn-plan-policy-row');
-                    if (policyRow) {
-                        policyRow.open = true;
-                    }
+                if (event.target.matches('[data-plan-policy-key="status"], [data-plan-policy-link-source]')) {
+                    updatePlanPolicyFoldedUI(event.target);
                 }
                 setOnboardingSaveStatus('unsaved', 'Unsaved changes');
                 window.clearTimeout(state.autosaveTimer);
@@ -11308,6 +12347,7 @@
                     event.target.setCustomValidity('');
                 }
                 updateStepOneBedWarning();
+                updateSwingBedConsistencyWarning();
                 updateStepOneAffiliationUI();
                 updateStepOneQualityLeaderTitleUI();
                 if (event.target.matches('[data-onboarding-field="independent_or_system"]')) {
@@ -11324,39 +12364,40 @@
                 window.clearTimeout(state.autosaveTimer);
                 state.autosaveTimer = window.setTimeout(autosaveOnboardingStep, 900);
             }
-            if (event.target.matches('[data-us-date-picker]')) {
-                var dateWrap = event.target.closest('.qn-us-date-wrap');
-                var visibleDate = dateWrap ? dateWrap.querySelector('[data-date-format="us"]') : null;
-                if (visibleDate) {
-                    visibleDate.value = formatDateForDisplay(event.target.value);
-                    visibleDate.setCustomValidity('');
-                    visibleDate.dispatchEvent(new Event('input', {bubbles: true}));
-                    visibleDate.dispatchEvent(new Event('change', {bubbles: true}));
-                }
-            }
         });
         document.addEventListener('click', function (event) {
-            var dateTrigger = event.target.closest('[data-us-date-trigger]');
+            var swingBedAction = event.target.closest('[data-swing-bed-action]');
+            var datePickerDay = event.target.closest('[data-qn-date]');
+            var datePickerToday = event.target.closest('[data-qn-date-today]');
+            var datePickerClear = event.target.closest('[data-qn-date-clear]');
+            var dateControl = event.target.closest('[data-us-date-trigger], [data-date-format="us"]');
             var stepButton = event.target.closest('[data-onboarding-step]');
             var addRepeater = event.target.closest('[data-add-repeater]');
             var multiselectTrigger = event.target.closest('[data-multiselect-trigger]');
             var multiselectRemove = event.target.closest('[data-multiselect-remove]');
             var passwordToggle = event.target.closest('[data-toggle-password]');
-            if (dateTrigger) {
-                var dateWrapper = dateTrigger.closest('.qn-us-date-wrap');
-                var nativeDate = dateWrapper ? dateWrapper.querySelector('[data-us-date-picker]') : null;
-                var visibleDateInput = dateWrapper ? dateWrapper.querySelector('[data-date-format="us"]') : null;
-                if (nativeDate) {
-                    var normalizedDate = normalizeDateForStorage(visibleDateInput ? visibleDateInput.value : '');
-                    nativeDate.value = /^\d{4}-\d{2}-\d{2}$/.test(normalizedDate) ? normalizedDate : '';
-                    if (typeof nativeDate.showPicker === 'function') {
-                        nativeDate.showPicker();
-                    } else {
-                        nativeDate.focus();
-                        nativeDate.click();
-                    }
-                }
+            if (swingBedAction) {
+                saveSwingBedResolution(swingBedAction.getAttribute('data-swing-bed-resolution'), swingBedAction);
                 return;
+            }
+            if (datePickerDay) {
+                selectUsDate(datePickerDay.getAttribute('data-qn-date'));
+                return;
+            }
+            if (datePickerToday) {
+                selectUsDate(todayIsoDate());
+                return;
+            }
+            if (datePickerClear) {
+                selectUsDate('');
+                return;
+            }
+            if (dateControl) {
+                openUsDatePicker(dateControl);
+                return;
+            }
+            if (usDatePickerPopover && !usDatePickerPopover.hidden && !usDatePickerPopover.contains(event.target)) {
+                closeUsDatePicker();
             }
             if (!event.target.closest('.qn-multiselect')) {
                 closeMultiselects();
@@ -11474,6 +12515,8 @@
                 retryScoutRun(scoutRetry.getAttribute('data-retry-scout'), scoutRetry);
             }
         });
+        window.addEventListener('resize', positionUsDatePicker);
+        window.addEventListener('scroll', positionUsDatePicker, true);
         var scoutGenerate = document.getElementById('qn-scout-generate-button');
         if (scoutGenerate) {
             scoutGenerate.addEventListener('click', generateScoutPreview);

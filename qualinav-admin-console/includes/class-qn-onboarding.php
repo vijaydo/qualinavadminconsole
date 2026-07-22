@@ -46,29 +46,55 @@ class QN_Onboarding
         );
     }
 
-    public static function save_step($organization_id, $step_key, $answers, $user_id)
+    public static function save_step($organization_id, $step_key, $answers, $user_id, $mark_reviewed = false)
     {
         if (!self::can_edit_onboarding($user_id, $organization_id)) {
             return new WP_Error('qn_onboarding_forbidden', __('You cannot edit onboarding for this hospital.', 'qualinav-admin-console'), array('status' => 403));
         }
 
+        $step_key = sanitize_key($step_key);
         $role = QN_Users::get_role_for_organization($user_id, $organization_id);
         if ($role === 'hospital_admin' && !in_array($step_key, array('hospital_director_info'), true)) {
             return new WP_Error('qn_onboarding_step_forbidden', __('Hospital Admins can edit hospital profile setup only.', 'qualinav-admin-console'), array('status' => 403));
         }
 
+        $answers = self::remove_retired_compatibility_answers($answers);
+        $contract = self::validate_step_answer_keys($step_key, $answers);
+        if (is_wp_error($contract)) {
+            return $contract;
+        }
+
+        $existing_answers = QN_Questionnaire::get_answer_map($organization_id, false);
         $result = QN_Questionnaire::save_answers($organization_id, $answers, $user_id);
         if (is_wp_error($result)) {
             return $result;
+        }
+        $saved_answers = QN_Questionnaire::get_answer_map($organization_id, false);
+        $answers_changed = false;
+        foreach (array_keys((array) $answers) as $question_key) {
+            $before = array_key_exists($question_key, $existing_answers) ? $existing_answers[$question_key] : null;
+            $after = array_key_exists($question_key, $saved_answers) ? $saved_answers[$question_key] : null;
+            if ($before !== $after) {
+                $answers_changed = true;
+                break;
+            }
         }
 
         if (in_array($step_key, array('measures_qi_projects', 'committees_reporting'), true) && class_exists('QN_Data_Hub_Integration')) {
             QN_Data_Hub_Integration::sync_from_answers($organization_id, $answers, $user_id);
         }
 
-        $step_progress = QN_Questionnaire::update_section_progress($organization_id, $step_key, $user_id);
+        $step_progress = QN_Questionnaire::update_section_progress($organization_id, $step_key, $user_id, (bool) $mark_reviewed);
         $hospital = QN_Organizations::get_hospital($organization_id);
-        self::update_organization_onboarding_columns($organization_id, $hospital && $hospital['onboarding_status'] === 'submitted' ? 'submitted' : 'in_progress');
+        $was_submitted = $hospital && $hospital['onboarding_status'] === 'submitted';
+        if ($was_submitted && $answers_changed) {
+            if ($step_key !== 'regulatory_tools_preferences') {
+                QN_Questionnaire::save_answers($organization_id, array('final_review_confirmation' => false), $user_id);
+            }
+            self::update_organization_onboarding_columns($organization_id, 'in_progress');
+        } else {
+            self::update_organization_onboarding_columns($organization_id, $was_submitted ? 'submitted' : 'in_progress');
+        }
         QN_Audit_Log::log('onboarding_saved', 'organization', $organization_id, null, array('step_key' => $step_key, 'answers' => array_keys($answers)), $organization_id);
 
         return array(
@@ -78,11 +104,45 @@ class QN_Onboarding
         );
     }
 
+    private static function remove_retired_compatibility_answers($answers)
+    {
+        $retired_keys = array(
+            'is_critical_access_hospital',
+            'acute_beds',
+            'licensed_for_swing_beds',
+            'quality_director_name',
+        );
+
+        return array_diff_key((array) $answers, array_fill_keys($retired_keys, true));
+    }
+
+    private static function validate_step_answer_keys($step_key, $answers)
+    {
+        $allowed = array();
+        foreach (QN_Questionnaire::get_questions($step_key) as $question) {
+            $allowed[$question['question_key']] = true;
+        }
+
+        $invalid = array_values(array_diff(array_keys((array) $answers), array_keys($allowed)));
+        if ($invalid) {
+            return new WP_Error(
+                'qn_onboarding_invalid_question',
+                __('Hospital Setup changed while this page was open. Refresh the page and save again.', 'qualinav-admin-console'),
+                array(
+                    'status' => 400,
+                    'question_keys' => $invalid,
+                )
+            );
+        }
+
+        return true;
+    }
+
     public static function submit_onboarding($organization_id, $user_id)
     {
         $hospital = QN_Organizations::get_hospital($organization_id);
         if (!$hospital) {
-            return new WP_Error('qn_onboarding_invalid_organization', __('Select a valid hospital before submitting Hospital Setup.', 'qualinav-admin-console'), array('status' => 404));
+            return new WP_Error('qn_onboarding_invalid_organization', __('Select a valid hospital before starting Scout.', 'qualinav-admin-console'), array('status' => 404));
         }
 
         if (!self::can_edit_onboarding($user_id, $organization_id)) {
@@ -106,13 +166,30 @@ class QN_Onboarding
             }
         }
 
+        $offers_swing_bed_services = in_array('swing_bed_services', (array) ($answers['service_lines_core'] ?? array()), true);
+        $swing_bed_count = $hospital && isset($hospital['swing_beds']) ? absint($hospital['swing_beds']) : 0;
+        if ($offers_swing_bed_services && !$swing_bed_count) {
+            return new WP_Error(
+                'qn_swing_bed_count_required',
+                __('Add the number of licensed beds approved for swing-bed use, or remove Swing Bed Services before starting Scout.', 'qualinav-admin-console'),
+                array('status' => 422, 'question_key' => 'swing_beds')
+            );
+        }
+        if ($swing_bed_count && !$offers_swing_bed_services) {
+            return new WP_Error(
+                'qn_swing_bed_service_required',
+                __('Confirm that your hospital offers Swing Bed Services, or clear the swing-bed count before starting Scout.', 'qualinav-admin-console'),
+                array('status' => 422, 'question_key' => 'service_lines_core')
+            );
+        }
+
         self::mark_submitted($organization_id, $user_id);
         QN_Audit_Log::log('onboarding_submitted', 'organization', $organization_id, null, self::get_progress($organization_id), $organization_id);
 
         $response = array(
             'progress' => self::get_progress($organization_id),
             'scout_run' => null,
-            'warning' => __('Hospital Setup was submitted. Generate Scout setup preview from the Scout Setup Preview page.', 'qualinav-admin-console'),
+            'warning' => __('Hospital Setup is ready. Scout is now building the initial workspace preview automatically.', 'qualinav-admin-console'),
             'scout_generation_deferred' => true,
             'bridge_available' => class_exists('QN_Scout') ? QN_Scout::is_bridge_available() : false,
         );

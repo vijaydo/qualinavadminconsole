@@ -238,8 +238,26 @@ class QN_Questionnaire
 
     public static function save_answers($organization_id, $answers, $user_id)
     {
-        $saved = array();
+        $validated = array();
         foreach ((array) $answers as $question_key => $answer) {
+            $question = self::get_question_by_key($question_key);
+            if (!$question) {
+                return new WP_Error('qn_question_not_found', __('Question not found.', 'qualinav-admin-console'), array('status' => 404));
+            }
+
+            $valid = self::validate_answer($question, $answer);
+            if (is_wp_error($valid)) {
+                return $valid;
+            }
+            $valid = self::validate_organization_user_references($organization_id, $question_key, $valid);
+            if (is_wp_error($valid)) {
+                return $valid;
+            }
+            $validated[$question_key] = $valid;
+        }
+
+        $saved = array();
+        foreach ($validated as $question_key => $answer) {
             $result = self::save_answer($organization_id, $question_key, $answer, $user_id);
             if (is_wp_error($result)) {
                 return $result;
@@ -335,6 +353,20 @@ class QN_Questionnaire
             $questions_by_section[$section_id][] = $question;
         }
 
+        $reviewed_sections = array_fill_keys($organization_ids, array());
+        $progress_rows = $wpdb->get_results(
+            $wpdb->prepare(
+                'SELECT organization_id, section_key, status FROM ' . QN_DB::onboarding_progress_table() . " WHERE organization_id IN ({$placeholders})",
+                $organization_ids
+            ),
+            ARRAY_A
+        );
+        foreach ((array) $progress_rows as $progress_row) {
+            if (($progress_row['status'] ?? '') === 'completed') {
+                $reviewed_sections[absint($progress_row['organization_id'])][sanitize_key($progress_row['section_key'])] = true;
+            }
+        }
+
         $snapshots = array();
         foreach ($organization_ids as $organization_id) {
             $answers = $answer_maps[$organization_id];
@@ -348,10 +380,11 @@ class QN_Questionnaire
                 $percent = self::calculate_question_set_progress($questions, $answers);
 
                 $total += $percent;
+                $reviewed = !empty($reviewed_sections[$organization_id][$section['section_key']]);
                 $step_progress[] = array(
                     'organization_id' => $organization_id,
                     'section_key' => $section['section_key'],
-                    'status' => $percent >= 100 ? 'completed' : ($percent > 0 ? 'in_progress' : 'not_started'),
+                    'status' => ($reviewed || $percent >= 100) ? 'completed' : ($percent > 0 ? 'in_progress' : 'not_started'),
                     'percent_complete' => $percent,
                 );
             }
@@ -364,20 +397,21 @@ class QN_Questionnaire
         return $snapshots;
     }
 
-    public static function update_section_progress($organization_id, $section_key, $user_id)
+    public static function update_section_progress($organization_id, $section_key, $user_id, $mark_reviewed = false)
     {
         global $wpdb;
 
         $percent = self::calculate_section_progress($organization_id, $section_key);
-        $status = $percent >= 100 ? 'completed' : ($percent > 0 ? 'in_progress' : 'not_started');
+        $completed = (bool) $mark_reviewed || $percent >= 100;
+        $status = $completed ? 'completed' : ($percent > 0 ? 'in_progress' : 'not_started');
         $data = array(
             'organization_id' => absint($organization_id),
             'section_key' => sanitize_key($section_key),
             'status' => $status,
             'percent_complete' => $percent,
             'started_at' => $percent > 0 ? current_time('mysql') : null,
-            'completed_at' => $percent >= 100 ? current_time('mysql') : null,
-            'completed_by' => $percent >= 100 ? absint($user_id) : null,
+            'completed_at' => $completed ? current_time('mysql') : null,
+            'completed_by' => $completed ? absint($user_id) : null,
             'updated_at' => current_time('mysql'),
         );
 
@@ -632,15 +666,15 @@ class QN_Questionnaire
             self::step('services_clinical_model', 'Services & Clinical Model', 'Please check all services currently offered at your hospital.', array(
                 array('service_lines_core', 'Core Services', 'multiselect', false, $core_services), array('service_lines_common', 'Commonly Offered Services', 'multiselect', false, $common_services), array('service_lines_growth_expansion', 'Growth and Expansion Services', 'multiselect', false, $growth_services), array('service_lines_other', 'Other services offered', 'textarea'), array('laboratory_model', 'Laboratory model', 'text'), array('laboratory_model_other', 'Other laboratory model details', 'textarea'), array('radiology_model', 'Radiology model', 'text'), array('radiology_model_other', 'Other radiology model details', 'textarea'), array('pharmacy_model', 'Pharmacy model', 'text'), array('pharmacy_model_other', 'Other pharmacy model details', 'textarea'), array('anesthesia_moderate_sedation_model', 'Anesthesia / moderate sedation model', 'text'), array('anesthesia_moderate_sedation_model_other', 'Other anesthesia or moderate sedation details', 'textarea'), array('blood_bank_model', 'Blood bank model', 'text'), array('blood_bank_model_other', 'Other blood bank model details', 'textarea'), array('transfusions_per_year', 'Transfusions per year', 'number'), array('emergency_department', 'Legacy emergency department', 'yes_no', false, $yes_no), array('surgery_invasive_procedures', 'Legacy surgery or invasive procedures', 'select', false, array('offered', 'limited', 'not_offered')), array('surgery_procedure_types', 'Legacy surgery procedure types', 'textarea'), array('obstetrics_labor_delivery', 'Legacy obstetrics / labor & delivery', 'yes_no', false, $yes_no), array('respiratory_therapy', 'Legacy respiratory therapy', 'yes_no', false, $yes_no), array('rehabilitation_services', 'Legacy rehabilitation services', 'yes_no', false, $yes_no), array('dietary_nutrition_services', 'Legacy dietary and nutrition services', 'yes_no', false, $yes_no), array('visiting_specialists', 'Legacy visiting specialists', 'yes_no', false, $yes_no), array('contracted_quality_monitoring_agreements', 'Legacy contracted quality monitoring agreements', 'textarea'),
             )),
-            self::step('measures_qi_projects', 'Data & Reporting', 'Manage measures, submissions, deadlines, and performance monitoring in Data Hub.', array(
-            )),
             self::step('committees_reporting', 'Meeting Cadence', 'Tell Scout where quality information is reviewed and how meetings roll up through the hospital.', array(
-                array('report_lead_time', 'Default preparation lead time', 'text'), array('backup_preparer', 'Default backup preparer', 'text'), array('committee_list', 'Quality meeting cadence', 'repeater'),
+                array('report_lead_time', 'Default preparation lead time', 'text'), array('report_lead_time_custom', 'Custom preparation lead time', 'text'), array('backup_preparer', 'Default backup preparer', 'text'), array('committee_list', 'Quality meeting cadence', 'repeater'),
+            )),
+            self::step('measures_qi_projects', 'Data & Reporting', 'Manage measures, submissions, deadlines, and performance monitoring in Data Hub.', array(
             )),
             self::step('plans_policies_monitoring', 'Plans & Policies', 'Review required plans and policies and attach current documents for authorized Scout use.', array(
                 array('plan_policy_inventory', 'Plan and policy inventory', 'repeater', true),
             )),
-            self::step('regulatory_tools_preferences', 'Review & Access', 'Review missing setup details, confirm backup access, and submit when ready.', array(
+            self::step('regulatory_tools_preferences', 'Review & Access', 'Review the setup, confirm backup access, and tell Scout when the information is ready.', array(
                 array('backup_visibility_users', 'Backup visibility users', 'textarea'), array('final_review_confirmation', 'Final review confirmation', 'checkbox', true),
             )),
         );
@@ -676,7 +710,7 @@ class QN_Questionnaire
                 'survey_compliance_process', 'accrediting_body', 'accrediting_body_other', 'state_survey_agency', 'state_survey_agency_url', 'life_safety_survey_agency_status', 'life_safety_survey_agency', 'life_safety_survey_agency_url', 'last_accreditation_licensing_survey_date', 'other_certification_licensing_surveys_status', 'other_certification_licensing_surveys',
                 'service_lines_core', 'service_lines_common', 'service_lines_growth_expansion', 'service_lines_other', 'laboratory_model', 'laboratory_model_other', 'radiology_model', 'radiology_model_other', 'pharmacy_model', 'pharmacy_model_other', 'anesthesia_moderate_sedation_model', 'anesthesia_moderate_sedation_model_other', 'blood_bank_model', 'blood_bank_model_other',
                 'internal_monitoring_patient_safety_events', 'internal_monitoring_infection_prevention', 'internal_monitoring_medication_safety', 'internal_monitoring_clinical_case_review', 'internal_monitoring_ed_care_transitions', 'internal_monitoring_patient_experience', 'internal_monitoring_other', 'external_reporting_flex_mbqip', 'external_reporting_cms_iqr', 'external_reporting_cms_oqr', 'external_reporting_cms_payment_programs', 'external_reporting_nhsn', 'external_reporting_medicare_pi', 'external_reporting_state_other', 'external_reporting_voluntary', 'external_reporting_other',
-                'committee_list', 'standing_agenda_items', 'minutes_owner_location', 'board_agenda_timing', 'reporting_obligations', 'backup_preparer', 'report_lead_time',
+                'committee_list', 'standing_agenda_items', 'minutes_owner_location', 'board_agenda_timing', 'reporting_obligations',
                 'plan_policy_inventory', 'qapi_plan_status', 'patient_safety_plan_status', 'infection_prevention_plan_status', 'emergency_preparedness_plan_status', 'risk_management_plan_status', 'plan_location_authority', 'policy_management_system', 'annual_policy_review_cycle', 'templates_needed', 'morbidity_mortality_monitoring', 'blood_usage_review', 'medication_safety_monitoring', 'operative_invasive_review', 'anesthesia_sedation_monitoring', 'sentinel_never_event_protocol', 'ancillary_services_review', 'contracted_service_quality_data_flow', 'weakest_monitoring_areas',
                 'department_goals_this_year', 'department_goals_two_three_years', 'protected_workflow_goals', 'program_gaps', 'strategic_plan_alignment', 'time_in_current_role', 'new_to_quality_director_role', 'quality_certifications', 'confidence_foundational', 'confidence_qi_patient_safety', 'confidence_specialized_areas', 'confidence_professional_development', 'activate_first_30_days_track', 'learning_format_preference', 'state_flex_contact', 'state_office_rural_health_contact', 'state_hospital_association_contact', 'state_survey_agency_contacts', 'peer_cah_contacts', 'accreditation_liaison', 'referral_hospital_contacts',
                 'update_preference', 'auto_propose_task_adjustments', 'current_tools', 'calendar_system', 'ehr_system', 'incident_reporting_system', 'nhsn_qualitynet_access', 'reminder_lead_time', 'reminder_buffer_time', 'backup_visibility_users', 'final_review_confirmation',
@@ -694,9 +728,9 @@ class QN_Questionnaire
 
         $columns = array(
             'survey_history' => array('survey_date', 'survey_type', 'surveying_agency', 'survey_outcome', 'poc_status', 'follow_up_window'),
-            'committee_list' => array('committee_name', 'local_name', 'committee_frequency', 'committee_week_of_month', 'committee_weekday', 'committee_time', 'frequency_timing', 'user_role', 'reports_to', 'prep_lead_time'),
+            'committee_list' => array('committee_name', 'local_name', 'committee_frequency', 'committee_week_of_month', 'committee_weekday', 'committee_time', 'frequency_timing', 'user_role', 'reports_to', 'prep_lead_time', 'prep_lead_time_custom'),
             'reporting_obligations' => array('is_reported', 'measure_key', 'report_name', 'category', 'program_tags', 'frequency', 'due_date_rule', 'due_date_details', 'due_dates', 'source_link', 'who_prepares', 'backup_preparer', 'owner_user_id', 'backup_user_id', 'submit_to_method', 'approval_required', 'prep_lead_time', 'payment_linked', 'event_triggered', 'measure_version_id', 'measure_version_label', 'effective_start_date', 'effective_end_date', 'canonical_source', 'from_step4'),
-            'plan_policy_inventory' => array('policy_key', 'policy_name', 'category', 'date_last_approved', 'status', 'folded_into', 'notes', 'upload_status', 'document_id', 'document_name', 'document_version_id', 'ingestion_job_id', 'storage_path', 'scout_status'),
+            'plan_policy_inventory' => array('policy_key', 'policy_name', 'category', 'date_last_approved', 'status', 'folded_into', 'folded_into_policy_key', 'folded_into_document_id', 'coverage_review_status', 'notes', 'upload_status', 'document_id', 'document_name', 'document_version_id', 'ingestion_job_id', 'storage_path', 'document_sha256', 'document_size_bytes', 'scout_status', 'is_additional_plan'),
             'active_qi_projects' => array('project_aim', 'method', 'measure', 'status_next_milestone'),
         );
 
@@ -718,6 +752,7 @@ class QN_Questionnaire
             'blood_usage_review' => array('not_applicable_if' => array('transfusions_per_year' => 0, 'blood_bank_model' => 'no blood bank')),
             'activate_first_30_days_track' => array('show_if' => array('new_to_quality_director_role' => 'yes')),
             'contracted_quality_monitoring_agreements' => array('hide_if' => array('visiting_specialists' => 'no')),
+            'report_lead_time_custom' => array('show_if' => array('report_lead_time' => 'custom')),
         );
 
         return isset($logic[$question_key]) ? $logic[$question_key] : null;
@@ -966,7 +1001,7 @@ class QN_Questionnaire
             'nhsn_qualitynet_access' => self::choice_pairs(array('access_confirmed' => 'Access confirmed', 'access_pending' => 'Access pending', 'need_help_setting_up' => 'Need help setting up', 'not_applicable' => 'Not applicable', 'not_sure' => 'Not sure')),
             'reminder_lead_time' => self::choice_pairs(array('one_week' => '1 week', 'two_weeks' => '2 weeks', 'three_weeks' => '3 weeks', 'four_weeks' => '4 weeks', 'six_weeks' => '6 weeks', 'custom' => 'Custom', 'not_sure' => 'Not sure')),
             'reminder_buffer_time' => self::choice_pairs(array('no_buffer' => 'No buffer', 'three_days' => '3 days', 'one_week' => '1 week', 'two_weeks' => '2 weeks', 'custom' => 'Custom', 'not_sure' => 'Not sure')),
-            'final_review_confirmation' => self::choice_pairs(array('checked' => 'I confirm this setup is ready to submit and contains no PHI', 'not_checked' => 'Not checked')),
+            'final_review_confirmation' => self::choice_pairs(array('checked' => 'The information is ready for Scout to build my initial workspace', 'not_checked' => 'Not checked')),
         );
 
         if (isset($maps[$question_key])) {
@@ -1086,7 +1121,7 @@ class QN_Questionnaire
         }
 
         if ($question['field_type'] === 'checkbox' && $answer !== true) {
-            return new WP_Error('qn_onboarding_confirmation_required', __('Confirm that Hospital Setup is ready to submit and contains no PHI or case-level details.', 'qualinav-admin-console'), array('status' => 400, 'question_key' => $question['question_key']));
+            return new WP_Error('qn_onboarding_confirmation_required', __('Confirm that the information is ready for Scout to build your initial workspace.', 'qualinav-admin-console'), array('status' => 400, 'question_key' => $question['question_key']));
         }
 
         if ($question['question_key'] === 'plan_policy_inventory') {
@@ -1094,6 +1129,15 @@ class QN_Questionnaire
                 if (!is_array($row) || empty($row['policy_key']) || empty($row['status'])) {
                     $policy_name = is_array($row) && !empty($row['policy_name']) ? sanitize_text_field($row['policy_name']) : __('the highlighted plan or policy', 'qualinav-admin-console');
                     return new WP_Error('qn_onboarding_plan_inventory_incomplete', sprintf(__('Select a status for %s. Document uploads are not required.', 'qualinav-admin-console'), $policy_name), array('status' => 400, 'question_key' => $question['question_key']));
+                }
+                if ($row['status'] === 'folded_into_another') {
+                    $has_source = !empty($row['folded_into']) &&
+                        !empty($row['folded_into_policy_key']) &&
+                        !empty($row['folded_into_document_id']);
+                    if (!$has_source) {
+                        $policy_name = !empty($row['policy_name']) ? sanitize_text_field($row['policy_name']) : __('the highlighted plan or policy', 'qualinav-admin-console');
+                        return new WP_Error('qn_onboarding_folded_plan_required', sprintf(__('Choose the uploaded plan or policy that contains %s, or add and upload a new source plan first.', 'qualinav-admin-console'), $policy_name), array('status' => 400, 'question_key' => $question['question_key']));
+                    }
                 }
             }
         }
