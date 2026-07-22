@@ -373,14 +373,30 @@ class QN_Questionnaire
             if (class_exists('QN_Data_Hub_Integration')) {
                 $answers = QN_Data_Hub_Integration::hydrate_answers($organization_id, $answers, false);
             }
+            // Hospital and Quality Leader fields are canonical organization/user
+            // references. They are displayed in Hospital Setup even when an older
+            // questionnaire row does not exist, so progress must evaluate the same
+            // hydrated values the user sees.
+            if (class_exists('QN_Onboarding') && class_exists('QN_Organizations')) {
+                $answers = QN_Onboarding::hydrate_hospital_references(
+                    QN_Organizations::get_hospital($organization_id),
+                    $answers
+                );
+            }
+            $setup_confirmed = !empty($answers['final_review_confirmation']);
             $total = 0;
             $step_progress = array();
             foreach ($sections as $section) {
                 $questions = isset($questions_by_section[absint($section['id'])]) ? $questions_by_section[absint($section['id'])] : array();
-                $percent = self::calculate_question_set_progress($questions, $answers);
+                // The final review confirmation means the Quality Leader has
+                // reviewed every section and supplied everything reasonably
+                // available today. Optional blanks remain visible to Scout as
+                // follow-up opportunities, but they must not leave setup steps
+                // labelled "In progress" after that acknowledgement.
+                $percent = $setup_confirmed ? 100 : self::calculate_question_set_progress($questions, $answers);
 
                 $total += $percent;
-                $reviewed = !empty($reviewed_sections[$organization_id][$section['section_key']]);
+                $reviewed = $setup_confirmed || !empty($reviewed_sections[$organization_id][$section['section_key']]);
                 $step_progress[] = array(
                     'organization_id' => $organization_id,
                     'section_key' => $section['section_key'],

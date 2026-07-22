@@ -71,13 +71,23 @@ class QN_Onboarding
         }
         $saved_answers = QN_Questionnaire::get_answer_map($organization_id, false);
         $answers_changed = false;
+        $changed_answer_keys = array();
         foreach (array_keys((array) $answers) as $question_key) {
             $before = array_key_exists($question_key, $existing_answers) ? $existing_answers[$question_key] : null;
             $after = array_key_exists($question_key, $saved_answers) ? $saved_answers[$question_key] : null;
             if ($before !== $after) {
                 $answers_changed = true;
-                break;
+                $changed_answer_keys[] = $question_key;
             }
+        }
+
+        $final_confirmation_was_checked = !empty($existing_answers['final_review_confirmation']);
+        $final_confirmation_is_checked = !empty($saved_answers['final_review_confirmation']);
+        $final_confirmation_just_checked = !$final_confirmation_was_checked && $final_confirmation_is_checked;
+        if ($step_key === 'regulatory_tools_preferences' && $final_confirmation_is_checked) {
+            // Checking the final acknowledgement is itself the review action for
+            // this step; a separate Save & Continue click must not be required.
+            $mark_reviewed = true;
         }
 
         if (in_array($step_key, array('measures_qi_projects', 'committees_reporting'), true) && class_exists('QN_Data_Hub_Integration')) {
@@ -87,10 +97,15 @@ class QN_Onboarding
         $step_progress = QN_Questionnaire::update_section_progress($organization_id, $step_key, $user_id, (bool) $mark_reviewed);
         $hospital = QN_Organizations::get_hospital($organization_id);
         $was_submitted = $hospital && $hospital['onboarding_status'] === 'submitted';
-        if ($was_submitted && $answers_changed) {
-            if ($step_key !== 'regulatory_tools_preferences') {
-                QN_Questionnaire::save_answers($organization_id, array('final_review_confirmation' => false), $user_id);
-            }
+        $non_confirmation_changes = array_diff($changed_answer_keys, array('final_review_confirmation'));
+        $changed_after_confirmation = $final_confirmation_was_checked && !empty($non_confirmation_changes);
+        if ($changed_after_confirmation) {
+            // A genuine edit after the whole-setup acknowledgement reopens the
+            // final review, whether or not Scout has already been started.
+            QN_Questionnaire::save_answers($organization_id, array('final_review_confirmation' => false), $user_id);
+            $final_confirmation_is_checked = false;
+        }
+        if ($was_submitted && $answers_changed && !$final_confirmation_just_checked) {
             self::update_organization_onboarding_columns($organization_id, 'in_progress');
         } else {
             self::update_organization_onboarding_columns($organization_id, $was_submitted ? 'submitted' : 'in_progress');
@@ -319,6 +334,16 @@ class QN_Onboarding
 
     public static function hydrate_canonical_references($organization_id, $hospital, $answers)
     {
+        $answers = self::hydrate_hospital_references($hospital, $answers);
+
+        $projects = self::canonical_qi_projects($organization_id);
+        $answers['qi_project_references'] = $projects;
+        $answers['active_qi_projects'] = $projects;
+        return $answers;
+    }
+
+    public static function hydrate_hospital_references($hospital, $answers)
+    {
         if ($hospital) {
             $answers['hospital_name'] = (string) $hospital['name'];
             $answers['ccn'] = (string) $hospital['ccn'];
@@ -339,10 +364,6 @@ class QN_Onboarding
             $answers['quality_director_name'] = $answers['quality_leader_name'];
             $answers['quality_leader_email'] = $quality_director ? (string) $quality_director['user_email'] : '';
         }
-
-        $projects = self::canonical_qi_projects($organization_id);
-        $answers['qi_project_references'] = $projects;
-        $answers['active_qi_projects'] = $projects;
         return $answers;
     }
 

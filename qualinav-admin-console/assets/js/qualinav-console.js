@@ -11346,7 +11346,11 @@
                 answers: collectOnboardingAnswers(),
                 mark_reviewed: !!advance
             }
-        }).then(function () {
+        }).then(function (result) {
+            if (result && result.progress && state.onboarding) {
+                state.onboarding.progress = result.progress;
+                renderStepper(state.onboarding.steps || []);
+            }
             setText('#qn-onboarding-message', 'Saved.');
             setOnboardingSaveStatus('saved', 'Saved');
             showToast('Onboarding saved.', 'success');
@@ -11384,7 +11388,11 @@
                 step_key: step.section_key,
                 answers: answers || {}
             }
-        }).then(function () {
+        }).then(function (result) {
+            if (result && result.progress && state.onboarding) {
+                state.onboarding.progress = result.progress;
+                renderStepper(state.onboarding.steps || []);
+            }
             setText('#qn-onboarding-message', 'Saved.');
             setOnboardingSaveStatus('saved', 'Saved');
         }).catch(function (error) {
