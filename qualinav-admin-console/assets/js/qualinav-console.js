@@ -4885,7 +4885,7 @@
         return renderScoutStatusHero(run) +
             renderScoutPersonaContext(run) +
             renderScoutAttentionPanel(run) +
-            '<section class="qn-scout-workflow-section"><div class="qn-section-toolbar qn-scout-workflow-heading"><div><p class="qn-eyebrow">Your Scout workspace</p><h3>What Scout prepared for your hospital</h3><p>Review the areas that matter now. Each draft shows what Scout prepared, why it helps, and the next place to review.</p></div></div>' +
+            '<section class="qn-scout-workflow-section"><div class="qn-section-toolbar qn-scout-workflow-heading"><div><p class="qn-eyebrow">Your Scout workspace</p><h3>What Scout prepared for your hospital</h3><p>Review the areas that matter now. Each section shows what Scout prepared, why it helps, and where to review it.</p></div></div>' +
             workflowList + '</section>' +
             renderScoutSources(scoutSources(run));
     }
@@ -5311,12 +5311,12 @@
         var status = scoutGroupStatus(group, counts);
         var preview = scoutGroupPreviewContent(definition, group, counts);
         return '<article class="qn-scout-workflow-card qn-scout-card-' + escapeHtml(status.tone) + '">' +
-            '<div class="qn-scout-workflow-card-header"><span class="dashicons ' + scoutIcon(definition.key) + '"></span><div><h4>' + escapeHtml(definition.title) + '</h4><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(status.tone) + '">' + escapeHtml(status.label === 'Ready' ? 'Draft ready' : status.label) + '</span></div></div>' +
+            '<div class="qn-scout-workflow-card-header"><span class="dashicons ' + scoutIcon(definition.key) + '"></span><div><h4>' + escapeHtml(definition.title) + '</h4><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(status.tone) + '">' + escapeHtml(status.label === 'Ready' ? 'Ready to review' : status.label) + '</span></div></div>' +
             '<p class="qn-scout-workflow-summary">' + escapeHtml(preview.summary) + '</p>' +
             '<div class="qn-scout-workflow-benefit"><span class="dashicons dashicons-lightbulb"></span><span><b>Why this helps:</b> ' + escapeHtml(definition.benefit) + '</span></div>' +
             (preview.examples.length ? '<div class="qn-scout-prepared"><span>Scout prepared</span><ul class="qn-scout-card-examples">' + preview.examples.map(function (example) { return '<li>' + escapeHtml(example) + '</li>'; }).join('') + '</ul></div>' : '') +
             '<div class="qn-scout-workflow-card-footer"><div class="qn-scout-card-metrics">' +
-            '<span>' + escapeHtml(String(counts.items)) + (counts.items === 1 ? ' draft item' : ' draft items') + '</span>' +
+            '<span>' + escapeHtml(String(counts.items)) + (counts.items === 1 ? ' item to review' : ' items to review') + '</span>' +
             (counts.warnings ? '<span>' + escapeHtml(String(counts.warnings)) + ' warnings</span>' : '') +
             (counts.missing ? '<span>' + escapeHtml(String(counts.missing)) + ' missing</span>' : '') +
             '</div>' +
@@ -5396,24 +5396,24 @@
         var samples = scoutGroupSamples(group, 3);
         var count = counts.items || samples.length;
         var summaries = {
-            master_reporting_schedule: count + ' reporting obligations drafted for review.',
+            master_reporting_schedule: count + ' reporting obligations ready for review.',
             meeting_report_flow_map: count + ' committee and report-flow items mapped.',
-            survey_readiness_timeline: count + ' survey readiness windows drafted.',
-            active_monitoring_improvement_tasks: count + ' monitoring and improvement actions drafted.',
-            recurring_clinical_monitoring: count + ' recurring monitoring activities drafted.',
-            aggregate_data_uploads: count + ' aggregate data upload needs drafted.',
-            routine_task_rhythm: 'Routine work rhythm drafted from setup answers.',
-            active_improvement_projects: count + ' improvement project signals drafted.',
+            survey_readiness_timeline: count + ' survey readiness windows ready for review.',
+            active_monitoring_improvement_tasks: count + ' monitoring and improvement actions ready for review.',
+            recurring_clinical_monitoring: count + ' recurring monitoring activities ready for review.',
+            aggregate_data_uploads: count + ' aggregate data upload needs ready for review.',
+            routine_task_rhythm: 'Routine work rhythm prepared from your setup answers.',
+            active_improvement_projects: count + ' improvement project signals ready for review.',
             priority_queue: count + ' priority items identified for follow-up.',
-            plan_policy_tasks: count + ' plan and policy priorities drafted.',
-            regulatory_monitoring_preferences: count + ' regulatory monitoring preferences drafted.',
-            external_contact_directory: count + ' external contact items drafted.',
-            first_30_days_learning_journey: count + ' first-30-days learning steps drafted.',
-            learning_journey: count + ' learning items drafted.',
-            reminder_rules: count + ' reminder rules drafted.'
+            plan_policy_tasks: count + ' plan and policy priorities ready for review.',
+            regulatory_monitoring_preferences: count + ' regulatory monitoring preferences ready for review.',
+            external_contact_directory: count + ' external contact items ready for review.',
+            first_30_days_learning_journey: count + ' first-30-days learning steps ready for review.',
+            learning_journey: count + ' learning items ready for review.',
+            reminder_rules: count + ' reminder rules ready for review.'
         };
         return {
-            summary: group.summary || group.description ? describeScoutItem(group.summary || group.description) : (summaries[definition.key] || (count + ' draft items returned for review.')),
+            summary: group.summary || group.description ? describeScoutItem(group.summary || group.description) : (summaries[definition.key] || (count + (count === 1 ? ' item is ready for review.' : ' items are ready for review.'))),
             examples: samples
         };
     }
