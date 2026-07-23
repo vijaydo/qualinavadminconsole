@@ -42,8 +42,69 @@ class QN_Onboarding
             'progress' => self::get_progress($organization_id),
             'onboarding_status' => $hospital && !empty($hospital['onboarding_status']) ? sanitize_key($hospital['onboarding_status']) : '',
             'onboarding_submitted' => $hospital && isset($hospital['onboarding_status']) && $hospital['onboarding_status'] === 'submitted',
+            'scout_attention_preferences' => self::get_scout_attention_preferences($organization_id, get_current_user_id()),
             'can_edit' => self::can_edit_onboarding(get_current_user_id(), $organization_id),
         );
+    }
+
+    public static function get_scout_attention_preferences($organization_id, $user_id)
+    {
+        $organization_id = absint($organization_id);
+        $user_id = absint($user_id);
+        if (!$organization_id || !$user_id || (!QN_Users::is_qualinav_admin($user_id) && !QN_Users::user_has_organization($user_id, $organization_id))) {
+            return array();
+        }
+
+        $all = get_user_meta($user_id, 'qn_scout_attention_preferences', true);
+        $all = is_array($all) ? $all : array();
+        $preferences = isset($all[$organization_id]) && is_array($all[$organization_id]) ? $all[$organization_id] : array();
+
+        return array_filter($preferences, function ($preference) {
+            return is_array($preference) && isset($preference['status']) && in_array($preference['status'], array('ignored', 'confirmed'), true);
+        });
+    }
+
+    public static function update_scout_attention_preference($organization_id, $user_id, $item_key, $status)
+    {
+        $organization_id = absint($organization_id);
+        $user_id = absint($user_id);
+        $item_key = sanitize_key($item_key);
+        $status = sanitize_key($status);
+
+        if (!$organization_id || !$user_id || !$item_key) {
+            return new WP_Error('qn_scout_attention_invalid', __('Scout could not save this review choice.', 'qualinav-admin-console'), array('status' => 400));
+        }
+        if (!self::can_edit_onboarding($user_id, $organization_id)) {
+            return new WP_Error('qn_scout_attention_forbidden', __('You cannot update Scout review choices for this hospital.', 'qualinav-admin-console'), array('status' => 403));
+        }
+        if (!in_array($status, array('ignored', 'confirmed', 'active'), true)) {
+            return new WP_Error('qn_scout_attention_status', __('Select a valid Scout review choice.', 'qualinav-admin-console'), array('status' => 400));
+        }
+
+        $all = get_user_meta($user_id, 'qn_scout_attention_preferences', true);
+        $all = is_array($all) ? $all : array();
+        $preferences = isset($all[$organization_id]) && is_array($all[$organization_id]) ? $all[$organization_id] : array();
+        if ($status === 'active') {
+            unset($preferences[$item_key]);
+        } else {
+            $preferences[$item_key] = array(
+                'status' => $status,
+                'updated_at' => current_time('mysql', true),
+            );
+        }
+        $all[$organization_id] = array_slice($preferences, -100, 100, true);
+        update_user_meta($user_id, 'qn_scout_attention_preferences', $all);
+
+        QN_Audit_Log::log(
+            'scout_attention_preference_updated',
+            'organization',
+            $organization_id,
+            null,
+            array('item_key' => $item_key, 'status' => $status),
+            $organization_id
+        );
+
+        return self::get_scout_attention_preferences($organization_id, $user_id);
     }
 
     public static function save_step($organization_id, $step_key, $answers, $user_id, $mark_reviewed = false)

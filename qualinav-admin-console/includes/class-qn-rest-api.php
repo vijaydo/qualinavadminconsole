@@ -341,6 +341,12 @@ class QN_REST_API
             'permission_callback' => array(__CLASS__, 'can_read_me'),
         ));
 
+        register_rest_route(self::NAMESPACE, '/scout/attention-preference', array(
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => array(__CLASS__, 'update_scout_attention_preference'),
+            'permission_callback' => array(__CLASS__, 'can_read_me'),
+        ));
+
         register_rest_route(self::NAMESPACE, '/scout/runs', array(
             'methods' => WP_REST_Server::READABLE,
             'callback' => array(__CLASS__, 'get_scout_runs'),
@@ -1401,6 +1407,28 @@ class QN_REST_API
         return is_wp_error($run) ? $run : rest_ensure_response(array(
             'run' => $run,
             'preview' => isset($run['preview']) ? $run['preview'] : null,
+        ));
+    }
+
+    public static function update_scout_attention_preference(WP_REST_Request $request)
+    {
+        $organization_id = self::resolve_onboarding_organization($request);
+        if (is_wp_error($organization_id)) {
+            return $organization_id;
+        }
+
+        $payload = $request->get_json_params();
+        $payload = is_array($payload) ? $payload : array();
+        $preferences = QN_Onboarding::update_scout_attention_preference(
+            $organization_id,
+            get_current_user_id(),
+            isset($payload['item_key']) ? $payload['item_key'] : '',
+            isset($payload['status']) ? $payload['status'] : ''
+        );
+
+        return is_wp_error($preferences) ? $preferences : rest_ensure_response(array(
+            'organization_id' => absint($organization_id),
+            'preferences' => $preferences,
         ));
     }
 

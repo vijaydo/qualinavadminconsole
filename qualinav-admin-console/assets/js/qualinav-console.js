@@ -4936,11 +4936,10 @@
     }
 
     function scoutRunCounts(run) {
-        var warnings = scoutWarnings(run).length;
-        var missing = scoutMissingInputs(run).length;
+        var attention = scoutAttentionReport(run);
         return {
-            warnings: warnings,
-            missing: missing,
+            warnings: attention.warnings.length,
+            missing: attention.missing.length,
             sources: scoutSources(run).length || (run && run.source_count !== null && run.source_count !== undefined ? run.source_count : 0)
         };
     }
@@ -4999,39 +4998,94 @@
     }
 
     function renderScoutAttentionPanel(run) {
-        var missing = scoutMissingInputs(run);
-        var warnings = scoutWarnings(run);
-        var backend = run && run.status === 'failed' ? [safeScoutError(run.error_message)] : [];
-        if (!missing.length && !warnings.length && !backend.length) {
-            return '';
-        }
+        var report = scoutAttentionReport(run);
+        var capabilities = scoutReadyCapabilities(run);
+        var hasReview = report.missing.length || report.warnings.length || report.technical.length;
         return '<section class="qn-scout-attention">' +
-            '<div class="qn-section-toolbar"><div><p class="qn-eyebrow">Before you use this plan</p><h3>A few items need your review</h3><p class="qn-muted-note">Complete missing details when you can, and confirm any assumptions Scout made.</p></div></div>' +
-            '<div class="qn-scout-attention-grid">' +
-            (missing.length ? renderScoutAttentionGroup('Information to add', missing, 'editor-help', 'missing') : '') +
-            (warnings.length ? renderScoutAttentionGroup('Assumptions to confirm', warnings, 'warning', 'warning') : '') +
-            (backend.length ? renderScoutAttentionGroup('Technical notice', backend, 'shield', 'technical') : '') +
-            '</div></section>';
+            '<div class="qn-scout-readiness-summary"><span class="dashicons dashicons-superhero-alt"></span><div><p class="qn-eyebrow">Your initial workspace is ready</p><h3>Scout has already turned your setup into practical quality workflows</h3>' +
+            '<p>Use the generated plan now. Adding or confirming the details below will make dates, reminders, and recommendations more precise.</p>' +
+            (capabilities.length ? '<div class="qn-scout-capability-list" aria-label="Scout capabilities ready">' + capabilities.map(function (label) { return '<span><span class="dashicons dashicons-yes-alt"></span>' + escapeHtml(label) + '</span>'; }).join('') + '</div>' : '') +
+            '</div></div>' +
+            (hasReview ? '<div class="qn-section-toolbar qn-scout-review-heading"><div><p class="qn-eyebrow">Improve Scout\'s accuracy</p><h3>A few details can make this workspace even more useful</h3><p class="qn-muted-note">Each item explains why it matters. Add, confirm, change, or review it later without blocking your work.</p></div></div>' +
+                '<div class="qn-scout-attention-grid">' +
+                (report.missing.length ? renderScoutAttentionGroup('Information that would help', report.missing, 'editor-help', 'missing') : '') +
+                (report.warnings.length ? renderScoutAttentionGroup('Assumptions to confirm', report.warnings, 'warning', 'warning') : '') +
+                (report.technical.length ? renderScoutAttentionGroup('Technical notice', report.technical, 'shield', 'technical') : '') +
+                '</div>' : '<div class="qn-scout-all-ready"><span class="dashicons dashicons-yes-alt"></span><div><strong>No additional details need review right now.</strong><p>Scout can use the current Hospital Setup as provided.</p></div></div>') +
+            renderScoutResolvedAttention(report.resolved) + '</section>';
     }
 
     function renderScoutAttentionGroup(title, items, icon, tone) {
-        items = cleanScoutList(items);
         return '<article class="qn-scout-attention-group qn-scout-attention-group-' + escapeHtml(tone) + '">' +
             '<div class="qn-scout-attention-heading"><span class="dashicons dashicons-' + escapeHtml(icon) + '"></span><div><h4>' + escapeHtml(title) + '</h4><span>' + escapeHtml(items.length + (items.length === 1 ? ' item' : ' items')) + '</span></div></div>' +
             '<div class="qn-scout-attention-list">' + items.map(function (item) {
                 return renderScoutAttentionItem(item, tone);
             }).join('') + '</div>' +
-            (tone === 'missing' ? '<a class="qn-button qn-button-secondary qn-scout-attention-action" href="#day-0-setup">Update Hospital Setup</a>' : '') +
             '</article>';
     }
 
     function renderScoutAttentionItem(item, tone) {
-        var detail = normalizeScoutAttentionItem(item, tone);
+        var detail = item && item.key ? item : normalizeScoutAttentionItem(item, tone);
+        var canEdit = canEditOnboarding() && tone !== 'technical';
+        var primaryLabel = tone === 'warning' ? 'Change' : detail.actionLabel;
+        var actions = canEdit ? '<div class="qn-scout-attention-actions">' +
+            (tone === 'warning' ? '<button class="qn-button qn-button-small qn-button-primary" type="button" data-scout-attention-preference="confirmed" data-scout-attention-key="' + escapeHtml(detail.key) + '"><span class="dashicons dashicons-yes"></span>Confirm</button>' : '') +
+            '<button class="qn-button qn-button-small qn-button-secondary" type="button" data-scout-attention-open="' + escapeHtml(detail.key) + '"><span class="dashicons dashicons-edit"></span>' + escapeHtml(primaryLabel) + '</button>' +
+            '<button class="qn-button qn-button-small qn-button-quiet" type="button" data-scout-attention-preference="ignored" data-scout-attention-key="' + escapeHtml(detail.key) + '">Review later</button>' +
+            '</div>' : '';
         return '<div class="qn-scout-attention-item">' +
             '<strong>' + escapeHtml(detail.title) + '</strong>' +
             (detail.description ? '<p>' + escapeHtml(detail.description) + '</p>' : '') +
+            (detail.benefit ? '<div class="qn-scout-attention-benefit"><span class="dashicons dashicons-lightbulb"></span><span><b>What this improves:</b> ' + escapeHtml(detail.benefit) + '</span></div>' : '') +
             (detail.basis ? '<span class="qn-scout-attention-basis"><span class="dashicons dashicons-info-outline"></span>Based on ' + escapeHtml(detail.basis) + '</span>' : '') +
-            '</div>';
+            actions + '</div>';
+    }
+
+    function renderScoutResolvedAttention(items) {
+        if (!items.length) {
+            return '';
+        }
+        return '<details class="qn-scout-resolved"><summary>' + escapeHtml(items.length + (items.length === 1 ? ' item set aside or confirmed' : ' items set aside or confirmed')) + '</summary><div>' + items.map(function (item) {
+            return '<div><span><strong>' + escapeHtml(item.title) + '</strong><small>' + escapeHtml(item.preferenceStatus === 'confirmed' ? 'Confirmed' : 'Review later') + '</small></span>' +
+                (canEditOnboarding() ? '<button class="qn-button qn-button-small qn-button-quiet" type="button" data-scout-attention-preference="active" data-scout-attention-key="' + escapeHtml(item.key) + '">Restore</button>' : '') + '</div>';
+        }).join('') + '</div></details>';
+    }
+
+    function scoutAttentionReport(run) {
+        var byKey = {};
+        var order = [];
+        scoutMissingInputs(run).forEach(function (item) {
+            var detail = normalizeScoutAttentionItem(item, 'missing');
+            if (!byKey[detail.key]) {
+                byKey[detail.key] = detail;
+                order.push(detail.key);
+            }
+        });
+        scoutWarnings(run).forEach(function (item) {
+            var detail = normalizeScoutAttentionItem(item, 'warning');
+            if (!byKey[detail.key]) {
+                byKey[detail.key] = detail;
+                order.push(detail.key);
+            }
+        });
+        var preferences = state.onboarding && state.onboarding.scout_attention_preferences ? state.onboarding.scout_attention_preferences : {};
+        var report = {missing: [], warnings: [], technical: [], resolved: []};
+        order.forEach(function (key) {
+            var detail = byKey[key];
+            var preference = preferences[key] || {};
+            detail.preferenceStatus = preference.status || '';
+            if (detail.preferenceStatus === 'ignored' || detail.preferenceStatus === 'confirmed') {
+                report.resolved.push(detail);
+            } else if (detail.tone === 'warning') {
+                report.warnings.push(detail);
+            } else {
+                report.missing.push(detail);
+            }
+        });
+        if (run && run.status === 'failed') {
+            report.technical.push(normalizeScoutAttentionItem(safeScoutError(run.error_message), 'technical'));
+        }
+        return report;
     }
 
     function normalizeScoutAttentionItem(item, tone) {
@@ -5040,11 +5094,11 @@
             value = parseScoutObjectText(value) || {description: normalizePublicSetupCopy(value)};
         }
         value = value && typeof value === 'object' && !Array.isArray(value) ? value : {description: describeScoutItem(value)};
-        var key = value.input_key || value.key || '';
+        var rawKey = value.input_key || value.key || '';
         var title = value.title || value.label || value.name || '';
         var description = value.description || value.detail || value.message || value.reason || '';
-        if (!title && key) {
-            title = scoutAttentionTitle(key);
+        if (!title && rawKey) {
+            title = scoutAttentionTitle(rawKey);
         }
         if (!title) {
             title = tone === 'warning' ? 'Confirm this planning assumption' : (tone === 'technical' ? 'Scout could not complete this step' : 'Additional information needed');
@@ -5052,11 +5106,128 @@
         if (!description && value.value) {
             description = describeScoutItem(value.value);
         }
+        var key = scoutAttentionCanonicalKey(rawKey, title, description);
+        var guidance = scoutAttentionGuidance(key);
         return {
-            title: normalizePublicSetupCopy(title),
+            key: key,
+            tone: tone,
+            title: guidance.title || normalizePublicSetupCopy(title),
             description: normalizePublicSetupCopy(description),
-            basis: scoutEvidenceBasis(value.evidence_basis || value.source || '')
+            basis: scoutEvidenceBasis(value.evidence_basis || value.source || ''),
+            benefit: guidance.benefit,
+            actionLabel: guidance.actionLabel
         };
+    }
+
+    function scoutAttentionCanonicalKey(rawKey, title, description) {
+        var source = [rawKey, title, description].join(' ').toLowerCase().replace(/[_-]+/g, ' ');
+        if (/policy.{0,20}review.{0,20}cycle|review cycle.{0,20}polic/.test(source)) {
+            return 'policy_review_cycle';
+        }
+        if (/governing board|board quality committee|full board/.test(source)) {
+            return 'governing_board_schedule';
+        }
+        if (/aggregate.{0,25}(upload|data)|routine data upload|reporting schedule/.test(source)) {
+            return 'aggregate_data_schedule';
+        }
+        if (/quality improvement|\bqi project/.test(source)) {
+            return 'quality_improvement_projects';
+        }
+        var fallback = String(rawKey || title || 'scout_review_item').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        return fallback.slice(0, 64) || 'scout_review_item';
+    }
+
+    function scoutAttentionGuidance(key) {
+        var guidance = {
+            quality_improvement_projects: {title: 'Quality improvement project details', benefit: 'Adds project owners, milestones, progress checks, and useful reminders to the workspace.', actionLabel: 'Open Data Hub'},
+            aggregate_data_schedule: {title: 'Routine data and submission schedule', benefit: 'Helps Scout place recurring submissions on the right dates and remind the right people earlier.', actionLabel: 'Open Data Hub'},
+            governing_board_schedule: {title: 'Governing Board meeting schedule', benefit: 'Makes committee dates, board reporting, and preparation reminders more accurate.', actionLabel: 'Add schedule'},
+            policy_review_cycle: {title: 'Policy review cycle', benefit: 'Lets Scout create reliable policy review reminders instead of estimating when reviews are due.', actionLabel: 'Add review cycle'}
+        };
+        return guidance[key] || {title: '', benefit: 'Helps Scout make the hospital\'s schedules, reminders, and recommendations more precise.', actionLabel: 'Add details'};
+    }
+
+    function scoutReadyCapabilities(run) {
+        var labels = {
+            master_reporting_schedule: 'Reporting schedule',
+            meeting_report_flow_map: 'Meeting and board flow',
+            survey_readiness_timeline: 'Survey readiness timeline',
+            active_monitoring_improvement_tasks: 'Monitoring tasks',
+            recurring_clinical_monitoring: 'Clinical monitoring',
+            active_improvement_projects: 'Improvement projects',
+            priority_queue: 'Priority queue',
+            plan_policy_tasks: 'Plan and policy reviews',
+            reminder_rules: 'Reminders'
+        };
+        return scoutWorkflowDefinitions().filter(function (definition) {
+            var group = findScoutGroup(run, definition);
+            return group && scoutGroupCounts(group).items > 0 && labels[definition.key];
+        }).map(function (definition) {
+            return labels[definition.key];
+        }).slice(0, 6);
+    }
+
+    function openScoutAttentionTarget(key) {
+        if (key === 'quality_improvement_projects' || key === 'aggregate_data_schedule') {
+            var homeUrl = String(config.homeUrl || '/').replace(/\/?$/, '/');
+            window.location.assign(homeUrl + 'data-hub/#dm');
+            return;
+        }
+        var targets = {
+            governing_board_schedule: {section: 'committees_reporting', question: 'committee_list'},
+            policy_review_cycle: {section: 'plans_policies_monitoring', question: 'annual_policy_review_cycle'}
+        };
+        var target = targets[key] || {section: 'hospital_director_info', question: ''};
+        activateSection('day-0-setup', true);
+        window.setTimeout(function () {
+            switchOnboardingStepBySection(target.section);
+            window.setTimeout(function () {
+                var field = target.question ? findOnboardingQuestionElement(target.question) : null;
+                if (!field) {
+                    scrollOnboardingStepToTop();
+                    return;
+                }
+                var disclosure = field.closest('details');
+                if (disclosure) {
+                    disclosure.open = true;
+                }
+                field.classList.add('qn-question-url-focus');
+                field.scrollIntoView({behavior: 'smooth', block: 'center'});
+                var control = field.querySelector('input:not([type="hidden"]), select, textarea, button');
+                if (control && typeof control.focus === 'function') {
+                    try {
+                        control.focus({preventScroll: true});
+                    } catch (error) {
+                        control.focus();
+                    }
+                }
+                window.setTimeout(function () {
+                    field.classList.remove('qn-question-url-focus');
+                }, 4200);
+            }, 160);
+        }, 80);
+    }
+
+    function updateScoutAttentionPreference(key, status, trigger) {
+        if (!key || !status || !state.onboardingOrganizationId || !canEditOnboarding()) {
+            return;
+        }
+        var restore = setButtonLoading(trigger, status === 'active' ? 'Restoring...' : 'Saving...');
+        api('/scout/attention-preference', {
+            method: 'POST',
+            body: {
+                organization_id: state.onboardingOrganizationId,
+                item_key: key,
+                status: status
+            }
+        }).then(function (result) {
+            state.onboarding.scout_attention_preferences = result.preferences || {};
+            renderScoutPreview();
+            showToast(status === 'confirmed' ? 'Assumption confirmed.' : (status === 'ignored' ? 'Moved to review later.' : 'Item restored.'), 'success');
+        }).catch(function (error) {
+            restore();
+            showToast(error.message || 'Scout could not save that choice.', 'error');
+        });
     }
 
     function parseScoutObjectText(raw) {
@@ -12136,6 +12307,22 @@
             if (clinicalGenerate) {
                 event.preventDefault();
                 generateScoutPreview(clinicalGenerate);
+                return;
+            }
+            var scoutAttentionOpen = event.target.closest('[data-scout-attention-open]');
+            if (scoutAttentionOpen) {
+                event.preventDefault();
+                openScoutAttentionTarget(scoutAttentionOpen.getAttribute('data-scout-attention-open'));
+                return;
+            }
+            var scoutAttentionPreference = event.target.closest('[data-scout-attention-preference]');
+            if (scoutAttentionPreference) {
+                event.preventDefault();
+                updateScoutAttentionPreference(
+                    scoutAttentionPreference.getAttribute('data-scout-attention-key'),
+                    scoutAttentionPreference.getAttribute('data-scout-attention-preference'),
+                    scoutAttentionPreference
+                );
                 return;
             }
             var sectionTarget = event.target.closest('[data-section-target]');
