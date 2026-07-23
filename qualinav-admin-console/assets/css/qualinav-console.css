@@ -6471,16 +6471,16 @@ body.qn-site-shell-console .qn-scout-attention-item {
     padding-top: 18px;
 }
 
-.qn-scout-attention-benefit {
+body.qn-site-shell-console .qn-scout-attention-benefit {
     align-items: flex-start;
     background: #f0f7fa;
     border-radius: 9px;
     color: #34576c;
     display: flex;
     font-size: 0.78rem;
-    gap: 7px;
+    gap: 10px;
     line-height: 1.45;
-    padding: 9px 10px;
+    padding: 12px 16px !important;
 }
 
 .qn-scout-attention-benefit .dashicons {
@@ -6702,15 +6702,15 @@ body.qn-site-shell-console .qn-scout-workflow-card {
     margin: 0;
 }
 
-.qn-scout-workflow-benefit {
+body.qn-site-shell-console .qn-scout-workflow-benefit {
     align-items: flex-start;
     background: #eef8f8;
     border-radius: 12px;
     color: #31576d;
     display: flex;
-    gap: 8px;
+    gap: 12px;
     line-height: 1.45;
-    padding: 11px 12px;
+    padding: 12px 16px !important;
 }
 
 .qn-scout-workflow-benefit > .dashicons {
