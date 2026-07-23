@@ -6735,14 +6735,14 @@ body.qn-site-shell-console .qn-scout-workflow-benefit {
     text-transform: uppercase;
 }
 
-.qn-scout-workflow-card-footer {
+body.qn-site-shell-console .qn-scout-workflow-card-footer {
     align-items: center;
     border-top: 1px solid #e5edf3;
     display: flex;
     gap: 12px;
     justify-content: space-between;
     margin-top: auto;
-    padding-top: 13px;
+    padding-top: 16px !important;
 }
 
 .qn-scout-workflow-card-footer .qn-button {
