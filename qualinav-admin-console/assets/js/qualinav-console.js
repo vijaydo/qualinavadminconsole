@@ -9232,11 +9232,13 @@
         var foldedOpen = !isAdditionalPlan && row.status === 'folded_into_another';
         var rowId = 'qn-policy-row-' + row.policy_key;
         var hasDocument = !!row.document_id && ['ready', 'ocr_required', 'queued', 'processing'].indexOf(row.upload_status) !== -1;
-        var documentStatus = row.upload_status === 'ready' ? 'Indexed for Scout' :
-            (row.upload_status === 'ocr_required' ? 'OCR needed' :
-            (['queued', 'processing'].indexOf(row.upload_status) !== -1 ? 'Indexing for Scout' :
-            (row.upload_status === 'failed' ? 'Indexing failed' : 'No document')));
+        var documentStatus = row.upload_status === 'ready' ? 'Ready' :
+            (row.upload_status === 'ocr_required' ? 'Needs readable text' :
+            (['queued', 'processing'].indexOf(row.upload_status) !== -1 ? 'Indexing…' :
+            (row.upload_status === 'failed' ? 'Needs attention' : 'No document')));
         var documentBusy = ['queued', 'processing'].indexOf(row.upload_status) !== -1;
+        var documentStatusClass = documentBusy ? ' qn-plan-policy-document-status-busy' :
+            (row.upload_status === 'ready' ? ' qn-plan-policy-document-status-ready' : '');
         var documentAction = documentBusy ? 'Document is indexing' : (hasDocument ? 'Replace document' : 'Upload document');
         var reusableDocuments = planPolicyReusableDocuments(row.policy_key);
         var uploadEnabled = documentUploadsEnabled() && canEditOnboarding() && !documentBusy;
@@ -9252,7 +9254,7 @@
         var documentControls = '<span class="qn-plan-policy-document-controls">' +
             documentActions +
             (documentUploadsEnabled() ? '<input type="file" hidden data-plan-policy-file="' + escapeHtml(row.policy_key) + '" accept=".pdf,.docx,.txt,.md,.html,.json,.jsonl">' : '') +
-            '<small class="qn-plan-policy-document-status">' + escapeHtml(documentStatus) + (row.document_name ? ': ' + escapeHtml(row.document_name) : '') + '</small>' +
+            '<small class="qn-plan-policy-document-status' + documentStatusClass + '"' + (row.document_name ? ' title="' + escapeHtml(row.document_name) + '"' : '') + '>' + escapeHtml(documentStatus) + '</small>' +
             '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="upload_status" value="' + escapeFieldValue(row.upload_status || 'not_configured') + '">' +
             '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="document_id" value="' + escapeFieldValue(row.document_id || '') + '">' +
             '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="document_name" value="' + escapeFieldValue(row.document_name || '') + '">' +
@@ -9301,7 +9303,7 @@
                 '<span>' + renderUsDateInput('data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="date_last_approved"', row.date_last_approved || '') + '</span>' +
                 '<span>' + (isAdditionalPlan ? '<span class="qn-status-pill qn-status-neutral">Additional plan</span><input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="status" value="in_place">' : renderPlanPolicyStatusSelect(row.policy_key, row.status || '')) + '</span>' +
                 documentControls +
-                '<span class="qn-plan-policy-guidance-preview">' + escapeHtml(row.guidance) + '<em>Notes &amp; linking options</em></span>' +
+                '<span class="qn-plan-policy-guidance-preview">' + escapeHtml(row.guidance) + '<em>Notes</em></span>' +
             '</summary>' +
             '<div class="qn-plan-policy-detail" id="' + escapeHtml(rowId) + '">' +
                 '<input type="hidden" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="policy_key" value="' + escapeFieldValue(row.policy_key) + '">' +
@@ -9525,13 +9527,8 @@
             return;
         }
         var targetWindow = browserWindow();
-        var preview = targetWindow ? targetWindow.open('about:blank', '_blank') : null;
-        if (preview) {
-            preview.opener = null;
-            preview.document.title = 'Opening document...';
-            preview.document.body.textContent = 'Opening your secure document...';
-        }
         var restoreButton = setButtonLoading(trigger, '');
+        setOnboardingSaveStatus('saving', 'Opening document...');
         api('/onboarding/plan-policy-document/view', {
             method: 'POST',
             body: {
@@ -9542,15 +9539,12 @@
             if (!result || !result.url) {
                 throw new Error('This document could not be opened securely.');
             }
-            if (preview) {
-                preview.location.replace(result.url);
-            } else {
-                showToast('Your browser blocked the document window. Allow pop-ups for QualiNav and try again.', 'warning');
+            if (!targetWindow) {
+                throw new Error('This document could not be opened in your browser.');
             }
+            targetWindow.location.assign(result.url);
         }).catch(function (error) {
-            if (preview) {
-                preview.close();
-            }
+            setOnboardingSaveStatus('error', 'Document could not be opened');
             showToast(error && error.message ? error.message : 'The document could not be opened.', 'warning');
         }).finally(function () {
             restoreButton();
