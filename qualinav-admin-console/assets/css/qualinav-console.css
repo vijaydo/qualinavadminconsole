@@ -6268,6 +6268,11 @@ textarea:focus-visible {
     padding: 18px 20px;
 }
 
+.qn-scout-attention {
+    gap: 20px;
+    padding: 26px 28px;
+}
+
 .qn-scout-persona-summary {
     background: linear-gradient(135deg, #eef7fb, #f8fafc);
     border: 1px solid #d0e8ea;
@@ -6299,9 +6304,9 @@ textarea:focus-visible {
     border: 1px solid var(--qn-border);
     border-radius: 16px;
     display: grid;
-    gap: 14px;
+    gap: 18px;
     min-width: 0;
-    padding: 18px;
+    padding: 22px !important;
 }
 
 .qn-scout-attention-group-missing {
@@ -6350,16 +6355,17 @@ textarea:focus-visible {
 
 .qn-scout-attention-list {
     display: grid;
-    gap: 10px;
+    gap: 14px;
 }
 
-.qn-scout-attention-item {
+body.qn-site-shell-console .qn-scout-attention-item {
     background: #ffffff;
     border: 1px solid #e3eaf0;
     border-radius: 12px;
     display: grid;
-    gap: 7px;
-    padding: 13px 14px;
+    box-shadow: 0 5px 16px rgba(30, 63, 83, 0.045);
+    gap: 9px;
+    padding: 17px 18px !important;
 }
 
 .qn-scout-attention-item strong {
@@ -11686,6 +11692,18 @@ body.qn-site-shell-console .qn-settings-summary-item {
 }
 
 @media (max-width: 700px) {
+    .qn-scout-attention {
+        padding: 18px;
+    }
+
+    .qn-scout-attention-grid .qn-scout-attention-group {
+        padding: 16px !important;
+    }
+
+    body.qn-site-shell-console .qn-scout-attention-item {
+        padding: 14px !important;
+    }
+
     .qn-reporting-action-strip > div {
         align-items: stretch;
         grid-template-columns: 1fr;
