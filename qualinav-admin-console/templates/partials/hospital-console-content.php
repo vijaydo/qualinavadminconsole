@@ -199,10 +199,10 @@ $shell_classes = 'qn-app-shell' . ($is_myorg_embedded_shell ? ' qn-myorg-app-she
                 <div class="qn-modal-panel qn-scout-detail-modal-panel">
                     <div class="qn-panel-header">
                         <div>
-                            <p class="qn-eyebrow"><?php esc_html_e('Scout Preview Details', 'qualinav-admin-console'); ?></p>
-                            <h2 id="qn-scout-detail-title"><?php esc_html_e('Preview details', 'qualinav-admin-console'); ?></h2>
+                            <p class="qn-eyebrow"><?php esc_html_e('Scout-prepared suggestions', 'qualinav-admin-console'); ?></p>
+                            <h2 id="qn-scout-detail-title"><?php esc_html_e('Prepared details', 'qualinav-admin-console'); ?></h2>
                         </div>
-                        <button class="qn-icon-button" type="button" data-close-scout-detail aria-label="<?php esc_attr_e('Close Scout details', 'qualinav-admin-console'); ?>"><span>&times;</span></button>
+                        <button class="qn-icon-button" type="button" data-close-scout-detail aria-label="<?php esc_attr_e('Close Scout suggestions', 'qualinav-admin-console'); ?>"><span>&times;</span></button>
                     </div>
                     <div class="qn-scout-detail-modal-body" id="qn-scout-detail-body"></div>
                 </div>

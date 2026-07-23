@@ -364,6 +364,12 @@ class QN_REST_API
             'callback' => array(__CLASS__, 'retry_scout_run'),
             'permission_callback' => array(__CLASS__, 'can_read_me'),
         ));
+
+        register_rest_route(self::NAMESPACE, '/scout/runs/(?P<id>\d+)/review', array(
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => array(__CLASS__, 'review_scout_run_section'),
+            'permission_callback' => array(__CLASS__, 'can_read_me'),
+        ));
     }
 
     public static function can_read_me()
@@ -1486,6 +1492,30 @@ class QN_REST_API
         return is_wp_error($retry) ? $retry : rest_ensure_response(array(
             'run' => $retry,
             'preview' => isset($retry['preview']) ? $retry['preview'] : null,
+        ));
+    }
+
+    public static function review_scout_run_section(WP_REST_Request $request)
+    {
+        $run = QN_Scout::get_run(absint($request['id']));
+        if (!$run) {
+            return new WP_Error('qn_scout_run_not_found', __('Scout run not found.', 'qualinav-admin-console'), array('status' => 404));
+        }
+
+        if (!QN_Scout::can_generate(get_current_user_id(), $run['organization_id'])) {
+            return new WP_Error('qn_scout_review_forbidden', __('You cannot confirm Scout suggestions for this hospital.', 'qualinav-admin-console'), array('status' => 403));
+        }
+
+        $payload = $request->get_json_params();
+        $payload = is_array($payload) ? $payload : array();
+        $reviewed = QN_Scout::review_section(
+            $run['id'],
+            isset($payload['group_key']) ? $payload['group_key'] : '',
+            get_current_user_id()
+        );
+
+        return is_wp_error($reviewed) ? $reviewed : rest_ensure_response(array(
+            'run' => $reviewed,
         ));
     }
 

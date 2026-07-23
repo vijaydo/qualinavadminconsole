@@ -5309,9 +5309,10 @@
             return '';
         }
         var status = scoutGroupStatus(group, counts);
+        var review = scoutReviewForGroup(run, group);
         var preview = scoutGroupPreviewContent(definition, group, counts);
         return '<article class="qn-scout-workflow-card qn-scout-card-' + escapeHtml(status.tone) + '">' +
-            '<div class="qn-scout-workflow-card-header"><span class="dashicons ' + scoutIcon(definition.key) + '"></span><div><h4>' + escapeHtml(definition.title) + '</h4><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(status.tone) + '">' + escapeHtml(status.label === 'Ready' ? 'Prepared by Scout' : status.label) + '</span></div></div>' +
+            '<div class="qn-scout-workflow-card-header"><span class="dashicons ' + scoutIcon(definition.key) + '"></span><div><h4>' + escapeHtml(definition.title) + '</h4><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(review ? 'success' : status.tone) + '">' + escapeHtml(review ? 'Reviewed' : (status.label === 'Ready' ? 'Prepared by Scout' : status.label)) + '</span></div></div>' +
             '<p class="qn-scout-workflow-summary">' + escapeHtml(preview.summary) + '</p>' +
             '<div class="qn-scout-workflow-benefit"><span class="dashicons dashicons-lightbulb"></span><span><b>Why this helps:</b> ' + escapeHtml(definition.benefit) + '</span></div>' +
             (preview.examples.length ? '<div class="qn-scout-prepared"><span>Scout prepared</span><ul class="qn-scout-card-examples">' + preview.examples.map(function (example) { return '<li>' + escapeHtml(example) + '</li>'; }).join('') + '</ul></div>' : '') +
@@ -5376,6 +5377,13 @@
             return {label: 'Needs review', tone: 'warning'};
         }
         return {label: 'Ready', tone: 'success'};
+    }
+
+    function scoutReviewForGroup(run, group) {
+        var key = group && group.key ? String(group.key) : '';
+        var reviews = run && run.reviews && typeof run.reviews === 'object' ? run.reviews : {};
+        var review = key && reviews[key] && typeof reviews[key] === 'object' ? reviews[key] : null;
+        return review && review.status === 'reviewed' ? review : null;
     }
 
     function scoutGroupPreviewText(group, status) {
@@ -5494,22 +5502,22 @@
 
     function scoutWorkflowDefinitions() {
         return [
-            {key: 'priority_queue', title: 'Priority Queue', category: 'priorities', actionLabel: 'Review priorities', benefit: 'Shows the Quality Director what deserves attention first instead of searching across the workspace.'},
-            {key: 'persona_experience_summary', title: 'Quality Director Workspace', category: 'priorities', actionLabel: 'Review workspace', benefit: 'Tailors Scout’s draft to this hospital and the Quality Director role.'},
-            {key: 'master_reporting_schedule', title: 'Reporting Schedule', aliases: ['reporting_schedule'], category: 'coordination', actionLabel: 'Review schedule', benefit: 'Brings due dates, owners, and preparation work into one reviewable schedule.'},
-            {key: 'meeting_report_flow_map', title: 'Meeting & Report Flow', aliases: ['committee_flow_map'], category: 'coordination', actionLabel: 'Review flow', benefit: 'Clarifies where reports go, who reviews them, and when board preparation should begin.'},
-            {key: 'aggregate_data_uploads', title: 'Data Submissions', category: 'coordination', actionLabel: 'Review submissions', benefit: 'Keeps recurring state, registry, and program submissions visible before they become urgent.'},
-            {key: 'routine_task_rhythm', title: 'Recurring Work Rhythm', category: 'coordination', actionLabel: 'Review routine work', benefit: 'Turns repeating quality work into a predictable monthly and quarterly rhythm.'},
-            {key: 'reminder_rules', title: 'Reminder Rules', category: 'coordination', actionLabel: 'Review reminders', benefit: 'Prompts the right people early enough to prepare, review, and submit work.'},
-            {key: 'active_monitoring_improvement_tasks', title: 'Monitoring & Improvement Work', aliases: ['clinical_monitoring_tasks'], category: 'improvement', actionLabel: 'Review work', benefit: 'Converts quality concerns into visible work with follow-up instead of one-time notes.'},
-            {key: 'recurring_clinical_monitoring', title: 'Clinical Monitoring', category: 'improvement', actionLabel: 'Review monitoring', benefit: 'Keeps recurring clinical reviews visible between committees and surveys.'},
-            {key: 'active_improvement_projects', title: 'QI Projects', aliases: ['qi_project_milestones'], category: 'improvement', actionLabel: 'Review projects', benefit: 'Connects improvement goals, owners, milestones, and progress checks.'},
-            {key: 'survey_readiness_timeline', title: 'Survey Readiness', category: 'readiness', actionLabel: 'Review timeline', benefit: 'Makes readiness work visible throughout the year instead of only before a survey.'},
-            {key: 'plan_policy_tasks', title: 'Plans & Policies', category: 'readiness', actionLabel: 'Review plans', benefit: 'Highlights reviews and follow-up needed to keep core plans and policies current.'},
-            {key: 'regulatory_monitoring_preferences', title: 'Regulatory Monitoring', category: 'readiness', actionLabel: 'Review monitoring', benefit: 'Focuses regulatory updates on the programs and requirements relevant to this hospital.'},
-            {key: 'external_contact_directory', title: 'External Contacts', category: 'readiness', actionLabel: 'Review contacts', benefit: 'Keeps important agency, program, and partner contacts easy to find when needed.'},
-            {key: 'first_30_days_learning_journey', title: 'First 30 Days', category: 'readiness', actionLabel: 'Review learning plan', benefit: 'Gives a new Quality Director a practical sequence instead of an unstructured list.'},
-            {key: 'learning_journey', title: 'Learning Journey', category: 'readiness', actionLabel: 'Review learning plan', benefit: 'Organizes role-specific learning into manageable next steps.'}
+            {key: 'priority_queue', title: 'Priority Queue', category: 'priorities', actionLabel: 'View priorities', benefit: 'Shows the Quality Director what deserves attention first instead of searching across the workspace.'},
+            {key: 'persona_experience_summary', title: 'Quality Director Workspace', category: 'priorities', actionLabel: 'View workspace', benefit: 'Tailors Scout’s suggestions to this hospital and the Quality Director role.'},
+            {key: 'master_reporting_schedule', title: 'Reporting Schedule', aliases: ['reporting_schedule'], category: 'coordination', actionLabel: 'View schedule', benefit: 'Brings due dates, owners, and preparation work into one reviewable schedule.'},
+            {key: 'meeting_report_flow_map', title: 'Meeting & Report Flow', aliases: ['committee_flow_map'], category: 'coordination', actionLabel: 'View flow', benefit: 'Clarifies where reports go, who reviews them, and when board preparation should begin.'},
+            {key: 'aggregate_data_uploads', title: 'Data Submissions', category: 'coordination', actionLabel: 'View submissions', benefit: 'Keeps recurring state, registry, and program submissions visible before they become urgent.'},
+            {key: 'routine_task_rhythm', title: 'Recurring Work Rhythm', category: 'coordination', actionLabel: 'View routine work', benefit: 'Turns repeating quality work into a predictable monthly and quarterly rhythm.'},
+            {key: 'reminder_rules', title: 'Reminder Rules', category: 'coordination', actionLabel: 'View reminders', benefit: 'Prompts the right people early enough to prepare, review, and submit work.'},
+            {key: 'active_monitoring_improvement_tasks', title: 'Monitoring & Improvement Work', aliases: ['clinical_monitoring_tasks'], category: 'improvement', actionLabel: 'View work', benefit: 'Converts quality concerns into visible work with follow-up instead of one-time notes.'},
+            {key: 'recurring_clinical_monitoring', title: 'Clinical Monitoring', category: 'improvement', actionLabel: 'View monitoring', benefit: 'Keeps recurring clinical reviews visible between committees and surveys.'},
+            {key: 'active_improvement_projects', title: 'QI Projects', aliases: ['qi_project_milestones'], category: 'improvement', actionLabel: 'View projects', benefit: 'Connects improvement goals, owners, milestones, and progress checks.'},
+            {key: 'survey_readiness_timeline', title: 'Survey Readiness', category: 'readiness', actionLabel: 'View timeline', benefit: 'Makes readiness work visible throughout the year instead of only before a survey.'},
+            {key: 'plan_policy_tasks', title: 'Plans & Policies', category: 'readiness', actionLabel: 'View plans', benefit: 'Highlights reviews and follow-up needed to keep core plans and policies current.'},
+            {key: 'regulatory_monitoring_preferences', title: 'Regulatory Monitoring', category: 'readiness', actionLabel: 'View monitoring', benefit: 'Focuses regulatory updates on the programs and requirements relevant to this hospital.'},
+            {key: 'external_contact_directory', title: 'External Contacts', category: 'readiness', actionLabel: 'View contacts', benefit: 'Keeps important agency, program, and partner contacts easy to find when needed.'},
+            {key: 'first_30_days_learning_journey', title: 'First 30 Days', category: 'readiness', actionLabel: 'View learning plan', benefit: 'Gives a new Quality Director a practical sequence instead of an unstructured list.'},
+            {key: 'learning_journey', title: 'Learning Journey', category: 'readiness', actionLabel: 'View learning plan', benefit: 'Organizes role-specific learning into manageable next steps.'}
         ];
     }
 
@@ -5728,7 +5736,7 @@
         var definition = scoutDefinitionByKey(key);
         var group = findScoutGroup(state.latestScoutRun, definition);
         title.textContent = definition.title;
-        body.innerHTML = renderScoutDetailBody(definition, group);
+        body.innerHTML = renderScoutDetailBody(definition, group, state.latestScoutRun);
         modal.hidden = false;
     }
 
@@ -5739,20 +5747,111 @@
         }
     }
 
-    function renderScoutDetailBody(definition, group) {
+    function renderScoutDetailBody(definition, group, run) {
         if (!group) {
             return '<section class="qn-scout-detail-section"><span class="qn-scout-status-badge qn-scout-status-neutral">Not returned</span><p>Scout did not return structured content for this section in the latest preview.</p></section>';
         }
         var items = Array.isArray(group.items) ? group.items : [];
+        var review = scoutReviewForGroup(run, group);
+        var counts = scoutGroupCounts(group);
+        var status = scoutGroupStatus(group, counts);
+        var summary = group.summary || group.description || ('Scout prepared ' + items.length + (items.length === 1 ? ' suggestion' : ' suggestions') + ' for this area.');
+        var reviewNote = review
+            ? '<div class="qn-scout-review-confirmation"><span class="dashicons dashicons-yes-alt"></span><div><strong>Reviewed</strong><span>' + escapeHtml(scoutReviewDescription(review)) + '</span></div></div>'
+            : '<p class="qn-scout-review-guidance">Opening these suggestions does not change their status. When you are comfortable with them, select <strong>Mark as reviewed</strong>.</p>';
         return '<section class="qn-scout-detail-section">' +
-            '<span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(scoutGroupStatus(group, scoutGroupCounts(group)).tone) + '">' + escapeHtml(scoutGroupStatus(group, scoutGroupCounts(group)).label) + '</span>' +
-            (group.summary || group.description ? '<p>' + escapeHtml(describeScoutItem(group.summary || group.description)) + '</p>' : '') +
-            (items.length ? renderScoutReadableValue(items) : '<p class="qn-muted-note">No item-level details were returned.</p>') +
-            renderScoutDetailList('Warnings', group.warnings || group.warning || []) +
-            renderScoutDetailList('Missing inputs', group.missing_inputs || group.missing || []) +
-            (group.sources ? '<h4>Sources</h4>' + renderScoutReadableValue(group.sources) : '') +
+            '<div class="qn-scout-review-intro"><span class="dashicons ' + scoutIcon(definition.key) + '"></span><div><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(review ? 'success' : status.tone) + '">' + escapeHtml(review ? 'Reviewed' : (status.label === 'Ready' ? 'Prepared by Scout' : status.label)) + '</span><p>' + escapeHtml(describeScoutItem(summary)) + '</p></div></div>' +
+            (items.length ? '<div class="qn-scout-review-list">' + items.map(function (item, index) { return renderScoutReviewItem(item, index); }).join('') + '</div>' : '<p class="qn-muted-note">Scout did not return individual suggestions for this area.</p>') +
+            renderScoutDetailList('Please check', group.warnings || group.warning || []) +
+            renderScoutDetailList('Information that would help', group.missing_inputs || group.missing || []) +
+            reviewNote +
+            '<div class="qn-scout-review-footer">' +
+            (!review && state.scoutCanGenerate ? '<button class="qn-button qn-button-primary" type="button" data-scout-mark-reviewed="' + escapeHtml(group.key) + '"><span class="dashicons dashicons-yes-alt"></span>Mark as reviewed</button>' : '') +
+            '<button class="qn-button qn-button-secondary" type="button" data-close-scout-detail>Close</button></div>' +
             (isGlobalAdmin() ? '<details class="qn-scout-raw-details"><summary>View raw response</summary><pre>' + escapeHtml(JSON.stringify(group, null, 2)) + '</pre></details>' : '') +
             '</section>';
+    }
+
+    function renderScoutReviewItem(item, index) {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) {
+            return '<section class="qn-scout-review-item"><div class="qn-scout-review-item-head"><span>' + (index + 1) + '</span><h3>' + escapeHtml(describeScoutItem(item)) + '</h3></div></section>';
+        }
+        var title = scoutItemTitle(item) || ('Suggestion ' + (index + 1));
+        var description = scoutFirstKnown(item, ['description', 'detail', 'action', 'recommendation', 'summary']);
+        var rationale = scoutFirstKnown(item, ['rationale', 'reason', 'why_it_matters']);
+        var evidence = scoutEvidenceBasis(item.evidence_basis || item.based_on || '');
+        var priority = scoutFirstKnown(item, ['priority', 'urgency']);
+        var facts = scoutReviewFacts(item);
+        return '<section class="qn-scout-review-item">' +
+            '<div class="qn-scout-review-item-head"><span>' + (index + 1) + '</span><div><h3>' + escapeHtml(title) + '</h3>' + (priority ? '<span class="qn-scout-review-priority">' + escapeHtml(formatScoutValue(priority, '')) + ' priority</span>' : '') + '</div></div>' +
+            (description ? '<p class="qn-scout-review-description">' + escapeHtml(describeScoutItem(description)) + '</p>' : '') +
+            (rationale ? '<div class="qn-scout-review-why"><span class="dashicons dashicons-lightbulb"></span><span><strong>Why this helps:</strong> ' + escapeHtml(describeScoutItem(rationale)) + '</span></div>' : '') +
+            (facts.length ? '<dl class="qn-scout-review-facts">' + facts.map(function (fact) { return '<div><dt>' + escapeHtml(fact.label) + '</dt><dd>' + escapeHtml(fact.value) + '</dd></div>'; }).join('') + '</dl>' : '') +
+            (evidence ? '<p class="qn-scout-review-source"><span class="dashicons dashicons-info-outline"></span>Based on ' + escapeHtml(evidence) + '</p>' : '') +
+            '</section>';
+    }
+
+    function scoutFirstKnown(item, keys) {
+        for (var i = 0; i < keys.length; i += 1) {
+            if (scoutKnownValue(item[keys[i]])) {
+                return item[keys[i]];
+            }
+        }
+        return '';
+    }
+
+    function scoutReviewFacts(item) {
+        var fields = [
+            ['owner', 'Owner'], ['frequency', 'Frequency'], ['cadence', 'Frequency'],
+            ['timeframe', 'Timeframe'], ['due_date', 'Due date'], ['date', 'Date'],
+            ['committee', 'Committee'], ['destination', 'Goes to'], ['review_body', 'Reviewed by'],
+            ['status', 'Current status'], ['lead_time', 'Preparation time']
+        ];
+        var used = {};
+        return fields.reduce(function (facts, field) {
+            var value = scoutKnownValue(item[field[0]]);
+            if (!value || used[field[1]]) {
+                return facts;
+            }
+            used[field[1]] = true;
+            facts.push({label: field[1], value: describeScoutItem(value)});
+            return facts;
+        }, []);
+    }
+
+    function scoutReviewDescription(review) {
+        var by = review.reviewed_by_name ? ' by ' + review.reviewed_by_name : '';
+        var when = '';
+        if (review.reviewed_at) {
+            var date = new Date(String(review.reviewed_at).replace(' ', 'T') + 'Z');
+            if (!isNaN(date.getTime())) {
+                when = ' on ' + date.toLocaleString([], {dateStyle: 'medium', timeStyle: 'short'});
+            }
+        }
+        return 'Marked as reviewed' + by + when + '.';
+    }
+
+    function markScoutSectionReviewed(button) {
+        var run = state.latestScoutRun;
+        var key = button ? button.getAttribute('data-scout-mark-reviewed') : '';
+        if (!run || !run.id || !key || button.disabled) {
+            return;
+        }
+        button.disabled = true;
+        button.innerHTML = '<span class="dashicons dashicons-update"></span>Saving...';
+        api('/scout/runs/' + encodeURIComponent(run.id) + '/review', {method: 'POST', body: {group_key: key}}).then(function (result) {
+            state.latestScoutRun = result.run || state.latestScoutRun;
+            state.scoutRuns = state.scoutRuns.map(function (existingRun) {
+                return String(existingRun.id) === String(state.latestScoutRun.id) ? state.latestScoutRun : existingRun;
+            });
+            renderScoutPreview();
+            openScoutDetails(key);
+            showToast('Marked as reviewed.', 'success');
+        }).catch(function (error) {
+            button.disabled = false;
+            button.innerHTML = '<span class="dashicons dashicons-yes-alt"></span>Mark as reviewed';
+            showToast(error.message || 'Could not save this review. Please try again.', 'warning');
+        });
     }
 
     function renderScoutDetailList(title, items) {
@@ -12975,6 +13074,12 @@
             var scoutDetails = event.target.closest('[data-scout-details]');
             if (scoutDetails) {
                 openScoutDetails(scoutDetails.getAttribute('data-scout-details'));
+                return;
+            }
+            var scoutMarkReviewed = event.target.closest('[data-scout-mark-reviewed]');
+            if (scoutMarkReviewed) {
+                markScoutSectionReviewed(scoutMarkReviewed);
+                return;
             }
             if (event.target.closest('[data-close-scout-detail]')) {
                 closeScoutDetails();

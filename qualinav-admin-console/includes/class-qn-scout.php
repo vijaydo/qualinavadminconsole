@@ -331,6 +331,70 @@ class QN_Scout
         return self::generate_for_organization($run['organization_id'], $user_id);
     }
 
+    public static function review_section($run_id, $group_key, $user_id)
+    {
+        global $wpdb;
+
+        $run_id = absint($run_id);
+        $group_key = sanitize_key($group_key);
+        $user_id = absint($user_id);
+        $run = self::get_run($run_id);
+        if (!$run) {
+            return new WP_Error('qn_scout_run_not_found', __('Scout run not found.', 'qualinav-admin-console'), array('status' => 404));
+        }
+        if (!$group_key || !$user_id) {
+            return new WP_Error('qn_scout_review_invalid', __('Scout could not save this review.', 'qualinav-admin-console'), array('status' => 400));
+        }
+        if (!self::can_generate($user_id, $run['organization_id'])) {
+            return new WP_Error('qn_scout_review_forbidden', __('You cannot confirm Scout suggestions for this hospital.', 'qualinav-admin-console'), array('status' => 403));
+        }
+
+        $group_exists = false;
+        foreach ((array) ($run['preview']['groups'] ?? array()) as $group) {
+            if (is_array($group) && sanitize_key((string) ($group['key'] ?? '')) === $group_key) {
+                $group_exists = true;
+                break;
+            }
+        }
+        if (!$group_exists) {
+            return new WP_Error('qn_scout_review_group_not_found', __('This Scout section is not part of the current preview.', 'qualinav-admin-console'), array('status' => 404));
+        }
+
+        $reviews = isset($run['reviews']) && is_array($run['reviews']) ? $run['reviews'] : array();
+        $user = get_userdata($user_id);
+        $reviews[$group_key] = array(
+            'status' => 'reviewed',
+            'reviewed_by' => $user_id,
+            'reviewed_by_name' => $user ? sanitize_text_field($user->display_name) : __('Hospital user', 'qualinav-admin-console'),
+            'reviewed_at' => current_time('mysql', true),
+        );
+
+        $updated = $wpdb->update(
+            QN_DB::scout_runs_table(),
+            array(
+                'review_json' => wp_json_encode($reviews),
+                'updated_at' => current_time('mysql'),
+            ),
+            array('id' => $run_id),
+            array('%s', '%s'),
+            array('%d')
+        );
+        if ($updated === false) {
+            return new WP_Error('qn_scout_review_save_failed', __('Scout could not save this review. Please try again.', 'qualinav-admin-console'), array('status' => 500));
+        }
+
+        QN_Audit_Log::log(
+            'scout_section_reviewed',
+            'scout_run',
+            $run_id,
+            null,
+            array('group_key' => $group_key, 'status' => 'reviewed', 'reviewed_by' => $user_id),
+            $run['organization_id']
+        );
+
+        return self::get_run($run_id);
+    }
+
     public static function extract_preview_summary($response)
     {
         if (is_string($response)) {
@@ -658,6 +722,7 @@ class QN_Scout
     private static function normalize_run_row($row)
     {
         $response = !empty($row['response_json']) ? json_decode($row['response_json'], true) : null;
+        $reviews = !empty($row['review_json']) ? json_decode($row['review_json'], true) : array();
         $request_payload = !empty($row['request_payload_json']) ? json_decode($row['request_payload_json'], true) : array();
         $normalized = $response ? self::normalize_scout_response($response) : array(
             'preview' => self::extract_preview_summary(array()),
@@ -680,6 +745,7 @@ class QN_Scout
             'generated_by' => $row['generated_by'] !== null ? absint($row['generated_by']) : null,
             'created_at' => $row['created_at'],
             'updated_at' => $row['updated_at'],
+            'reviews' => is_array($reviews) ? self::sanitize_deep($reviews) : array(),
             'response' => $response,
             'preview' => isset($normalized['preview']) ? $normalized['preview'] : self::extract_preview_summary($response),
             'warnings' => isset($normalized['warnings']) ? $normalized['warnings'] : array(),

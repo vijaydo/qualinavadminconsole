@@ -14,6 +14,7 @@ class QN_Activator
         }
 
         self::create_org_setup_tables();
+        self::create_scout_runs_table();
         QN_Questionnaire::seed_default_questionnaire();
         update_option('qn_admin_console_version', QN_ADMIN_CONSOLE_VERSION, false);
     }
@@ -539,6 +540,7 @@ class QN_Activator
             input_data_type VARCHAR(160) NULL,
             request_payload_json LONGTEXT NULL,
             response_json LONGTEXT NULL,
+            review_json LONGTEXT NULL,
             status VARCHAR(30) NOT NULL DEFAULT 'pending',
             api_request_id VARCHAR(160) NULL,
             source_count INT NULL,
