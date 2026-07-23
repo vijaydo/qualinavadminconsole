@@ -172,6 +172,9 @@ class QN_Onboarding
         } else {
             self::update_organization_onboarding_columns($organization_id, $was_submitted ? 'submitted' : 'in_progress');
         }
+        if (!empty($non_confirmation_changes) && class_exists('QN_Scout')) {
+            QN_Scout::mark_source_changes($organization_id, $step_key, $non_confirmation_changes, $user_id);
+        }
         QN_Audit_Log::log('onboarding_saved', 'organization', $organization_id, null, array('step_key' => $step_key, 'answers' => array_keys($answers)), $organization_id);
 
         return array(

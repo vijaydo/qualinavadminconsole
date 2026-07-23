@@ -6150,6 +6150,8 @@ textarea:focus-visible {
 .qn-scout-status-action {
     align-items: center;
     display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
 }
 
 .qn-scout-status-badge,
@@ -7180,6 +7182,21 @@ body.qn-site-shell-console .qn-scout-review-item {
     gap: 7px;
 }
 
+.qn-scout-review-item-actions {
+    align-items: center;
+    border-top: 1px solid var(--qn-border);
+    color: #607286;
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.82rem;
+    gap: 10px 12px;
+    padding-top: 14px;
+}
+
+.qn-scout-review-item-actions .qn-button {
+    gap: 7px;
+}
+
 .qn-scout-review-guidance {
     background: #f8fafc;
     border-left: 4px solid #7bc7c2;
@@ -7206,6 +7223,65 @@ body.qn-site-shell-console .qn-scout-review-item {
 .qn-scout-review-confirmation span:last-child {
     color: #427052;
     font-size: 0.86rem;
+}
+
+.qn-scout-review-refresh,
+.qn-scout-review-later {
+    background: #fff8df;
+    border-color: #efd886;
+    color: #785300;
+}
+
+.qn-scout-review-refresh span:last-child,
+.qn-scout-review-later span:last-child {
+    color: #785f24;
+}
+
+.qn-scout-review-dismissed {
+    background: #f5f7fa;
+    border-color: #dce4ec;
+    color: #41576c;
+}
+
+.qn-scout-dismissed-sections {
+    background: #f8fafc;
+    border: 1px solid var(--qn-border);
+    border-radius: 16px;
+    margin-top: 18px;
+    padding: 16px 18px;
+}
+
+.qn-scout-dismissed-sections summary {
+    color: var(--qn-text);
+    cursor: pointer;
+    font-weight: 800;
+}
+
+.qn-scout-dismissed-sections > div {
+    display: grid;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.qn-scout-dismissed-sections > div > div {
+    align-items: center;
+    background: #fff;
+    border: 1px solid var(--qn-border);
+    border-radius: 12px;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    padding: 12px 14px;
+}
+
+.qn-scout-dismissed-sections > div > div > span {
+    display: grid;
+    gap: 3px;
+}
+
+.qn-scout-dismissed-sections > div > div > div {
+    display: flex;
+    gap: 8px;
 }
 
 .qn-scout-review-footer {

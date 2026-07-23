@@ -4879,6 +4879,7 @@
 
     function renderScoutCompleted(run) {
         var workflowGroups = renderScoutWorkflowGroups(run);
+        var dismissedSections = renderScoutDismissedSections(run);
         var workflowList = workflowGroups ?
             '<div class="qn-scout-workflow-groups">' + workflowGroups + '</div>' :
             '<div class="qn-empty-state"><span class="dashicons dashicons-lightbulb"></span><h3>No workflow sections returned</h3><p>Scout did not return structured workflow sections for this preview.</p></div>';
@@ -4886,7 +4887,7 @@
             renderScoutPersonaContext(run) +
             renderScoutAttentionPanel(run) +
             '<section class="qn-scout-workflow-section"><div class="qn-section-toolbar qn-scout-workflow-heading"><div><p class="qn-eyebrow">Your Scout workspace</p><h3>What Scout prepared for your hospital</h3><p>Review the areas that matter now. Each section shows what Scout prepared, why it helps, and where to review it.</p></div></div>' +
-            workflowList + '</section>' +
+            workflowList + dismissedSections + '</section>' +
             renderScoutSources(scoutSources(run));
     }
 
@@ -4918,7 +4919,11 @@
             return state.scoutCanGenerate ? '<button class="qn-button qn-button-primary" type="button" data-retry-scout="' + escapeHtml(run.id) + '">Retry Generation</button>' : '';
         }
         if (run.status === 'completed') {
-            return '<button class="qn-button qn-button-primary" type="button" data-scout-open-latest>Open Latest Preview</button>';
+            if (scoutSourceChange(run)) {
+                return state.scoutCanGenerate ? '<button class="qn-button qn-button-primary" type="button" data-retry-scout="' + escapeHtml(run.id) + '">Refresh Scout Preview</button>' : '';
+            }
+            return '<button class="qn-button qn-button-primary" type="button" data-scout-open-latest>Review sections</button>' +
+                (state.scoutCanGenerate ? '<button class="qn-button qn-button-secondary" type="button" data-retry-scout="' + escapeHtml(run.id) + '">Refresh from latest data</button>' : '');
         }
         return '';
     }
@@ -4939,6 +4944,9 @@
         }
         if (run.status === 'running' || run.status === 'pending') {
             return {label: 'Generating', tone: 'warning', detail: 'Scout is preparing setup recommendations.'};
+        }
+        if (scoutSourceChange(run)) {
+            return {label: 'Needs refresh', tone: 'warning', detail: 'Hospital information changed after this preview was prepared. Refresh Scout to use the latest saved information.'};
         }
         return {label: 'Prepared', tone: 'success', detail: 'Scout prepared your hospital-specific workspace. Review the sections below before using them.'};
     }
@@ -5313,10 +5321,16 @@
             return '';
         }
         var status = scoutGroupStatus(group, counts);
-        var review = scoutReviewForGroup(run, group);
+        var sectionState = scoutSectionStateForGroup(run, group);
+        if (sectionState && sectionState.status === 'dismissed') {
+            return '';
+        }
+        var needsRefresh = scoutGroupNeedsRefresh(run, group);
         var preview = scoutGroupPreviewContent(definition, group, counts);
+        var displayLabel = needsRefresh ? 'Needs refresh' : (sectionState && sectionState.status === 'reviewed' ? 'Reviewed' : (sectionState && sectionState.status === 'later' ? 'Review later' : (status.label === 'Ready' ? 'Prepared by Scout' : status.label)));
+        var displayTone = needsRefresh || (sectionState && sectionState.status === 'later') ? 'warning' : (sectionState && sectionState.status === 'reviewed' ? 'success' : status.tone);
         return '<article class="qn-scout-workflow-card qn-scout-card-' + escapeHtml(status.tone) + '">' +
-            '<div class="qn-scout-workflow-card-header"><span class="dashicons ' + scoutIcon(definition.key) + '"></span><div><h4>' + escapeHtml(definition.title) + '</h4><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(review ? 'success' : status.tone) + '">' + escapeHtml(review ? 'Reviewed' : (status.label === 'Ready' ? 'Prepared by Scout' : status.label)) + '</span></div></div>' +
+            '<div class="qn-scout-workflow-card-header"><span class="dashicons ' + scoutIcon(definition.key) + '"></span><div><h4>' + escapeHtml(definition.title) + '</h4><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(displayTone) + '">' + escapeHtml(displayLabel) + '</span></div></div>' +
             '<p class="qn-scout-workflow-summary">' + escapeHtml(preview.summary) + '</p>' +
             '<div class="qn-scout-workflow-benefit"><span class="dashicons dashicons-lightbulb"></span><span><b>Why this helps:</b> ' + escapeHtml(definition.benefit) + '</span></div>' +
             (preview.examples.length ? '<div class="qn-scout-prepared"><span>Scout prepared</span><ul class="qn-scout-card-examples">' + preview.examples.map(function (example) { return '<li>' + escapeHtml(example) + '</li>'; }).join('') + '</ul></div>' : '') +
@@ -5347,6 +5361,21 @@
             }
             return '<section class="qn-scout-workflow-group"><div class="qn-scout-workflow-group-heading"><div><p class="qn-eyebrow">' + escapeHtml(category.title) + '</p><p>' + escapeHtml(category.description) + '</p></div><span>' + escapeHtml(String(cards.length)) + (cards.length === 1 ? ' area' : ' areas') + '</span></div><div class="qn-scout-workflow-list">' + cards.join('') + '</div></section>';
         }).filter(Boolean).join('');
+    }
+
+    function renderScoutDismissedSections(run) {
+        var dismissed = scoutWorkflowDefinitions().map(function (definition) {
+            var group = findScoutGroup(run, definition);
+            var sectionState = scoutSectionStateForGroup(run, group);
+            if (!group || !sectionState || sectionState.status !== 'dismissed') {
+                return '';
+            }
+            return '<div><span><strong>' + escapeHtml(definition.title) + '</strong><small>Dismissed from this preview</small></span><div><button class="qn-button qn-button-small qn-button-quiet" type="button" data-scout-details="' + escapeHtml(definition.key) + '">View</button><button class="qn-button qn-button-small qn-button-secondary" type="button" data-scout-review-status="active" data-scout-review-group="' + escapeHtml(group.key) + '">Restore</button></div></div>';
+        }).filter(Boolean);
+        if (!dismissed.length) {
+            return '';
+        }
+        return '<details class="qn-scout-dismissed-sections"><summary>' + escapeHtml(dismissed.length + (dismissed.length === 1 ? ' dismissed section' : ' dismissed sections')) + '</summary><div>' + dismissed.join('') + '</div></details>';
     }
 
     function findScoutGroup(run, definition) {
@@ -5383,11 +5412,23 @@
         return {label: 'Ready', tone: 'success'};
     }
 
-    function scoutReviewForGroup(run, group) {
+    function scoutSectionStateForGroup(run, group) {
         var key = group && group.key ? String(group.key) : '';
         var reviews = run && run.reviews && typeof run.reviews === 'object' ? run.reviews : {};
         var review = key && reviews[key] && typeof reviews[key] === 'object' ? reviews[key] : null;
-        return review && review.status === 'reviewed' ? review : null;
+        return review && ['reviewed', 'later', 'dismissed'].indexOf(review.status) !== -1 ? review : null;
+    }
+
+    function scoutSourceChange(run) {
+        var reviews = run && run.reviews && typeof run.reviews === 'object' ? run.reviews : {};
+        var change = reviews._source_change && typeof reviews._source_change === 'object' ? reviews._source_change : null;
+        return change && change.status === 'needs_refresh' ? change : null;
+    }
+
+    function scoutGroupNeedsRefresh(run, group) {
+        var change = scoutSourceChange(run);
+        var affected = change && Array.isArray(change.affected_groups) ? change.affected_groups : [];
+        return !!(group && affected.indexOf(group.key) !== -1);
     }
 
     function scoutGroupPreviewText(group, status) {
@@ -5756,31 +5797,35 @@
             return '<section class="qn-scout-detail-section"><span class="qn-scout-status-badge qn-scout-status-neutral">Not returned</span><p>Scout did not return structured content for this section in the latest preview.</p></section>';
         }
         var items = Array.isArray(group.items) ? group.items : [];
-        var review = scoutReviewForGroup(run, group);
+        var sectionState = scoutSectionStateForGroup(run, group);
+        var needsRefresh = scoutGroupNeedsRefresh(run, group);
         var counts = scoutGroupCounts(group);
         var status = scoutGroupStatus(group, counts);
         var copy = scoutReviewCopy(definition);
         var summary = copy.meaning || group.summary || group.description || ('Scout prepared ' + items.length + (items.length === 1 ? ' suggestion' : ' suggestions') + ' for this area.');
         var hasPriority = items.some(function (item) { return item && typeof item === 'object' && scoutKnownValue(item.priority || item.urgency); });
-        var reviewNote = review
-            ? '<div class="qn-scout-review-confirmation"><span class="dashicons dashicons-yes-alt"></span><div><strong>Reviewed</strong><span>' + escapeHtml(scoutReviewDescription(review)) + '</span></div></div>'
-            : '<p class="qn-scout-review-guidance">Opening these suggestions does not change their status. When you are comfortable with them, select <strong>Mark as reviewed</strong>.</p>';
+        var displayLabel = needsRefresh ? 'Needs refresh' : (sectionState && sectionState.status === 'reviewed' ? 'Reviewed' : (sectionState && sectionState.status === 'later' ? 'Review later' : (sectionState && sectionState.status === 'dismissed' ? 'Dismissed' : (status.label === 'Ready' ? 'Prepared by Scout' : status.label))));
+        var displayTone = needsRefresh || (sectionState && sectionState.status === 'later') ? 'warning' : (sectionState && sectionState.status === 'dismissed' ? 'neutral' : (sectionState && sectionState.status === 'reviewed' ? 'success' : status.tone));
+        var reviewNote = renderScoutSectionStateNote(sectionState, needsRefresh);
         return '<section class="qn-scout-detail-section">' +
-            '<div class="qn-scout-review-intro"><span class="dashicons ' + scoutIcon(definition.key) + '"></span><div><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(review ? 'success' : status.tone) + '">' + escapeHtml(review ? 'Reviewed' : (status.label === 'Ready' ? 'Prepared by Scout' : status.label)) + '</span><h3>What this section means</h3><p>' + escapeHtml(describeScoutItem(summary)) + '</p><p class="qn-scout-review-notice">Scout prepared this for your review. It has not changed your hospital schedule, assigned work, or made a compliance determination.</p></div></div>' +
+            '<div class="qn-scout-review-intro"><span class="dashicons ' + scoutIcon(definition.key) + '"></span><div><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(displayTone) + '">' + escapeHtml(displayLabel) + '</span><h3>What this section means</h3><p>' + escapeHtml(describeScoutItem(summary)) + '</p><p class="qn-scout-review-notice">Scout prepared this for your review. It has not changed your hospital schedule, assigned work, or made a compliance determination.</p></div></div>' +
             '<div class="qn-scout-review-check"><span class="dashicons dashicons-visibility"></span><div><strong>What to check</strong><span>' + escapeHtml(copy.reviewPrompt) + '</span></div></div>' +
             (hasPriority ? '<p class="qn-scout-priority-note"><strong>About priority:</strong> “Do soon,” “Plan next,” and “Keep visible” only suggest the order in which to review the information. They do not mean your hospital is noncompliant.</p>' : '') +
-            (items.length ? '<div class="qn-scout-review-list">' + items.map(function (item, index) { return renderScoutReviewItem(item, index, copy); }).join('') + '</div>' : '<p class="qn-muted-note">Scout did not return individual suggestions for this area.</p>') +
+            (items.length ? '<div class="qn-scout-review-list">' + items.map(function (item, index) { return renderScoutReviewItem(item, index, copy, definition); }).join('') + '</div>' : '<p class="qn-muted-note">Scout did not return individual suggestions for this area.</p>') +
             renderScoutDetailList('Please check', group.warnings || group.warning || []) +
             renderScoutDetailList('Information that would help', group.missing_inputs || group.missing || []) +
             reviewNote +
             '<div class="qn-scout-review-footer">' +
-            (!review && state.scoutCanGenerate ? '<button class="qn-button qn-button-primary" type="button" data-scout-mark-reviewed="' + escapeHtml(group.key) + '"><span class="dashicons dashicons-yes-alt"></span>Mark as reviewed</button>' : '') +
+            (state.scoutCanGenerate && (!sectionState || (sectionState.status !== 'reviewed' && sectionState.status !== 'dismissed')) ? '<button class="qn-button qn-button-primary" type="button" data-scout-review-status="reviewed" data-scout-review-group="' + escapeHtml(group.key) + '"><span class="dashicons dashicons-yes-alt"></span>Mark as reviewed</button>' : '') +
+            (state.scoutCanGenerate && (!sectionState || (sectionState.status !== 'later' && sectionState.status !== 'dismissed')) ? '<button class="qn-button qn-button-secondary" type="button" data-scout-review-status="later" data-scout-review-group="' + escapeHtml(group.key) + '">Review later</button>' : '') +
+            (state.scoutCanGenerate && sectionState && sectionState.status === 'dismissed' ? '<button class="qn-button qn-button-secondary" type="button" data-scout-review-status="active" data-scout-review-group="' + escapeHtml(group.key) + '">Restore section</button>' : '') +
+            (state.scoutCanGenerate && (!sectionState || sectionState.status !== 'dismissed') ? '<button class="qn-button qn-button-quiet" type="button" data-scout-review-status="dismissed" data-scout-review-group="' + escapeHtml(group.key) + '">Dismiss section</button>' : '') +
             '<button class="qn-button qn-button-secondary" type="button" data-close-scout-detail>Close</button></div>' +
             (isGlobalAdmin() ? '<details class="qn-scout-raw-details"><summary>View raw response</summary><pre>' + escapeHtml(JSON.stringify(group, null, 2)) + '</pre></details>' : '') +
             '</section>';
     }
 
-    function renderScoutReviewItem(item, index, copy) {
+    function renderScoutReviewItem(item, index, copy, definition) {
         if (!item || typeof item !== 'object' || Array.isArray(item)) {
             return '<section class="qn-scout-review-item"><div class="qn-scout-review-item-head"><span>' + (index + 1) + '</span><h3>' + escapeHtml(describeScoutItem(item)) + '</h3></div></section>';
         }
@@ -5790,13 +5835,127 @@
         var evidence = scoutEvidenceBasis(item.evidence_basis || item.based_on || '');
         var priority = scoutFirstKnown(item, ['priority', 'urgency']);
         var facts = scoutReviewFacts(item);
+        var sourceTarget = scoutSourceTarget(definition, item);
         return '<section class="qn-scout-review-item">' +
             '<div class="qn-scout-review-item-head"><span>' + (index + 1) + '</span><div><h3>' + escapeHtml(title) + '</h3>' + (priority ? '<span class="qn-scout-review-priority qn-scout-review-priority-' + escapeHtml(String(priority).toLowerCase()) + '">' + escapeHtml(scoutPriorityLabel(priority)) + '</span>' : '') + '</div></div>' +
             (description ? '<div class="qn-scout-review-copy"><span>' + escapeHtml(copy.itemLabel) + '</span><p class="qn-scout-review-description">' + escapeHtml(describeScoutItem(description)) + '</p></div>' : '') +
             (rationale ? '<div class="qn-scout-review-why"><span class="dashicons dashicons-lightbulb"></span><span><strong>Why this matters:</strong> ' + escapeHtml(describeScoutItem(rationale)) + '</span></div>' : '') +
             (facts.length ? '<dl class="qn-scout-review-facts">' + facts.map(function (fact) { return '<div><dt>' + escapeHtml(fact.label) + '</dt><dd>' + escapeHtml(fact.value) + '</dd></div>'; }).join('') + '</dl>' : '') +
             (evidence ? '<p class="qn-scout-review-source"><span class="dashicons dashicons-info-outline"></span>Based on ' + escapeHtml(evidence) + '</p>' : '') +
+            (sourceTarget && canEditOnboarding() ? '<div class="qn-scout-review-item-actions"><button class="qn-button qn-button-small qn-button-secondary" type="button" data-scout-change-source="' + escapeHtml(definition.key) + '" data-scout-change-index="' + index + '"><span class="dashicons dashicons-edit"></span>' + escapeHtml(sourceTarget.label) + '</button><span>Changes are used after Scout Preview is refreshed.</span></div>' : '') +
             '</section>';
+    }
+
+    function scoutSourceTarget(definition, item) {
+        var key = definition && definition.key ? definition.key : '';
+        var haystack = [scoutItemTitle(item), item && item.description, item && item.rationale, item && item.related_policy].filter(Boolean).join(' ').toLowerCase();
+        var policyKey = scoutSourcePolicyKey(item);
+        if (key === 'active_improvement_projects' || key === 'qi_project_milestones' || /\bqi\b|quality improvement|project/.test(haystack)) {
+            return {type: 'url', path: 'qi-projects/', label: 'Open QI Projects'};
+        }
+        if (key === 'aggregate_data_uploads' || /submission|registry|upload|measure data/.test(haystack)) {
+            return {type: 'url', path: 'data-hub/#dm', label: 'Open Data Hub'};
+        }
+        if (key === 'plan_policy_tasks' || policyKey || /policy|plan review/.test(haystack)) {
+            return {type: 'setup', section: 'plans_policies_monitoring', question: 'plan_policy_inventory', policyKey: policyKey, label: 'Open plan or policy'};
+        }
+        if (key === 'survey_readiness_timeline') {
+            return {type: 'setup', section: 'accreditation_survey_readiness', question: 'last_accreditation_licensing_survey_date', label: 'Update survey information'};
+        }
+        if (key === 'regulatory_monitoring_preferences') {
+            return {type: 'setup', section: 'accreditation_survey_readiness', question: 'survey_compliance_process', label: 'Update regulatory information'};
+        }
+        if (key === 'external_contact_directory') {
+            return {type: 'setup', section: 'accreditation_survey_readiness', question: 'state_survey_agency', label: 'Update agency contacts'};
+        }
+        if (key === 'persona_experience_summary' || key === 'first_30_days_learning_journey' || key === 'learning_journey') {
+            return {type: 'setup', section: 'hospital_director_info', question: '', label: 'Update hospital information'};
+        }
+        if (key === 'clinical_monitoring_tasks' || key === 'active_monitoring_improvement_tasks' || key === 'recurring_clinical_monitoring') {
+            return {type: 'setup', section: 'plans_policies_monitoring', question: 'plan_policy_inventory', label: 'Update monitoring information'};
+        }
+        if (key === 'reporting_schedule' || key === 'master_reporting_schedule' || key === 'meeting_report_flow_map' || key === 'committee_flow_map' || key === 'routine_task_rhythm' || key === 'reminder_rules') {
+            return {type: 'setup', section: 'committees_reporting', question: 'committee_list', label: 'Update committee schedule'};
+        }
+        return {type: 'setup', section: 'hospital_director_info', question: '', label: 'Change source information'};
+    }
+
+    function scoutSourcePolicyKey(item) {
+        if (!item || typeof item !== 'object') {
+            return '';
+        }
+        if (item.policy_key) {
+            return String(item.policy_key);
+        }
+        var name = item.related_policy || item.policy_name || '';
+        return String(name).toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    }
+
+    function openScoutSourceForItem(definitionKey, index) {
+        var definition = scoutDefinitionByKey(definitionKey);
+        var group = findScoutGroup(state.latestScoutRun, definition);
+        var item = group && Array.isArray(group.items) ? group.items[Number(index)] : null;
+        var target = scoutSourceTarget(definition, item || {});
+        if (!target) {
+            return;
+        }
+        closeScoutDetails();
+        if (target.type === 'url') {
+            var homeUrl = String(config.homeUrl || '/').replace(/\/?$/, '/');
+            window.location.assign(homeUrl + target.path);
+            return;
+        }
+        openScoutSetupSource(target);
+    }
+
+    function openScoutSetupSource(target) {
+        activateSection('day-0-setup', true);
+        window.setTimeout(function () {
+            switchOnboardingStepBySection(target.section);
+            window.setTimeout(function () {
+                var field = target.question ? findOnboardingQuestionElement(target.question) : null;
+                if (target.policyKey) {
+                    var policyRow = Array.prototype.slice.call(document.querySelectorAll('[data-plan-policy-row]')).find(function (row) {
+                        return row.getAttribute('data-plan-policy-row') === target.policyKey;
+                    });
+                    if (policyRow) {
+                        policyRow.open = true;
+                        field = policyRow;
+                    }
+                }
+                if (!field) {
+                    scrollOnboardingStepToTop();
+                    return;
+                }
+                var disclosure = field.closest('details');
+                if (disclosure) {
+                    disclosure.open = true;
+                }
+                field.classList.add('qn-question-url-focus');
+                field.scrollIntoView({behavior: 'smooth', block: 'center'});
+                var control = field.querySelector('input:not([type="hidden"]), select, textarea, button');
+                if (control && typeof control.focus === 'function') {
+                    try { control.focus({preventScroll: true}); } catch (error) { control.focus(); }
+                }
+                window.setTimeout(function () { field.classList.remove('qn-question-url-focus'); }, 4200);
+            }, 180);
+        }, 80);
+    }
+
+    function renderScoutSectionStateNote(sectionState, needsRefresh) {
+        if (needsRefresh) {
+            return '<div class="qn-scout-review-confirmation qn-scout-review-refresh"><span class="dashicons dashicons-update"></span><div><strong>Hospital information changed</strong><span>This section is based on older information. Refresh Scout Preview before relying on it.</span></div></div>';
+        }
+        if (sectionState && sectionState.status === 'reviewed') {
+            return '<div class="qn-scout-review-confirmation"><span class="dashicons dashicons-yes-alt"></span><div><strong>Reviewed</strong><span>' + escapeHtml(scoutReviewDescription(sectionState)) + '</span></div></div>';
+        }
+        if (sectionState && sectionState.status === 'later') {
+            return '<div class="qn-scout-review-confirmation qn-scout-review-later"><span class="dashicons dashicons-clock"></span><div><strong>Saved for later</strong><span>This section remains available and can be reviewed when you are ready.</span></div></div>';
+        }
+        if (sectionState && sectionState.status === 'dismissed') {
+            return '<div class="qn-scout-review-confirmation qn-scout-review-dismissed"><span class="dashicons dashicons-hidden"></span><div><strong>Dismissed</strong><span>This section is hidden from the main preview. Restore it at any time.</span></div></div>';
+        }
+        return '<p class="qn-scout-review-guidance">Opening these suggestions does not change their status. Mark them reviewed, save them for later, or dismiss the section without changing hospital information.</p>';
     }
 
     function scoutPriorityLabel(value) {
@@ -5974,26 +6133,32 @@
         return 'Marked as reviewed' + by + when + '.';
     }
 
-    function markScoutSectionReviewed(button) {
+    function updateScoutSectionStatus(button) {
         var run = state.latestScoutRun;
-        var key = button ? button.getAttribute('data-scout-mark-reviewed') : '';
-        if (!run || !run.id || !key || button.disabled) {
+        var key = button ? button.getAttribute('data-scout-review-group') : '';
+        var status = button ? button.getAttribute('data-scout-review-status') : '';
+        if (!run || !run.id || !key || !status || button.disabled) {
             return;
         }
         button.disabled = true;
         button.innerHTML = '<span class="dashicons dashicons-update"></span>Saving...';
-        api('/scout/runs/' + encodeURIComponent(run.id) + '/review', {method: 'POST', body: {group_key: key}}).then(function (result) {
+        api('/scout/runs/' + encodeURIComponent(run.id) + '/review', {method: 'POST', body: {group_key: key, status: status}}).then(function (result) {
             state.latestScoutRun = result.run || state.latestScoutRun;
             state.scoutRuns = state.scoutRuns.map(function (existingRun) {
                 return String(existingRun.id) === String(state.latestScoutRun.id) ? state.latestScoutRun : existingRun;
             });
             renderScoutPreview();
-            openScoutDetails(key);
-            showToast('Marked as reviewed.', 'success');
+            if (status === 'dismissed' || status === 'active') {
+                closeScoutDetails();
+            } else {
+                openScoutDetails(key);
+            }
+            var messages = {reviewed: 'Section marked as reviewed.', later: 'Section saved for later.', dismissed: 'Section dismissed. You can restore it below the preview.', active: 'Section restored.'};
+            showToast(messages[status] || 'Review choice saved.', 'success');
         }).catch(function (error) {
             button.disabled = false;
-            button.innerHTML = '<span class="dashicons dashicons-yes-alt"></span>Mark as reviewed';
-            showToast(error.message || 'Could not save this review. Please try again.', 'warning');
+            button.textContent = 'Try again';
+            showToast(error.message || 'Could not save this choice. Please try again.', 'warning');
         });
     }
 
@@ -13219,9 +13384,14 @@
                 openScoutDetails(scoutDetails.getAttribute('data-scout-details'));
                 return;
             }
-            var scoutMarkReviewed = event.target.closest('[data-scout-mark-reviewed]');
-            if (scoutMarkReviewed) {
-                markScoutSectionReviewed(scoutMarkReviewed);
+            var scoutChangeSource = event.target.closest('[data-scout-change-source]');
+            if (scoutChangeSource) {
+                openScoutSourceForItem(scoutChangeSource.getAttribute('data-scout-change-source'), scoutChangeSource.getAttribute('data-scout-change-index'));
+                return;
+            }
+            var scoutReviewStatus = event.target.closest('[data-scout-review-status]');
+            if (scoutReviewStatus) {
+                updateScoutSectionStatus(scoutReviewStatus);
                 return;
             }
             if (event.target.closest('[data-close-scout-detail]')) {

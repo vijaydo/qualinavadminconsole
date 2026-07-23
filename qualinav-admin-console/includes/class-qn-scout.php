@@ -331,18 +331,19 @@ class QN_Scout
         return self::generate_for_organization($run['organization_id'], $user_id);
     }
 
-    public static function review_section($run_id, $group_key, $user_id)
+    public static function review_section($run_id, $group_key, $user_id, $status = 'reviewed')
     {
         global $wpdb;
 
         $run_id = absint($run_id);
         $group_key = sanitize_key($group_key);
         $user_id = absint($user_id);
+        $status = sanitize_key($status);
         $run = self::get_run($run_id);
         if (!$run) {
             return new WP_Error('qn_scout_run_not_found', __('Scout run not found.', 'qualinav-admin-console'), array('status' => 404));
         }
-        if (!$group_key || !$user_id) {
+        if (!$group_key || !$user_id || !in_array($status, array('reviewed', 'later', 'dismissed', 'active'), true)) {
             return new WP_Error('qn_scout_review_invalid', __('Scout could not save this review.', 'qualinav-admin-console'), array('status' => 400));
         }
         if (!self::can_generate($user_id, $run['organization_id'])) {
@@ -362,12 +363,21 @@ class QN_Scout
 
         $reviews = isset($run['reviews']) && is_array($run['reviews']) ? $run['reviews'] : array();
         $user = get_userdata($user_id);
-        $reviews[$group_key] = array(
-            'status' => 'reviewed',
-            'reviewed_by' => $user_id,
-            'reviewed_by_name' => $user ? sanitize_text_field($user->display_name) : __('Hospital user', 'qualinav-admin-console'),
-            'reviewed_at' => current_time('mysql', true),
-        );
+        if ($status === 'active') {
+            unset($reviews[$group_key]);
+        } else {
+            $reviews[$group_key] = array(
+                'status' => $status,
+                'updated_by' => $user_id,
+                'updated_by_name' => $user ? sanitize_text_field($user->display_name) : __('Hospital user', 'qualinav-admin-console'),
+                'updated_at' => current_time('mysql', true),
+            );
+            if ($status === 'reviewed') {
+                $reviews[$group_key]['reviewed_by'] = $user_id;
+                $reviews[$group_key]['reviewed_by_name'] = $reviews[$group_key]['updated_by_name'];
+                $reviews[$group_key]['reviewed_at'] = $reviews[$group_key]['updated_at'];
+            }
+        }
 
         $updated = $wpdb->update(
             QN_DB::scout_runs_table(),
@@ -384,15 +394,89 @@ class QN_Scout
         }
 
         QN_Audit_Log::log(
-            'scout_section_reviewed',
+            $status === 'reviewed' ? 'scout_section_reviewed' : 'scout_section_review_status_updated',
             'scout_run',
             $run_id,
             null,
-            array('group_key' => $group_key, 'status' => 'reviewed', 'reviewed_by' => $user_id),
+            array('group_key' => $group_key, 'status' => $status, 'updated_by' => $user_id),
             $run['organization_id']
         );
 
         return self::get_run($run_id);
+    }
+
+    public static function mark_source_changes($organization_id, $step_key, $changed_answer_keys, $user_id)
+    {
+        global $wpdb;
+
+        $organization_id = absint($organization_id);
+        $step_key = sanitize_key($step_key);
+        $user_id = absint($user_id);
+        $changed_answer_keys = array_values(array_filter(array_map('sanitize_key', (array) $changed_answer_keys)));
+        if (!$organization_id || !$step_key || !$changed_answer_keys || !$user_id) {
+            return false;
+        }
+
+        $run = self::get_latest_run($organization_id);
+        if (!$run || $run['status'] !== 'completed') {
+            return false;
+        }
+
+        $dependencies = array(
+            'hospital_director_info' => array('persona_experience_summary', 'survey_readiness_timeline', 'regulatory_monitoring_preferences', 'external_contact_directory', 'priority_queue'),
+            'accreditation_survey_readiness' => array('persona_experience_summary', 'survey_readiness_timeline', 'regulatory_monitoring_preferences', 'external_contact_directory', 'priority_queue'),
+            'services_clinical_model' => array('clinical_monitoring_tasks', 'active_monitoring_improvement_tasks', 'recurring_clinical_monitoring', 'plan_policy_tasks', 'priority_queue'),
+            'committees_reporting' => array('reporting_schedule', 'master_reporting_schedule', 'committee_flow_map', 'meeting_report_flow_map', 'routine_task_rhythm', 'reminder_rules', 'priority_queue'),
+            'measures_qi_projects' => array('aggregate_data_uploads', 'active_improvement_projects', 'qi_project_milestones', 'active_monitoring_improvement_tasks', 'priority_queue'),
+            'plans_policies_monitoring' => array('plan_policy_tasks', 'clinical_monitoring_tasks', 'active_monitoring_improvement_tasks', 'recurring_clinical_monitoring', 'reminder_rules', 'priority_queue'),
+            'regulatory_tools_preferences' => array('regulatory_monitoring_preferences', 'reminder_rules', 'first_30_days_learning_journey', 'learning_journey'),
+        );
+        $affected = isset($dependencies[$step_key]) ? $dependencies[$step_key] : array();
+        $available = array();
+        foreach ((array) ($run['preview']['groups'] ?? array()) as $group) {
+            if (is_array($group) && !empty($group['key'])) {
+                $available[] = sanitize_key($group['key']);
+            }
+        }
+        $affected = array_values(array_intersect($affected, $available));
+        if (!$affected) {
+            return false;
+        }
+
+        $reviews = isset($run['reviews']) && is_array($run['reviews']) ? $run['reviews'] : array();
+        foreach ($affected as $group_key) {
+            unset($reviews[$group_key]);
+        }
+        $reviews['_source_change'] = array(
+            'status' => 'needs_refresh',
+            'step_key' => $step_key,
+            'changed_answer_keys' => $changed_answer_keys,
+            'affected_groups' => $affected,
+            'changed_by' => $user_id,
+            'changed_at' => current_time('mysql', true),
+        );
+
+        $updated = $wpdb->update(
+            QN_DB::scout_runs_table(),
+            array('review_json' => wp_json_encode($reviews), 'updated_at' => current_time('mysql')),
+            array('id' => $run['id']),
+            array('%s', '%s'),
+            array('%d')
+        );
+        if ($updated === false) {
+            return false;
+        }
+
+        QN_Audit_Log::log(
+            'scout_source_information_changed',
+            'scout_run',
+            $run['id'],
+            null,
+            array('step_key' => $step_key, 'changed_answer_keys' => $changed_answer_keys, 'affected_groups' => $affected),
+            $organization_id
+        );
+
+        return true;
     }
 
     public static function extract_preview_summary($response)

@@ -1511,7 +1511,8 @@ class QN_REST_API
         $reviewed = QN_Scout::review_section(
             $run['id'],
             isset($payload['group_key']) ? $payload['group_key'] : '',
-            get_current_user_id()
+            get_current_user_id(),
+            isset($payload['status']) ? $payload['status'] : 'reviewed'
         );
 
         return is_wp_error($reviewed) ? $reviewed : rest_ensure_response(array(
