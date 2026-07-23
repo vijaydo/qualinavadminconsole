@@ -5864,22 +5864,8 @@
         setText('#qn-onboarding-step-count', 'Step ' + (state.onboardingIndex + 1) + ' of ' + steps.length);
         setText('#qn-onboarding-step-title', step.title);
         setText('#qn-onboarding-step-description', step.description);
-        var progress = state.onboarding.progress ? state.onboarding.progress.total_percent : 0;
-        var headerProgressText = document.querySelector('.qn-site-header-progress #qn-onboarding-progress-text');
-        if (headerProgressText) {
-            headerProgressText.textContent = progress + '%';
-            if (!state.onboardingBackgroundSaving && !state.onboardingSubmitting) {
-                setOnboardingSaveStatus(progress > 0 ? 'ready' : 'not-started', progress > 0 ? 'Ready' : 'Not started');
-            }
-        } else {
-            setText('#qn-onboarding-progress-text', isOnboardingSubmitted() ? 'Ready for Scout - ' + progress + '% of optional detail added' : progress + '% of optional detail added');
-        }
+        var progress = refreshOnboardingProgressUi({updateStatus: true});
         setText('#qn-onboarding-step-summary', 'Step ' + (state.onboardingIndex + 1) + ' of ' + steps.length + ' - ' + (isOnboardingSubmitted() ? 'submitted, ' + progress + '% answer completeness' : progress + '% complete'));
-        var bar = document.getElementById('qn-onboarding-progress-bar');
-        if (bar) {
-            bar.style.width = progress + '%';
-            bar.textContent = '';
-        }
         var warning = document.getElementById('qn-phi-warning');
         if (warning) {
             warning.hidden = true;
@@ -5916,6 +5902,35 @@
             save.disabled = !canEditOnboardingStep(step);
         }
         maybeShowOnboardingGuide();
+    }
+
+    function refreshOnboardingProgressUi(options) {
+        options = options || {};
+        var progress = state.onboarding && state.onboarding.progress ? Number(state.onboarding.progress.total_percent) || 0 : 0;
+        progress = Math.max(0, Math.min(100, Math.round(progress)));
+        var headerProgressText = document.querySelector('.qn-site-header-progress #qn-onboarding-progress-text');
+        if (headerProgressText) {
+            headerProgressText.textContent = progress + '%';
+            if (options.updateStatus && !state.onboardingBackgroundSaving && !state.onboardingSubmitting) {
+                setOnboardingSaveStatus(progress > 0 ? 'ready' : 'not-started', progress > 0 ? 'Ready' : 'Not started');
+            }
+        } else {
+            setText('#qn-onboarding-progress-text', isOnboardingSubmitted() ? 'Ready for Scout - ' + progress + '% of optional detail added' : progress + '% of optional detail added');
+        }
+        var bar = document.getElementById('qn-onboarding-progress-bar');
+        if (bar) {
+            bar.style.width = progress + '%';
+            bar.textContent = '';
+        }
+        setText('[data-dashboard="setup_percent"]', progress + '%');
+        var dashboardBar = document.querySelector('[data-dashboard="setup_bar"]');
+        if (dashboardBar) {
+            dashboardBar.style.width = progress + '%';
+        }
+        if (state.currentHospital) {
+            state.currentHospital.onboarding_percent = progress;
+        }
+        return progress;
     }
 
     function renderOnboardingReadonlyNotice(step) {
@@ -11699,6 +11714,7 @@
         }).then(function (result) {
             if (result && result.progress && state.onboarding) {
                 state.onboarding.progress = result.progress;
+                refreshOnboardingProgressUi();
                 renderStepper(state.onboarding.steps || []);
             }
             setText('#qn-onboarding-message', 'Saved.');
@@ -11741,6 +11757,7 @@
         }).then(function (result) {
             if (result && result.progress && state.onboarding) {
                 state.onboarding.progress = result.progress;
+                refreshOnboardingProgressUi();
                 renderStepper(state.onboarding.steps || []);
             }
             setText('#qn-onboarding-message', 'Saved.');
