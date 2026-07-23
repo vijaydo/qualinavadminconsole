@@ -1208,6 +1208,102 @@ textarea:focus-visible {
     transform: translateY(-1px);
 }
 
+.qn-confirm-modal {
+    align-items: center;
+}
+
+.qn-confirm-modal-panel {
+    max-width: 540px;
+    width: min(540px, calc(100vw - 40px));
+}
+
+.qn-confirm-modal-panel .qn-panel-header {
+    align-items: flex-start;
+}
+
+.qn-confirm-modal-panel .qn-panel-header h2 {
+    font-size: clamp(1.2rem, 2vw, 1.55rem);
+    margin-top: 3px;
+}
+
+.qn-confirm-modal-body {
+    display: grid;
+    gap: 13px;
+    padding: 22px 24px 16px;
+}
+
+.qn-confirm-modal-body > p {
+    color: #52677a;
+    line-height: 1.55;
+    margin: 0;
+}
+
+.qn-confirm-modal-icon {
+    align-items: center;
+    background: #fff3f2;
+    border: 1px solid #f1cfca;
+    border-radius: 13px;
+    color: #a43a32;
+    display: inline-flex;
+    height: 44px;
+    justify-content: center;
+    width: 44px;
+}
+
+.qn-confirm-modal-icon .dashicons {
+    font-size: 22px;
+    height: 22px;
+    width: 22px;
+}
+
+.qn-confirm-modal-item {
+    background: #f7fafc;
+    border: 1px solid #dce6ed;
+    border-radius: 12px;
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    padding: 11px 13px;
+}
+
+.qn-confirm-modal-item span {
+    color: #718397;
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.qn-confirm-modal-item strong {
+    color: #17324a;
+    overflow-wrap: anywhere;
+}
+
+.qn-confirm-modal-note {
+    font-size: 0.78rem;
+}
+
+.qn-confirm-modal-actions {
+    align-items: center;
+    border-top: 1px solid #edf2f7;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding: 16px 24px 20px;
+}
+
+.qn-confirm-modal-actions .qn-button-danger {
+    background: #a93636;
+    border-color: #a93636;
+    color: #fff;
+}
+
+.qn-confirm-modal-actions .qn-button-danger:hover,
+.qn-confirm-modal-actions .qn-button-danger:focus-visible {
+    background: #8f2929;
+    border-color: #8f2929;
+    color: #fff;
+}
+
 .qn-form {
     display: grid;
     gap: 16px;
@@ -3427,7 +3523,7 @@ textarea:focus-visible {
 }
 
 .qn-plan-policy-row > summary {
-    align-items: center;
+    align-items: start;
     cursor: pointer;
     list-style: none;
     min-width: 0;
@@ -3475,13 +3571,14 @@ textarea:focus-visible {
 }
 
 .qn-plan-policy-document-controls {
+    align-self: start;
     display: grid;
     gap: 7px;
     min-width: 0;
 }
 
 .qn-plan-policy-document-actions {
-    align-items: center;
+    align-items: flex-start;
     display: flex;
     gap: 7px;
 }

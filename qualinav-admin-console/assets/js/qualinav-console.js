@@ -60,6 +60,8 @@
     };
     var usDatePickerPopover = null;
     var usDatePickerContext = null;
+    var destructiveConfirmation = null;
+    var destructiveConfirmationFocus = null;
 
     var roleLabels = {
         qualinav_super_admin: 'QualiNav Super Admin',
@@ -3286,12 +3288,20 @@
         button.classList.add('qn-is-loading');
         button.disabled = true;
         button.setAttribute('aria-busy', 'true');
-        button.innerHTML = '<span class="dashicons dashicons-update"></span>' + escapeHtml(label || 'Working...');
+        if (button.classList.contains('qn-plan-policy-document-action')) {
+            button.setAttribute('aria-label', label || 'Working');
+            button.innerHTML = '<span class="dashicons dashicons-update"></span><span class="qn-sr-only">' + escapeHtml(label || 'Working') + '</span>';
+        } else {
+            button.innerHTML = '<span class="dashicons dashicons-update"></span>' + escapeHtml(label || 'Working...');
+        }
         return function () {
             button.classList.remove('qn-is-loading');
             button.disabled = false;
             button.removeAttribute('aria-busy');
             button.innerHTML = button.getAttribute('data-original-html') || originalHtml;
+            if (button.classList.contains('qn-plan-policy-document-action') && button.title) {
+                button.setAttribute('aria-label', button.title);
+            }
             button.removeAttribute('data-original-html');
         };
     }
@@ -6626,6 +6636,82 @@
         });
     }
 
+    function ensureDestructiveConfirmationModal() {
+        var existing = document.getElementById('qn-destructive-confirmation-modal');
+        if (existing) {
+            return existing;
+        }
+        document.body.insertAdjacentHTML('beforeend',
+            '<div class="qn-modal qn-confirm-modal" id="qn-destructive-confirmation-modal" hidden>' +
+                '<div class="qn-modal-panel qn-confirm-modal-panel" role="alertdialog" aria-modal="true" aria-labelledby="qn-confirm-modal-title" aria-describedby="qn-confirm-modal-description">' +
+                    '<div class="qn-panel-header"><div><p class="qn-eyebrow">Please confirm</p><h2 id="qn-confirm-modal-title">Confirm action</h2></div>' +
+                        '<button class="qn-icon-button" type="button" data-confirm-modal-close aria-label="Close confirmation"><span aria-hidden="true">&times;</span></button></div>' +
+                    '<div class="qn-confirm-modal-body"><div class="qn-confirm-modal-icon"><span class="dashicons dashicons-trash" aria-hidden="true"></span></div>' +
+                        '<p id="qn-confirm-modal-description"></p><div class="qn-confirm-modal-item" id="qn-confirm-modal-item" hidden><span>Selected item</span><strong></strong></div>' +
+                        '<p class="qn-confirm-modal-note" id="qn-confirm-modal-note" hidden></p></div>' +
+                    '<div class="qn-confirm-modal-actions"><button class="qn-button qn-button-secondary" type="button" data-confirm-modal-close>Cancel</button>' +
+                        '<button class="qn-button qn-button-danger" type="button" id="qn-confirm-modal-accept">Delete</button></div>' +
+                '</div></div>'
+        );
+        var modal = document.getElementById('qn-destructive-confirmation-modal');
+        modal.querySelectorAll('[data-confirm-modal-close]').forEach(function (button) {
+            button.addEventListener('click', closeDestructiveConfirmation);
+        });
+        modal.querySelector('#qn-confirm-modal-accept').addEventListener('click', function () {
+            var action = destructiveConfirmation && destructiveConfirmation.onConfirm;
+            closeDestructiveConfirmation();
+            if (typeof action === 'function') {
+                action();
+            }
+        });
+        return modal;
+    }
+
+    function openDestructiveConfirmation(options) {
+        options = options || {};
+        var modal = ensureDestructiveConfirmationModal();
+        destructiveConfirmation = options;
+        destructiveConfirmationFocus = document.activeElement;
+        setText('#qn-confirm-modal-title', options.title || 'Confirm deletion');
+        setText('#qn-confirm-modal-description', options.description || 'Please confirm that you want to continue.');
+        var item = modal.querySelector('#qn-confirm-modal-item');
+        var itemName = item ? item.querySelector('strong') : null;
+        if (item && itemName) {
+            item.hidden = !options.itemName;
+            itemName.textContent = options.itemName || '';
+        }
+        var note = modal.querySelector('#qn-confirm-modal-note');
+        if (note) {
+            note.hidden = !options.note;
+            note.textContent = options.note || '';
+        }
+        var accept = modal.querySelector('#qn-confirm-modal-accept');
+        if (accept) {
+            accept.textContent = options.confirmLabel || 'Delete';
+        }
+        modal.hidden = false;
+        var close = modal.querySelector('[data-confirm-modal-close]');
+        if (close) {
+            close.focus();
+        }
+    }
+
+    function closeDestructiveConfirmation() {
+        var modal = document.getElementById('qn-destructive-confirmation-modal');
+        if (modal) {
+            modal.hidden = true;
+        }
+        destructiveConfirmation = null;
+        if (destructiveConfirmationFocus && typeof destructiveConfirmationFocus.focus === 'function') {
+            try {
+                destructiveConfirmationFocus.focus({preventScroll: true});
+            } catch (error) {
+                destructiveConfirmationFocus.focus();
+            }
+        }
+        destructiveConfirmationFocus = null;
+    }
+
     function shouldAutoShowWorkspaceWelcome() {
         if (!state.me || isGlobalAdmin() || state.workspaceWelcomeAutoShown) {
             return false;
@@ -9405,7 +9491,7 @@
         var hasDocument = !!row.document_id && ['ready', 'ocr_required', 'queued', 'processing'].indexOf(row.upload_status) !== -1;
         var documentStatus = row.upload_status === 'ready' ? 'Ready' :
             (row.upload_status === 'ocr_required' ? 'Needs readable text' :
-            (['queued', 'processing'].indexOf(row.upload_status) !== -1 ? 'Indexing…' :
+            (['queued', 'processing'].indexOf(row.upload_status) !== -1 ? 'Working…' :
             (row.upload_status === 'failed' ? 'Needs attention' : 'No document')));
         var documentBusy = ['queued', 'processing'].indexOf(row.upload_status) !== -1;
         var documentStatusClass = documentBusy ? ' qn-plan-policy-document-status-busy' :
@@ -9450,7 +9536,7 @@
                 '<select data-plan-policy-link-source="' + escapeHtml(row.policy_key) + '" data-plan-policy-field="' + escapeHtml(row.policy_key) + '" data-plan-policy-key="folded_into_policy_key"' + (foldedOpen ? ' required' : '') + '>' +
                     '<option value="">Choose an uploaded plan...</option>' +
                     reusableDocuments.map(function (document) {
-                        var statusSuffix = document.upload_status === 'ready' ? ' — Ready' : ' — Indexing...';
+                        var statusSuffix = document.upload_status === 'ready' ? ' — Ready' : ' — Working...';
                         return '<option value="' + escapeFieldValue(document.policy_key) + '"' + (selectedFoldedKey === document.policy_key ? ' selected' : '') + '>' + escapeHtml(document.policy_name + ' — ' + document.document_name + statusSuffix) + '</option>';
                     }).join('') +
                     '<option value="__new_plan__"' + (selectedFoldedKey === '__new_plan__' ? ' selected' : '') + '>Add another plan or policy...</option>' +
@@ -9654,6 +9740,14 @@
         var controls = input.closest('.qn-plan-policy-document-controls');
         var button = controls ? controls.querySelector('[data-plan-policy-upload]') : null;
         var restoreButton = setButtonLoading(button, 'Processing...');
+        var visibleStatus = controls ? controls.querySelector('.qn-plan-policy-document-status') : null;
+        var originalVisibleStatus = visibleStatus ? visibleStatus.textContent : '';
+        var originalVisibleStatusClass = visibleStatus ? visibleStatus.className : '';
+        if (visibleStatus) {
+            visibleStatus.textContent = 'Working…';
+            visibleStatus.classList.remove('qn-plan-policy-document-status-ready');
+            visibleStatus.classList.add('qn-plan-policy-document-status-busy');
+        }
         var step = state.onboarding.steps[state.onboardingIndex];
         var currentAnswers = collectOnboardingAnswers();
         window.clearTimeout(state.autosaveTimer);
@@ -9685,6 +9779,10 @@
             setOnboardingSaveStatus('saved', status === 'ocr_required' ? 'Text extraction needs review' : 'Document ready');
             return loadOnboarding(state.onboardingOrganizationId, {showLoading: false});
         }).catch(function (error) {
+            if (visibleStatus && visibleStatus.isConnected) {
+                visibleStatus.textContent = originalVisibleStatus;
+                visibleStatus.className = originalVisibleStatusClass;
+            }
             showToast(error.message || 'The document could not be processed.', 'warning');
             setOnboardingSaveStatus('error', 'Document failed');
         }).finally(function () {
@@ -9790,12 +9888,6 @@
             return;
         }
         var removePlanRecord = trigger && trigger.getAttribute('data-remove-plan-record') === '1';
-        var confirmation = removePlanRecord ?
-            'Delete this additional plan and its Scout document? Unlink it from every requirement first.' :
-            'Remove this document from Scout? The required plan or policy row will remain.';
-        if (!window.confirm(confirmation)) {
-            return;
-        }
         var restoreButton = setButtonLoading(trigger, 'Removing...');
         api('/onboarding/plan-policy-document/delete', {
             method: 'POST',
@@ -9815,6 +9907,80 @@
         }).finally(function () {
             restoreButton();
         });
+    }
+
+    function confirmPlanPolicyDocumentDeletion(policyKey, trigger) {
+        var row = trigger ? trigger.closest('.qn-plan-policy-row') : null;
+        var removePlanRecord = trigger && trigger.getAttribute('data-remove-plan-record') === '1';
+        var planNameNode = row ? row.querySelector('.qn-plan-policy-name strong') : null;
+        var documentNameField = row ? row.querySelector('[data-plan-policy-key="document_name"]') : null;
+        var planName = planNameNode ? planNameNode.textContent.trim() : 'this plan or policy';
+        var documentName = documentNameField ? documentNameField.value.trim() : '';
+        openDestructiveConfirmation({
+            title: removePlanRecord ? 'Delete additional plan?' : 'Remove document?',
+            description: removePlanRecord ?
+                'This removes the additional plan record and its document from Scout. Requirements linked to it must be unlinked first.' :
+                'This removes the document from Scout. The required plan or policy row and the information you entered will remain.',
+            itemName: documentName || planName,
+            note: documentName && planName ? 'Plan or policy: ' + planName : '',
+            confirmLabel: removePlanRecord ? 'Delete plan' : 'Remove document',
+            onConfirm: function () {
+                deletePlanPolicyDocument(policyKey, trigger);
+            }
+        });
+    }
+
+    function confirmOnboardingRepeaterDeletion(row) {
+        if (!row) {
+            return;
+        }
+        var repeater = row.closest('[data-repeater]');
+        var style = repeater ? repeater.getAttribute('data-repeater-style') : '';
+        var heading = row.querySelector('.qn-survey-card-header strong');
+        var itemName = heading ? heading.textContent.trim() : 'This entry';
+        var copy = {
+            'survey-history': {title: 'Delete survey history entry?', description: 'This removes the survey or review entry from Hospital Setup.', label: 'Delete entry'},
+            'committee-card': {title: 'Delete committee?', description: 'This removes the committee and its meeting details from Hospital Setup.', label: 'Delete committee'},
+            'report-card': {title: 'Delete reporting obligation?', description: 'This removes the report, timing, owner, and submission details from Hospital Setup.', label: 'Delete report'},
+            'qi-project-card': {title: 'Delete improvement project?', description: 'This removes the project details and milestones from Hospital Setup.', label: 'Delete project'},
+            'backup-user-card': {title: 'Delete backup user entry?', description: 'This removes the backup coverage entry from Hospital Setup. It does not delete the person’s QualiNav account.', label: 'Delete entry'}
+        }[style] || {title: 'Delete this entry?', description: 'This removes the selected entry from Hospital Setup.', label: 'Delete entry'};
+        openDestructiveConfirmation({
+            title: copy.title,
+            description: copy.description,
+            itemName: itemName,
+            note: 'This change will be saved automatically.',
+            confirmLabel: copy.label,
+            onConfirm: function () {
+                deleteOnboardingRepeaterRow(row);
+            }
+        });
+    }
+
+    function deleteOnboardingRepeaterRow(row) {
+        var repeaterOwner = row ? row.closest('[data-repeater]') : null;
+        if (!row || !repeaterOwner) {
+            return;
+        }
+        row.remove();
+        if (!repeaterOwner.querySelector('.qn-repeater-row')) {
+            var style = repeaterOwner.getAttribute('data-repeater-style');
+            var emptyText = '<div class="qn-survey-empty"><strong>No survey history added yet.</strong><span>Add prior surveys if available; you can also skip this for now.</span></div>';
+            if (style === 'committee-card') {
+                emptyText = '<div class="qn-survey-empty"><strong>No committees added yet.</strong><span>Add the meetings where quality data is reviewed.</span></div>';
+            }
+            if (style === 'report-card') {
+                emptyText = '<div class="qn-survey-empty"><strong>No reporting obligations added yet.</strong><span>Add recurring or event-triggered reports.</span></div>';
+            }
+            if (style === 'backup-user-card') {
+                emptyText = '<div class="qn-survey-empty qn-step8-backup-empty"><strong>No backup users added.</strong><span>This can be completed later if backup coverage is not decided yet.</span></div>';
+            }
+            repeaterOwner.insertAdjacentHTML('afterbegin', emptyText);
+        }
+        refreshRepeaterCardLabels(repeaterOwner);
+        setOnboardingSaveStatus('unsaved', 'Unsaved changes');
+        window.clearTimeout(state.autosaveTimer);
+        state.autosaveTimer = window.setTimeout(autosaveOnboardingStep, 900);
     }
 
     function renderPlanPolicyStatusSelect(policyKey, value) {
@@ -11945,6 +12111,64 @@
         });
     }
 
+    function findConsoleUser(userId) {
+        return (state.users || []).find(function (user) {
+            return Number(user.ID) === Number(userId);
+        }) || null;
+    }
+
+    function confirmUserStatusUpdate(userId, status, context, field) {
+        if (['disabled', 'archived'].indexOf(status) === -1) {
+            updateUserStatus(userId, status, context, field);
+            return;
+        }
+        var user = findConsoleUser(userId);
+        var userName = user ? text(user.display_name || user.user_email) : 'This user';
+        var userEmail = user ? text(user.user_email) : '';
+        var isArchive = status === 'archived';
+        var originalValue = field && field.matches && field.matches('select') ? field.getAttribute('data-original-value') : '';
+        if (originalValue !== null && originalValue !== '' && field && field.matches && field.matches('select')) {
+            field.value = originalValue;
+        }
+        openDestructiveConfirmation({
+            title: isArchive ? 'Remove user access?' : 'Disable user?',
+            description: isArchive ?
+                'This removes the user’s active access to the QualiNav workspace. Their historical activity and audit records will remain.' :
+                'This temporarily prevents the user from accessing the QualiNav workspace. An authorized administrator can reactivate them later.',
+            itemName: userName,
+            note: userEmail && userEmail !== userName ? userEmail : '',
+            confirmLabel: isArchive ? 'Remove access' : 'Disable user',
+            onConfirm: function () {
+                if (field && field.matches && field.matches('select')) {
+                    field.value = status;
+                }
+                updateUserStatus(userId, status, context, field);
+            }
+        });
+    }
+
+    function findConsoleInvitation(id) {
+        return (state.invitations || []).find(function (invitation) {
+            return Number(invitation.id) === Number(id);
+        }) || null;
+    }
+
+    function confirmInvitationRevocation(id, context, trigger) {
+        var invitation = findConsoleInvitation(id);
+        var email = invitation ? text(invitation.email) : 'This invitation';
+        var name = invitation ? text(invitation.full_name) : '';
+        openDestructiveConfirmation({
+            title: 'Revoke invitation?',
+            description: 'The invitation link will stop working. You can send a new invitation later if access is still needed.',
+            itemName: email,
+            note: name && name !== email ? name : '',
+            confirmLabel: 'Revoke invitation',
+            onConfirm: function () {
+                resendOrRevokeInvite('revoke', id, context, trigger);
+            }
+        });
+    }
+
     function resendOrRevokeInvite(action, id, context, trigger) {
         var restoreButton = setActionLoading(trigger, action === 'resend' ? 'Resending...' : 'Revoking...');
         return api('/' + context + '/invitations/' + id + '/' + action, {method: 'POST'}).then(function (invitation) {
@@ -12282,7 +12506,7 @@
             var planPolicyRemove = event.target.closest('[data-plan-policy-remove]');
             if (planPolicyRemove) {
                 event.preventDefault();
-                deletePlanPolicyDocument(planPolicyRemove.getAttribute('data-plan-policy-remove'), planPolicyRemove);
+                confirmPlanPolicyDocumentDeletion(planPolicyRemove.getAttribute('data-plan-policy-remove'), planPolicyRemove);
                 return;
             }
             var reportingGenerate = event.target.closest('[data-reporting-generate-scout]');
@@ -12417,7 +12641,7 @@
                 return;
             }
             if (menuStatus) {
-                updateUserStatus(menuStatus.getAttribute('data-update-user-status'), menuStatus.getAttribute('data-status'), menuStatus.getAttribute('data-context'), menuStatus);
+                confirmUserStatusUpdate(menuStatus.getAttribute('data-update-user-status'), menuStatus.getAttribute('data-status'), menuStatus.getAttribute('data-context'), menuStatus);
                 closeActionMenus();
                 return;
             }
@@ -12426,12 +12650,16 @@
                 return;
             }
             if (revoke) {
-                resendOrRevokeInvite('revoke', revoke.getAttribute('data-revoke-invite'), revoke.getAttribute('data-context'), revoke);
+                confirmInvitationRevocation(revoke.getAttribute('data-revoke-invite'), revoke.getAttribute('data-context'), revoke);
                 return;
             }
         });
         document.addEventListener('keydown', function (event) {
             if (event.key === 'Escape') {
+                var destructiveModal = document.getElementById('qn-destructive-confirmation-modal');
+                if (destructiveModal && !destructiveModal.hidden) {
+                    return;
+                }
                 closeActionMenus();
                 closeSearchableSelects();
                 closeUsDatePicker();
@@ -12498,7 +12726,7 @@
                 updateUserRole(role.getAttribute('data-user-role'), role.value, role.getAttribute('data-context'), role);
             }
             if (status) {
-                updateUserStatus(status.getAttribute('data-user-status'), status.value, status.getAttribute('data-context'), status);
+                confirmUserStatusUpdate(status.getAttribute('data-user-status'), status.value, status.getAttribute('data-context'), status);
             }
             if (menuRole) {
                 updateUserRole(menuRole.getAttribute('data-update-user-role'), menuRole.getAttribute('data-role'), menuRole.getAttribute('data-context'), menuRole);
@@ -12506,7 +12734,7 @@
                 return;
             }
             if (menuStatus) {
-                updateUserStatus(menuStatus.getAttribute('data-update-user-status'), menuStatus.getAttribute('data-status'), menuStatus.getAttribute('data-context'), menuStatus);
+                confirmUserStatusUpdate(menuStatus.getAttribute('data-update-user-status'), menuStatus.getAttribute('data-status'), menuStatus.getAttribute('data-context'), menuStatus);
                 closeActionMenus();
                 return;
             }
@@ -12706,28 +12934,7 @@
             var deleteRepeaterRow = event.target.closest('[data-delete-repeater-row]');
             if (deleteRepeaterRow) {
                 var row = deleteRepeaterRow.closest('.qn-repeater-row');
-                if (row) {
-                    var repeaterOwner = row.closest('[data-repeater]');
-                    row.remove();
-                    if (repeaterOwner && !repeaterOwner.querySelector('.qn-repeater-row')) {
-                        var style = repeaterOwner.getAttribute('data-repeater-style');
-                        var emptyText = '<div class="qn-survey-empty"><strong>No survey history added yet.</strong><span>Add prior surveys if available; you can also skip this for now.</span></div>';
-                        if (style === 'committee-card') {
-                            emptyText = '<div class="qn-survey-empty"><strong>No committees added yet.</strong><span>Add the meetings where quality data is reviewed.</span></div>';
-                        }
-                        if (style === 'report-card') {
-                            emptyText = '<div class="qn-survey-empty"><strong>No reporting obligations added yet.</strong><span>Add recurring or event-triggered reports.</span></div>';
-                        }
-                        if (style === 'backup-user-card') {
-                            emptyText = '<div class="qn-survey-empty qn-step8-backup-empty"><strong>No backup users added.</strong><span>This can be completed later if backup coverage is not decided yet.</span></div>';
-                        }
-                        repeaterOwner.insertAdjacentHTML('afterbegin', emptyText);
-                    }
-                    refreshRepeaterCardLabels(repeaterOwner);
-                    setOnboardingSaveStatus('unsaved', 'Unsaved changes');
-                    window.clearTimeout(state.autosaveTimer);
-                    state.autosaveTimer = window.setTimeout(autosaveOnboardingStep, 900);
-                }
+                confirmOnboardingRepeaterDeletion(row);
                 return;
             }
             var scoutDetails = event.target.closest('[data-scout-details]');
@@ -12798,9 +13005,18 @@
     function deactivateHealthSystem(id, trigger) {
         var system = findSystem(id);
         var name = system ? system.name : 'this health system';
-        if (!window.confirm('Deactivate ' + name + '? Hospitals will remain available.')) {
-            return;
-        }
+        openDestructiveConfirmation({
+            title: 'Deactivate health system?',
+            description: 'The health system will become inactive. Its hospitals and their information will remain available and will not be deleted.',
+            itemName: name,
+            confirmLabel: 'Deactivate system',
+            onConfirm: function () {
+                performHealthSystemDeactivation(id, trigger);
+            }
+        });
+    }
+
+    function performHealthSystemDeactivation(id, trigger) {
         var restoreButton = setActionLoading(trigger, 'Deactivating...');
         api('/admin/health-systems/' + id, {method: 'DELETE'}).then(function () {
             showToast('Health system deactivated.', 'success');
