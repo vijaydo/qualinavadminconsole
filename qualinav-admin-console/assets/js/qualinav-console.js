@@ -5296,7 +5296,11 @@
         var labels = {
             hospital_setup: 'Hospital Setup',
             quality_work: 'your quality program information',
-            reporting_obligations: 'your reporting schedule'
+            reporting_obligations: 'your reporting schedule',
+            persona_context: 'your hospital and Quality Director profile',
+            uploaded_documents: 'your hospital documents',
+            hospital_documents: 'your hospital documents',
+            benchmark_data: 'your hospital benchmark data'
         };
         var key = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
         return labels[key] || (key ? normalizePublicSetupCopy(key.replace(/_/g, ' ')) : '');
@@ -5450,7 +5454,7 @@
             return item.map(scoutItemTitle).filter(Boolean).slice(0, 2).join(', ');
         }
         if (typeof item === 'object') {
-            var keys = ['title', 'name', 'report_name', 'committee', 'meeting', 'monitoring_activity', 'activity', 'dataset', 'project', 'priority', 'topic', 'rule', 'focus', 'timeframe'];
+            var keys = ['title', 'name', 'report_name', 'committee', 'meeting', 'monitoring_activity', 'activity', 'dataset', 'project', 'topic', 'rule', 'focus', 'timeframe'];
             for (var i = 0; i < keys.length; i += 1) {
                 if (item[keys[i]]) {
                     return describeScoutItem(item[keys[i]]);
@@ -5755,13 +5759,17 @@
         var review = scoutReviewForGroup(run, group);
         var counts = scoutGroupCounts(group);
         var status = scoutGroupStatus(group, counts);
-        var summary = group.summary || group.description || ('Scout prepared ' + items.length + (items.length === 1 ? ' suggestion' : ' suggestions') + ' for this area.');
+        var copy = scoutReviewCopy(definition);
+        var summary = copy.meaning || group.summary || group.description || ('Scout prepared ' + items.length + (items.length === 1 ? ' suggestion' : ' suggestions') + ' for this area.');
+        var hasPriority = items.some(function (item) { return item && typeof item === 'object' && scoutKnownValue(item.priority || item.urgency); });
         var reviewNote = review
             ? '<div class="qn-scout-review-confirmation"><span class="dashicons dashicons-yes-alt"></span><div><strong>Reviewed</strong><span>' + escapeHtml(scoutReviewDescription(review)) + '</span></div></div>'
             : '<p class="qn-scout-review-guidance">Opening these suggestions does not change their status. When you are comfortable with them, select <strong>Mark as reviewed</strong>.</p>';
         return '<section class="qn-scout-detail-section">' +
-            '<div class="qn-scout-review-intro"><span class="dashicons ' + scoutIcon(definition.key) + '"></span><div><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(review ? 'success' : status.tone) + '">' + escapeHtml(review ? 'Reviewed' : (status.label === 'Ready' ? 'Prepared by Scout' : status.label)) + '</span><p>' + escapeHtml(describeScoutItem(summary)) + '</p></div></div>' +
-            (items.length ? '<div class="qn-scout-review-list">' + items.map(function (item, index) { return renderScoutReviewItem(item, index); }).join('') + '</div>' : '<p class="qn-muted-note">Scout did not return individual suggestions for this area.</p>') +
+            '<div class="qn-scout-review-intro"><span class="dashicons ' + scoutIcon(definition.key) + '"></span><div><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(review ? 'success' : status.tone) + '">' + escapeHtml(review ? 'Reviewed' : (status.label === 'Ready' ? 'Prepared by Scout' : status.label)) + '</span><h3>What this section means</h3><p>' + escapeHtml(describeScoutItem(summary)) + '</p><p class="qn-scout-review-notice">Scout prepared this for your review. It has not changed your hospital schedule, assigned work, or made a compliance determination.</p></div></div>' +
+            '<div class="qn-scout-review-check"><span class="dashicons dashicons-visibility"></span><div><strong>What to check</strong><span>' + escapeHtml(copy.reviewPrompt) + '</span></div></div>' +
+            (hasPriority ? '<p class="qn-scout-priority-note"><strong>About priority:</strong> “Do soon,” “Plan next,” and “Keep visible” only suggest the order in which to review the information. They do not mean your hospital is noncompliant.</p>' : '') +
+            (items.length ? '<div class="qn-scout-review-list">' + items.map(function (item, index) { return renderScoutReviewItem(item, index, copy); }).join('') + '</div>' : '<p class="qn-muted-note">Scout did not return individual suggestions for this area.</p>') +
             renderScoutDetailList('Please check', group.warnings || group.warning || []) +
             renderScoutDetailList('Information that would help', group.missing_inputs || group.missing || []) +
             reviewNote +
@@ -5772,7 +5780,7 @@
             '</section>';
     }
 
-    function renderScoutReviewItem(item, index) {
+    function renderScoutReviewItem(item, index, copy) {
         if (!item || typeof item !== 'object' || Array.isArray(item)) {
             return '<section class="qn-scout-review-item"><div class="qn-scout-review-item-head"><span>' + (index + 1) + '</span><h3>' + escapeHtml(describeScoutItem(item)) + '</h3></div></section>';
         }
@@ -5783,12 +5791,133 @@
         var priority = scoutFirstKnown(item, ['priority', 'urgency']);
         var facts = scoutReviewFacts(item);
         return '<section class="qn-scout-review-item">' +
-            '<div class="qn-scout-review-item-head"><span>' + (index + 1) + '</span><div><h3>' + escapeHtml(title) + '</h3>' + (priority ? '<span class="qn-scout-review-priority">' + escapeHtml(formatScoutValue(priority, '')) + ' priority</span>' : '') + '</div></div>' +
-            (description ? '<p class="qn-scout-review-description">' + escapeHtml(describeScoutItem(description)) + '</p>' : '') +
-            (rationale ? '<div class="qn-scout-review-why"><span class="dashicons dashicons-lightbulb"></span><span><strong>Why this helps:</strong> ' + escapeHtml(describeScoutItem(rationale)) + '</span></div>' : '') +
+            '<div class="qn-scout-review-item-head"><span>' + (index + 1) + '</span><div><h3>' + escapeHtml(title) + '</h3>' + (priority ? '<span class="qn-scout-review-priority qn-scout-review-priority-' + escapeHtml(String(priority).toLowerCase()) + '">' + escapeHtml(scoutPriorityLabel(priority)) + '</span>' : '') + '</div></div>' +
+            (description ? '<div class="qn-scout-review-copy"><span>' + escapeHtml(copy.itemLabel) + '</span><p class="qn-scout-review-description">' + escapeHtml(describeScoutItem(description)) + '</p></div>' : '') +
+            (rationale ? '<div class="qn-scout-review-why"><span class="dashicons dashicons-lightbulb"></span><span><strong>Why this matters:</strong> ' + escapeHtml(describeScoutItem(rationale)) + '</span></div>' : '') +
             (facts.length ? '<dl class="qn-scout-review-facts">' + facts.map(function (fact) { return '<div><dt>' + escapeHtml(fact.label) + '</dt><dd>' + escapeHtml(fact.value) + '</dd></div>'; }).join('') + '</dl>' : '') +
             (evidence ? '<p class="qn-scout-review-source"><span class="dashicons dashicons-info-outline"></span>Based on ' + escapeHtml(evidence) + '</p>' : '') +
             '</section>';
+    }
+
+    function scoutPriorityLabel(value) {
+        var key = String(value || '').trim().toLowerCase();
+        if (key === 'high' || key === 'urgent' || key === 'critical') {
+            return 'Do soon';
+        }
+        if (key === 'medium' || key === 'normal') {
+            return 'Plan next';
+        }
+        return 'Keep visible';
+    }
+
+    function scoutReviewCopy(definition) {
+        var copies = {
+            persona_experience_summary: {
+                meaning: 'This is Scout’s understanding of your hospital and Quality Director role. It is context Scout will use when preparing later suggestions.',
+                reviewPrompt: 'Confirm the hospital type, survey pathway, Quality Director role, and quality-program maturity are described correctly.',
+                itemLabel: 'What Scout understood'
+            },
+            master_reporting_schedule: {
+                meaning: 'This organizes upcoming committee reporting work into preparation dates and meeting dates.',
+                reviewPrompt: 'Confirm each meeting date, the internal preparation deadline, the report owner, and the committee receiving the report.',
+                itemLabel: 'Work Scout suggests preparing'
+            },
+            reporting_schedule: {
+                meaning: 'This organizes upcoming committee reporting work into preparation dates and meeting dates.',
+                reviewPrompt: 'Confirm each meeting date, the internal preparation deadline, the report owner, and the committee receiving the report.',
+                itemLabel: 'Work Scout suggests preparing'
+            },
+            meeting_report_flow_map: {
+                meaning: 'This shows how quality information is expected to move from one committee to another and ultimately to hospital leadership.',
+                reviewPrompt: 'Confirm that each committee sends its reports to the correct next committee, Medical Executive Committee, or Governing Board.',
+                itemLabel: 'Reporting path Scout mapped'
+            },
+            committee_flow_map: {
+                meaning: 'This shows how quality information is expected to move from one committee to another and ultimately to hospital leadership.',
+                reviewPrompt: 'Confirm that each committee sends its reports to the correct next committee, Medical Executive Committee, or Governing Board.',
+                itemLabel: 'Reporting path Scout mapped'
+            },
+            routine_task_rhythm: {
+                meaning: 'This is a suggested calendar pattern for recurring committee work. It is intended to reduce last-minute report preparation.',
+                reviewPrompt: 'Confirm which committees work monthly or quarterly, who owns each report, and how many days before each meeting preparation should begin.',
+                itemLabel: 'Suggested recurring process'
+            },
+            priority_queue: {
+                meaning: 'This brings the work that may need attention first into one place, based on dates and information in Hospital Setup.',
+                reviewPrompt: 'Confirm the due date, responsible person, current status, and whether each item really requires attention now.',
+                itemLabel: 'Work Scout suggests reviewing'
+            },
+            reminder_rules: {
+                meaning: 'This proposes reminders for recurring work so preparation can begin before a meeting, submission, or policy review becomes urgent.',
+                reviewPrompt: 'Confirm who should receive each reminder, what it is for, and how far in advance it should be sent.',
+                itemLabel: 'Reminder Scout suggests'
+            },
+            aggregate_data_uploads: {
+                meaning: 'This organizes recurring external data submissions that the hospital may need to prepare and send.',
+                reviewPrompt: 'Confirm the program or registry, submission deadline, data owner, reviewer, and submission frequency.',
+                itemLabel: 'Submission Scout identified'
+            },
+            active_monitoring_improvement_tasks: {
+                meaning: 'This turns quality concerns and policy requirements into visible monitoring or improvement work.',
+                reviewPrompt: 'Confirm the concern being monitored, the responsible owner, the measure or evidence to review, and when results should be reported.',
+                itemLabel: 'Work Scout suggests'
+            },
+            clinical_monitoring_tasks: {
+                meaning: 'This identifies clinical areas that may need an active monitoring process.',
+                reviewPrompt: 'Confirm the monitoring area, responsible owner, data to review, frequency, and committee receiving the findings.',
+                itemLabel: 'Monitoring Scout suggests'
+            },
+            recurring_clinical_monitoring: {
+                meaning: 'This proposes a repeatable schedule for reviewing important clinical quality and patient-safety information.',
+                reviewPrompt: 'Confirm the review frequency, responsible owner, measures or events included, and where findings should be reported.',
+                itemLabel: 'Recurring review Scout suggests'
+            },
+            active_improvement_projects: {
+                meaning: 'This organizes active quality-improvement work so goals, owners, milestones, and progress are easier to follow.',
+                reviewPrompt: 'Confirm the project goal, owner, current status, measures, next milestone, and expected completion date.',
+                itemLabel: 'QI project information Scout prepared'
+            },
+            qi_project_milestones: {
+                meaning: 'This organizes active quality-improvement work so goals, owners, milestones, and progress are easier to follow.',
+                reviewPrompt: 'Confirm the project goal, owner, current status, measures, next milestone, and expected completion date.',
+                itemLabel: 'QI project information Scout prepared'
+            },
+            survey_readiness_timeline: {
+                meaning: 'This uses your survey history and pathway to keep readiness work visible between surveys.',
+                reviewPrompt: 'Confirm the last survey date, survey pathway, unresolved follow-up, readiness window, and person coordinating preparation.',
+                itemLabel: 'Readiness work Scout suggests'
+            },
+            plan_policy_tasks: {
+                meaning: 'This identifies plans or policies that may need review, clarification, or follow-up based on your hospital’s document information.',
+                reviewPrompt: 'Open the named document and confirm its current approval status, review date, owner, and whether Scout’s suggested follow-up is appropriate.',
+                itemLabel: 'Document follow-up Scout suggests'
+            },
+            regulatory_monitoring_preferences: {
+                meaning: 'This identifies the regulatory sources Scout should keep relevant to your hospital’s type, state, and survey pathway.',
+                reviewPrompt: 'Confirm each source applies to your hospital and identify who should monitor changes or coordinate follow-up.',
+                itemLabel: 'Regulatory area Scout identified'
+            },
+            external_contact_directory: {
+                meaning: 'This identifies outside agencies and partners the Quality Director may need to contact for reporting, surveys, or guidance.',
+                reviewPrompt: 'Confirm the agency name, contact details, purpose, and the hospital person responsible for maintaining the relationship.',
+                itemLabel: 'Contact Scout identified'
+            },
+            first_30_days_learning_journey: {
+                meaning: 'This is a practical starting sequence for a Quality Director who is becoming familiar with the hospital’s quality program.',
+                reviewPrompt: 'Confirm the suggested order, remove steps already completed, and identify any local orientation or training that should be included.',
+                itemLabel: 'Learning step Scout suggests'
+            },
+            learning_journey: {
+                meaning: 'This organizes role-specific learning into manageable steps connected to the hospital’s quality work.',
+                reviewPrompt: 'Confirm the topic, timing, available resource, and whether the step is useful for this Quality Director.',
+                itemLabel: 'Learning step Scout suggests'
+            }
+        };
+        return copies[definition.key] || {
+            meaning: 'Scout organized this information from your hospital setup for you to review.',
+            reviewPrompt: 'Confirm the information is accurate, identify an owner, and correct any dates or details that do not match your hospital.',
+            itemLabel: 'What Scout prepared'
+        };
     }
 
     function scoutFirstKnown(item, keys) {
@@ -5803,9 +5932,13 @@
     function scoutReviewFacts(item) {
         var fields = [
             ['owner', 'Owner'], ['frequency', 'Frequency'], ['cadence', 'Frequency'],
-            ['timeframe', 'Timeframe'], ['due_date', 'Due date'], ['date', 'Date'],
+            ['timeframe', 'Timeframe'], ['due_date', 'Due date'], ['prep_due_date', 'Preparation due'],
+            ['meeting_date', 'Meeting date'], ['date', 'Date'], ['last_survey_date', 'Last survey'],
+            ['next_survey_window_end', 'Readiness window through'],
             ['committee', 'Committee'], ['destination', 'Goes to'], ['review_body', 'Reviewed by'],
-            ['status', 'Current status'], ['lead_time', 'Preparation time']
+            ['status', 'Current status'], ['lead_time', 'Preparation time'], ['agency_name', 'Agency'],
+            ['related_policy', 'Related policy'], ['finding_type', 'Follow-up type'],
+            ['week', 'Timing'], ['format', 'Format'], ['method', 'Approach'], ['measure', 'Measure']
         ];
         var used = {};
         return fields.reduce(function (facts, field) {
@@ -5814,9 +5947,19 @@
                 return facts;
             }
             used[field[1]] = true;
-            facts.push({label: field[1], value: describeScoutItem(value)});
+            facts.push({label: field[1], value: scoutReviewFactValue(field[0], value)});
             return facts;
         }, []);
+    }
+
+    function scoutReviewFactValue(key, value) {
+        if (/_date$/.test(key) || key === 'date' || key === 'next_survey_window_end') {
+            return formatDateForDisplay(value);
+        }
+        if (key === 'finding_type') {
+            return String(value).toLowerCase() === 'action_needed' ? 'Action to review' : formatScoutValue(value, '');
+        }
+        return describeScoutItem(value);
     }
 
     function scoutReviewDescription(review) {

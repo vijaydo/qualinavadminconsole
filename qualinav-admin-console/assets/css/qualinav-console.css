@@ -7000,6 +7000,48 @@ body.qn-site-shell-console .qn-scout-workflow-card-footer {
     min-width: 0;
 }
 
+.qn-scout-review-intro h3 {
+    color: var(--qn-text);
+    font-size: 1rem;
+    margin: 0;
+}
+
+.qn-scout-review-notice {
+    color: #536b82 !important;
+    font-size: 0.86rem;
+}
+
+.qn-scout-review-check {
+    align-items: flex-start;
+    background: #fff8e7;
+    border: 1px solid #f0dca0;
+    border-radius: 14px;
+    color: #66501a;
+    display: flex;
+    gap: 11px;
+    padding: 14px 16px;
+}
+
+.qn-scout-review-check > .dashicons {
+    color: #9b7000;
+    flex: 0 0 20px;
+    margin-top: 1px;
+}
+
+.qn-scout-review-check > div {
+    display: grid;
+    gap: 3px;
+    line-height: 1.5;
+}
+
+.qn-scout-priority-note {
+    background: #f8fafc;
+    border-radius: 10px;
+    color: #536b82 !important;
+    font-size: 0.86rem;
+    padding: 11px 13px;
+}
+
 .qn-scout-review-list {
     display: grid;
     gap: 14px;
@@ -7057,6 +7099,30 @@ body.qn-site-shell-console .qn-scout-review-item {
     font-size: 0.75rem;
     font-weight: 800;
     padding: 5px 9px;
+}
+
+.qn-scout-review-priority-medium,
+.qn-scout-review-priority-normal {
+    background: #eef4ff;
+    color: #315d8a;
+}
+
+.qn-scout-review-priority-low {
+    background: #eef7f1;
+    color: #39704b;
+}
+
+.qn-scout-review-copy {
+    display: grid;
+    gap: 5px;
+}
+
+.qn-scout-review-copy > span {
+    color: var(--qn-muted);
+    font-size: 0.72rem;
+    font-weight: 850;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
 }
 
 .qn-scout-review-description {
