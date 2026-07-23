@@ -4878,16 +4878,14 @@
     }
 
     function renderScoutCompleted(run) {
-        var rows = scoutWorkflowDefinitions().map(function (definition) {
-            return renderScoutWorkflowCard(run, definition);
-        }).filter(Boolean).join('');
-        var workflowList = rows ?
-            '<div class="qn-scout-workflow-list">' + rows + '</div>' :
+        var workflowGroups = renderScoutWorkflowGroups(run);
+        var workflowList = workflowGroups ?
+            '<div class="qn-scout-workflow-groups">' + workflowGroups + '</div>' :
             '<div class="qn-empty-state"><span class="dashicons dashicons-lightbulb"></span><h3>No workflow sections returned</h3><p>Scout did not return structured workflow sections for this preview.</p></div>';
         return renderScoutStatusHero(run) +
             renderScoutPersonaContext(run) +
             renderScoutAttentionPanel(run) +
-            '<section class="qn-scout-workflow-section"><div class="qn-section-toolbar"><div><p class="qn-eyebrow">Workflow draft</p><h3>Generated operating system preview</h3></div></div>' +
+            '<section class="qn-scout-workflow-section"><div class="qn-section-toolbar qn-scout-workflow-heading"><div><p class="qn-eyebrow">Your Scout workspace</p><h3>What Scout prepared for your hospital</h3><p>Review the areas that matter now. Each draft shows what Scout prepared, why it helps, and the next place to review.</p></div></div>' +
             workflowList + '</section>' +
             renderScoutSources(scoutSources(run));
     }
@@ -5149,8 +5147,8 @@
 
     function scoutAttentionGuidance(key) {
         var guidance = {
-            quality_improvement_projects: {title: 'Quality improvement project details', benefit: 'Adds project owners, milestones, progress checks, and useful reminders to the workspace.', actionLabel: 'Open Data Hub'},
-            aggregate_data_schedule: {title: 'Routine data and submission schedule', benefit: 'Helps Scout place recurring submissions on the right dates and remind the right people earlier.', actionLabel: 'Open Data Hub'},
+            quality_improvement_projects: {title: 'Quality improvement project details', benefit: 'Adds project owners, milestones, progress checks, and useful reminders to the workspace.', actionLabel: 'Open QI Projects'},
+            aggregate_data_schedule: {title: 'Routine data and submission schedule', benefit: 'Helps Scout place recurring submissions on the right dates and remind the right people earlier.', actionLabel: 'Add submission details'},
             governing_board_schedule: {title: 'Governing Board meeting schedule', benefit: 'Makes committee dates, board reporting, and preparation reminders more accurate.', actionLabel: 'Add schedule'},
             policy_review_cycle: {title: 'Policy review cycle', benefit: 'Lets Scout create reliable policy review reminders instead of estimating when reviews are due.', actionLabel: 'Add review cycle'}
         };
@@ -5178,12 +5176,13 @@
     }
 
     function openScoutAttentionTarget(key) {
-        if (key === 'quality_improvement_projects' || key === 'aggregate_data_schedule') {
+        if (key === 'quality_improvement_projects') {
             var homeUrl = String(config.homeUrl || '/').replace(/\/?$/, '/');
-            window.location.assign(homeUrl + 'data-hub/#dm');
+            window.location.assign(homeUrl + 'qi-projects/');
             return;
         }
         var targets = {
+            aggregate_data_schedule: {section: 'committees_reporting', question: 'reporting_obligations'},
             governing_board_schedule: {section: 'committees_reporting', question: 'committee_list'},
             policy_review_cycle: {section: 'plans_policies_monitoring', question: 'annual_policy_review_cycle'}
         };
@@ -5311,19 +5310,38 @@
         }
         var status = scoutGroupStatus(group, counts);
         var preview = scoutGroupPreviewContent(definition, group, counts);
-        return '<article class="qn-scout-row qn-scout-card-' + escapeHtml(status.tone) + '">' +
-            '<span class="dashicons ' + scoutIcon(definition.key) + '"></span>' +
-            '<div class="qn-scout-row-main"><div class="qn-scout-row-title"><h3>' + escapeHtml(definition.title) + '</h3><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(status.tone) + '">' + escapeHtml(status.label) + '</span></div>' +
-            '<p>' + escapeHtml(preview.summary) + '</p>' +
-            (preview.examples.length ? '<ul class="qn-scout-card-examples">' + preview.examples.map(function (example) { return '<li>' + escapeHtml(example) + '</li>'; }).join('') + '</ul>' : '') +
-            '</div>' +
-            '<div class="qn-scout-row-meta"><div class="qn-scout-card-metrics">' +
-            '<span>' + escapeHtml(String(counts.items)) + ' items</span>' +
+        return '<article class="qn-scout-workflow-card qn-scout-card-' + escapeHtml(status.tone) + '">' +
+            '<div class="qn-scout-workflow-card-header"><span class="dashicons ' + scoutIcon(definition.key) + '"></span><div><h4>' + escapeHtml(definition.title) + '</h4><span class="qn-scout-status-badge qn-scout-status-' + escapeHtml(status.tone) + '">' + escapeHtml(status.label === 'Ready' ? 'Draft ready' : status.label) + '</span></div></div>' +
+            '<p class="qn-scout-workflow-summary">' + escapeHtml(preview.summary) + '</p>' +
+            '<div class="qn-scout-workflow-benefit"><span class="dashicons dashicons-lightbulb"></span><span><b>Why this helps:</b> ' + escapeHtml(definition.benefit) + '</span></div>' +
+            (preview.examples.length ? '<div class="qn-scout-prepared"><span>Scout prepared</span><ul class="qn-scout-card-examples">' + preview.examples.map(function (example) { return '<li>' + escapeHtml(example) + '</li>'; }).join('') + '</ul></div>' : '') +
+            '<div class="qn-scout-workflow-card-footer"><div class="qn-scout-card-metrics">' +
+            '<span>' + escapeHtml(String(counts.items)) + (counts.items === 1 ? ' draft item' : ' draft items') + '</span>' +
             (counts.warnings ? '<span>' + escapeHtml(String(counts.warnings)) + ' warnings</span>' : '') +
             (counts.missing ? '<span>' + escapeHtml(String(counts.missing)) + ' missing</span>' : '') +
             '</div>' +
-            '<button class="qn-button qn-button-small" type="button" data-scout-details="' + escapeHtml(definition.key) + '">View Details</button></div>' +
+            '<button class="qn-button qn-button-small qn-button-secondary" type="button" data-scout-details="' + escapeHtml(definition.key) + '">' + escapeHtml(definition.actionLabel) + '<span class="dashicons dashicons-arrow-right-alt2"></span></button></div>' +
             '</article>';
+    }
+
+    function renderScoutWorkflowGroups(run) {
+        var categories = [
+            {key: 'priorities', title: 'Focus on what needs attention', description: 'Start with the work most likely to need action or follow-up.'},
+            {key: 'coordination', title: 'Keep reporting and teams coordinated', description: 'Organize recurring deadlines, meetings, handoffs, and reminders.'},
+            {key: 'improvement', title: 'Monitor and improve performance', description: 'Turn quality signals into ongoing monitoring and improvement work.'},
+            {key: 'readiness', title: 'Stay survey- and policy-ready', description: 'Keep readiness, plans, policies, contacts, and learning work visible.'}
+        ];
+        return categories.map(function (category) {
+            var cards = scoutWorkflowDefinitions().filter(function (definition) {
+                return definition.category === category.key;
+            }).map(function (definition) {
+                return renderScoutWorkflowCard(run, definition);
+            }).filter(Boolean);
+            if (!cards.length) {
+                return '';
+            }
+            return '<section class="qn-scout-workflow-group"><div class="qn-scout-workflow-group-heading"><div><p class="qn-eyebrow">' + escapeHtml(category.title) + '</p><p>' + escapeHtml(category.description) + '</p></div><span>' + escapeHtml(String(cards.length)) + (cards.length === 1 ? ' area' : ' areas') + '</span></div><div class="qn-scout-workflow-list">' + cards.join('') + '</div></section>';
+        }).filter(Boolean).join('');
     }
 
     function findScoutGroup(run, definition) {
@@ -5476,22 +5494,22 @@
 
     function scoutWorkflowDefinitions() {
         return [
-            {key: 'persona_experience_summary', title: 'Scout Experience Summary'},
-            {key: 'master_reporting_schedule', title: 'Master Reporting Schedule', aliases: ['reporting_schedule']},
-            {key: 'meeting_report_flow_map', title: 'Meeting & Report Flow Map', aliases: ['committee_flow_map']},
-            {key: 'survey_readiness_timeline', title: 'Survey Readiness Timeline'},
-            {key: 'active_monitoring_improvement_tasks', title: 'Active Monitoring & Improvement Tasks', aliases: ['clinical_monitoring_tasks']},
-            {key: 'recurring_clinical_monitoring', title: 'Recurring Clinical Monitoring'},
-            {key: 'aggregate_data_uploads', title: 'Aggregate Data Uploads'},
-            {key: 'routine_task_rhythm', title: 'Routine Task Rhythm'},
-            {key: 'active_improvement_projects', title: 'Active Improvement Projects', aliases: ['qi_project_milestones']},
-            {key: 'priority_queue', title: 'Priority Queue'},
-            {key: 'plan_policy_tasks', title: 'Plans & Policies'},
-            {key: 'regulatory_monitoring_preferences', title: 'Regulatory Monitoring'},
-            {key: 'external_contact_directory', title: 'External Contacts'},
-            {key: 'first_30_days_learning_journey', title: 'First 30 Days & Learning Journey'},
-            {key: 'learning_journey', title: 'Learning Journey'},
-            {key: 'reminder_rules', title: 'Reminder Rules'}
+            {key: 'priority_queue', title: 'Priority Queue', category: 'priorities', actionLabel: 'Review priorities', benefit: 'Shows the Quality Director what deserves attention first instead of searching across the workspace.'},
+            {key: 'persona_experience_summary', title: 'Quality Director Workspace', category: 'priorities', actionLabel: 'Review workspace', benefit: 'Tailors Scout’s draft to this hospital and the Quality Director role.'},
+            {key: 'master_reporting_schedule', title: 'Reporting Schedule', aliases: ['reporting_schedule'], category: 'coordination', actionLabel: 'Review schedule', benefit: 'Brings due dates, owners, and preparation work into one reviewable schedule.'},
+            {key: 'meeting_report_flow_map', title: 'Meeting & Report Flow', aliases: ['committee_flow_map'], category: 'coordination', actionLabel: 'Review flow', benefit: 'Clarifies where reports go, who reviews them, and when board preparation should begin.'},
+            {key: 'aggregate_data_uploads', title: 'Data Submissions', category: 'coordination', actionLabel: 'Review submissions', benefit: 'Keeps recurring state, registry, and program submissions visible before they become urgent.'},
+            {key: 'routine_task_rhythm', title: 'Recurring Work Rhythm', category: 'coordination', actionLabel: 'Review routine work', benefit: 'Turns repeating quality work into a predictable monthly and quarterly rhythm.'},
+            {key: 'reminder_rules', title: 'Reminder Rules', category: 'coordination', actionLabel: 'Review reminders', benefit: 'Prompts the right people early enough to prepare, review, and submit work.'},
+            {key: 'active_monitoring_improvement_tasks', title: 'Monitoring & Improvement Work', aliases: ['clinical_monitoring_tasks'], category: 'improvement', actionLabel: 'Review work', benefit: 'Converts quality concerns into visible work with follow-up instead of one-time notes.'},
+            {key: 'recurring_clinical_monitoring', title: 'Clinical Monitoring', category: 'improvement', actionLabel: 'Review monitoring', benefit: 'Keeps recurring clinical reviews visible between committees and surveys.'},
+            {key: 'active_improvement_projects', title: 'QI Projects', aliases: ['qi_project_milestones'], category: 'improvement', actionLabel: 'Review projects', benefit: 'Connects improvement goals, owners, milestones, and progress checks.'},
+            {key: 'survey_readiness_timeline', title: 'Survey Readiness', category: 'readiness', actionLabel: 'Review timeline', benefit: 'Makes readiness work visible throughout the year instead of only before a survey.'},
+            {key: 'plan_policy_tasks', title: 'Plans & Policies', category: 'readiness', actionLabel: 'Review plans', benefit: 'Highlights reviews and follow-up needed to keep core plans and policies current.'},
+            {key: 'regulatory_monitoring_preferences', title: 'Regulatory Monitoring', category: 'readiness', actionLabel: 'Review monitoring', benefit: 'Focuses regulatory updates on the programs and requirements relevant to this hospital.'},
+            {key: 'external_contact_directory', title: 'External Contacts', category: 'readiness', actionLabel: 'Review contacts', benefit: 'Keeps important agency, program, and partner contacts easy to find when needed.'},
+            {key: 'first_30_days_learning_journey', title: 'First 30 Days', category: 'readiness', actionLabel: 'Review learning plan', benefit: 'Gives a new Quality Director a practical sequence instead of an unstructured list.'},
+            {key: 'learning_journey', title: 'Learning Journey', category: 'readiness', actionLabel: 'Review learning plan', benefit: 'Organizes role-specific learning into manageable next steps.'}
         ];
     }
 
