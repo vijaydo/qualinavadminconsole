@@ -9542,6 +9542,7 @@
             if (!targetWindow) {
                 throw new Error('This document could not be opened in your browser.');
             }
+            setOnboardingSaveStatus('saved', 'Document ready');
             targetWindow.location.assign(result.url);
         }).catch(function (error) {
             setOnboardingSaveStatus('error', 'Document could not be opened');
