@@ -6650,7 +6650,7 @@ body.qn-site-shell-console .qn-scout-attention-item {
     padding: 6px 10px;
 }
 
-.qn-scout-workflow-card {
+body.qn-site-shell-console .qn-scout-workflow-card {
     background: #ffffff;
     border: 1px solid #dce7ef;
     border-radius: 16px;
@@ -6659,7 +6659,7 @@ body.qn-site-shell-console .qn-scout-attention-item {
     flex-direction: column;
     gap: 13px;
     min-width: 0;
-    padding: 18px;
+    padding: 20px 22px !important;
 }
 
 .qn-scout-workflow-card-header {
@@ -11702,6 +11702,10 @@ body.qn-site-shell-console .qn-settings-summary-item {
 
     body.qn-site-shell-console .qn-scout-attention-item {
         padding: 14px !important;
+    }
+
+    body.qn-site-shell-console .qn-scout-workflow-card {
+        padding: 16px !important;
     }
 
     .qn-reporting-action-strip > div {
